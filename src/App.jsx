@@ -1,3 +1,4 @@
+// App.jsx completo con modal de búsqueda mejorada, paginación y botón Cerrar
 import React, { useState, useEffect } from "react";
 import {
   Search,
@@ -52,14 +53,25 @@ const PADRON_SIMULADO = generarPadron();
 // ======================= MODAL PARA AGREGAR PERSONA =======================
 const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   if (!show) return null;
 
-  const filteredDisponibles = disponibles.filter((p) =>
-    p.ci.includes(searchTerm) ||
-    p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.apellido.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filtrado: solo busca si hay texto
+  const filtered = searchTerm.trim()
+    ? disponibles.filter(
+        (p) =>
+          p.ci.includes(searchTerm) ||
+          p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          p.apellido.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : [];
+
+  // Paginación
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const startIndex = (page - 1) * pageSize;
+  const paginated = filtered.slice(startIndex, startIndex + pageSize);
 
   const titulo =
     tipo === "coordinador"
@@ -68,13 +80,33 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
       ? "Agregar Sub-coordinador"
       : "Agregar Votante";
 
+  const handleClose = () => {
+    setSearchTerm("");
+    setPage(1);
+    onClose();
+  };
+
+  const handleSelectPersona = (persona) => {
+    onAdd(persona);
+    setSearchTerm("");
+    setPage(1);
+  };
+
+  const handlePrevPage = () => {
+    setPage((prev) => Math.max(1, prev - 1));
+  };
+
+  const handleNextPage = () => {
+    setPage((prev) => Math.min(totalPages, prev + 1));
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl overflow-hidden flex flex-col">
         {/* HEADER */}
         <div className="p-6 border-b flex justify-between items-center bg-red-600 text-white">
           <h3 className="text-xl font-bold">{titulo}</h3>
-          <button onClick={onClose} className="hover:text-gray-200">
+          <button onClick={handleClose} className="hover:text-gray-200">
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -87,23 +119,30 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
               type="text"
               value={searchTerm}
               placeholder="Buscar por CI, nombre o apellido..."
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(1); // reset página al cambiar búsqueda
+              }}
               className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
             />
           </div>
         </div>
 
         {/* LISTADO */}
-        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-2">
-          {filteredDisponibles.length === 0 ? (
+        <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-2">
+          {searchTerm.trim().length === 0 ? (
             <p className="text-center text-gray-500 py-6">
-              No hay personas disponibles.
+              🔎 Escriba CI, nombre o apellido para buscar en el padrón.
+            </p>
+          ) : filtered.length === 0 ? (
+            <p className="text-center text-gray-500 py-6">
+              ❌ No se encontraron resultados.
             </p>
           ) : (
-            filteredDisponibles.map((persona) => (
+            paginated.map((persona) => (
               <div
                 key={persona.ci}
-                onClick={() => onAdd(persona)}
+                onClick={() => handleSelectPersona(persona)}
                 className="p-4 border rounded-lg hover:bg-red-50 cursor-pointer transition flex justify-between items-center"
               >
                 <div>
@@ -117,6 +156,49 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
               </div>
             ))
           )}
+        </div>
+
+        {/* PAGINACIÓN */}
+        {searchTerm.trim().length > 0 && filtered.length > 0 && (
+          <div className="px-6 pb-3 flex items-center justify-between text-sm text-gray-700">
+            <span>
+              Página {page} de {totalPages}
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={handlePrevPage}
+                disabled={page === 1}
+                className={`px-3 py-1 rounded-lg border ${
+                  page === 1
+                    ? "border-gray-300 text-gray-400 cursor-not-allowed bg-gray-100"
+                    : "border-gray-300 hover:bg-gray-100"
+                }`}
+              >
+                Anterior
+              </button>
+              <button
+                onClick={handleNextPage}
+                disabled={page === totalPages}
+                className={`px-3 py-1 rounded-lg border ${
+                  page === totalPages
+                    ? "border-gray-300 text-gray-400 cursor-not-allowed bg-gray-100"
+                    : "border-gray-300 hover:bg-gray-100"
+                }`}
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* BOTÓN CERRAR */}
+        <div className="px-6 pb-6">
+          <button
+            onClick={handleClose}
+            className="w-full mt-2 bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 rounded-lg transition"
+          >
+            Cerrar
+          </button>
         </div>
       </div>
     </div>
@@ -458,13 +540,11 @@ const App = () => {
             Iniciar Sesión
           </button>
 
-          {/* AGREGAR PRIMER COORDINADOR */}
-
           {/* INSTRUCCIONES */}
           <div className="mt-6 bg-red-50 p-4 rounded-lg border border-red-200 text-sm text-red-700">
             <p className="font-semibold mb-2">📋 Instrucciones:</p>
             <ol className="list-decimal ml-5 space-y-1">
-              <li>Ingrese el codigo proporcionado por el Admin"</li>
+              <li>Ingrese el código proporcionado por el Admin.</li>
             </ol>
           </div>
         </div>
