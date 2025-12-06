@@ -465,8 +465,6 @@ const App = () => {
             <p className="font-semibold mb-2">📋 Instrucciones:</p>
             <ol className="list-decimal ml-5 space-y-1">
               <li>Ingrese el codigo proporcionado por el Admin"</li>
-              <li>
-              </li>
             </ol>
           </div>
         </div>
