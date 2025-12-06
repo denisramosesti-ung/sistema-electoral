@@ -459,26 +459,13 @@ const App = () => {
           </button>
 
           {/* AGREGAR PRIMER COORDINADOR */}
-          <button
-            onClick={() => {
-              setModalType("coordinador");
-              setShowAddModal(true);
-            }}
-            className="w-full border-2 border-red-600 text-red-600 hover:bg-red-50 py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
-          >
-            <UserPlus className="w-5 h-5" />
-            Agregar Primer Coordinador
-          </button>
 
           {/* INSTRUCCIONES */}
           <div className="mt-6 bg-red-50 p-4 rounded-lg border border-red-200 text-sm text-red-700">
             <p className="font-semibold mb-2">📋 Instrucciones:</p>
             <ol className="list-decimal ml-5 space-y-1">
-              <li>Haz clic en "Agregar Primer Coordinador"</li>
-              <li>Selecciona una persona del padrón</li>
-              <li>Usa el código generado para iniciar sesión</li>
+              <li>Ingrese el codigo proporcionado por el Admin"</li>
               <li>
-                Superadmin usa CI: <b>4630621</b> y su contraseña.
               </li>
             </ol>
           </div>
