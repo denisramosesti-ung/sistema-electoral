@@ -594,7 +594,7 @@ const generarPDF = () => {
             value={loginID}
             onChange={(e) => setLoginID(e.target.value)}
             className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 mb-4"
-            placeholder="Ej: 4630621 o ABC123"
+            placeholder="Ej: 1234567 o ABC123"
           />
 
           {/* PASSWORD SOLO PARA SUPERADMIN */}
