@@ -206,10 +206,11 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
 
 // ======================= APLICACIÓN PRINCIPAL =======================
 const App = () => {
-  // ======================= GENERAR REPORTE PDF =======================
+// ======================= GENERAR REPORTE PDF =======================
 const generarPDF = () => {
   const doc = new jsPDF({ orientation: "portrait" });
 
+  // ENCABEZADO
   doc.setFontSize(16);
   doc.text("Reporte de Estructura Electoral", 14, 20);
 
@@ -221,11 +222,17 @@ const generarPDF = () => {
   );
   doc.text(`Fecha: ${new Date().toLocaleString()}`, 14, 38);
 
-  // === COORDINADORES (solo superadmin) ===
+  let y = 50;
+
+  // SUPERADMIN → LISTA DE COORDINADORES
   if (currentUser.role === "superadmin") {
+    doc.setFontSize(14);
+    doc.text("Listado de Coordinadores", 14, y);
+    y += 6;
+
     autoTable(doc, {
-      startY: 50,
-      head: [["CI", "Nombre", "Apellido", "Login Code"]],
+      startY: y,
+      head: [["CI", "Nombre", "Apellido", "Código"]],
       body: estructura.coordinadores.map((c) => [
         c.ci,
         c.nombre,
@@ -235,46 +242,76 @@ const generarPDF = () => {
       theme: "striped",
       headStyles: { fillColor: [220, 0, 0] },
     });
+
+    y = doc.lastAutoTable.finalY + 15;
   }
 
-  // === SUBCOORDINADORES DEL COORDINADOR ===
+  // COORDINADOR → LISTA DE SUBCOORDINADORES
   if (currentUser.role === "coordinador") {
-    const misSubs = getMisSubcoordinadores();
-    autoTable(doc, {
-      startY: 50,
-      head: [["CI", "Nombre", "Apellido", "Código"]],
-      body: misSubs.map((s) => [
-        s.ci,
-        s.nombre,
-        s.apellido,
-        s.loginCode,
-      ]),
-      theme: "striped",
-      headStyles: { fillColor: [220, 0, 0] },
+    const subcoords = getMisSubcoordinadores();
+
+    subcoords.forEach((sub) => {
+      doc.setFontSize(14);
+      doc.text(
+        `Subcoordinador: ${sub.nombre} ${sub.apellido} (Código: ${sub.loginCode})`,
+        14,
+        y
+      );
+      y += 5;
+
+      const votantesSub = getVotantesDeSubcoord(sub.ci);
+
+      autoTable(doc, {
+        startY: y,
+        head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa"]],
+        body: votantesSub.map((v) => [
+          v.ci,
+          v.nombre,
+          v.apellido,
+          v.localidad,
+          v.mesa,
+        ]),
+        theme: "grid",
+        headStyles: { fillColor: [255, 80, 80] },
+      });
+
+      y = doc.lastAutoTable.finalY + 12;
     });
+
+    // VOTANTES DIRECTOS DEL COORDINADOR
+    const directos = getMisVotantes();
+    if (directos.length > 0) {
+      doc.setFontSize(14);
+      doc.text("Votantes directos del Coordinador:", 14, y);
+      y += 6;
+
+      autoTable(doc, {
+        startY: y,
+        head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa"]],
+        body: directos.map((v) => [
+          v.ci,
+          v.nombre,
+          v.apellido,
+          v.localidad,
+          v.mesa,
+        ]),
+        theme: "grid",
+        headStyles: { fillColor: [255, 80, 80] },
+      });
+
+      y = doc.lastAutoTable.finalY + 10;
+    }
   }
 
-  // === VOTANTES (según rol) ===
-  let votantes = [];
+  // SUBCOORDINADOR → SUS PROPIOS VOTANTES
+  if (currentUser.role === "subcoordinador") {
+    doc.setFontSize(14);
+    doc.text("Mis votantes asignados:", 14, y);
 
-  if (currentUser.role === "coordinador") {
-    votantes = [
-      ...getMisVotantes(),
-      ...getMisSubcoordinadores().flatMap((s) =>
-        getVotantesDeSubcoord(s.ci)
-      ),
-    ];
-  } else if (currentUser.role === "subcoordinador") {
-    votantes = getMisVotantes();
-  } else if (currentUser.role === "superadmin") {
-    votantes = estructura.votantes;
-  }
-
-  if (votantes.length > 0) {
     autoTable(doc, {
-      startY: doc.lastAutoTable ? doc.lastAutoTable.finalY + 15 : 60,
+      startY: y + 4,
       head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa"]],
-      body: votantes.map((v) => [
+      body: getMisVotantes().map((v) => [
         v.ci,
         v.nombre,
         v.apellido,
@@ -287,6 +324,8 @@ const generarPDF = () => {
   }
 
   doc.save("reporte_estructura.pdf");
+};
+
 };
   const [currentUser, setCurrentUser] = useState(null);
 
