@@ -14,7 +14,7 @@ import {
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-// ======================= GENERADOR DE PADRÓN =======================
+// ======================GENERADOR DE PADRÓN=======================
 const generarPadron = () => {
   const nombres = [
     "María","Carlos","Ana","José","Laura","Pedro","Sofía","Miguel","Lucía","Diego",
