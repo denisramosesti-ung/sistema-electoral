@@ -1083,6 +1083,6 @@ const generarPDF = () => {
       />
     </div>
   );
-};
+}
 
 export default App;
