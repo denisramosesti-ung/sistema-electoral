@@ -357,7 +357,7 @@ const getPersonasDisponibles = () => {
       ]);
 
       if (error) {
-        alert("Error al guardar coordinador en Supabase");
+        alert("Error al guardar coordinador en la BD");
         console.error(error);
         return;
       }
@@ -388,7 +388,7 @@ const getPersonasDisponibles = () => {
       ]);
 
       if (error) {
-        alert("Error al guardar subcoordinador en Supabase");
+        alert("Error al guardar subcoordinador");
         console.error(error);
         return;
       }
@@ -418,7 +418,7 @@ const getPersonasDisponibles = () => {
       ]);
 
       if (error) {
-        alert("Error al guardar votante en Supabase");
+        alert("Votante ya agregado por otra persona");
         console.error(error);
         return;
       }
