@@ -574,27 +574,53 @@ const App = () => {
       </div>
 
       {/* TARJETAS DE ESTADISTICAS */}
-      <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-        {currentUser.role === "superadmin" && (
-          <>
-            <Stat label="Coordinadores" value={stats.coordinadores} />
-            <Stat label="Subcoordinadores" value={stats.subcoordinadores} />
-            <Stat label="Votantes" value={stats.votantes} />
-          </>
-        )}
-
-        {currentUser.role === "coordinador" && (
-          <>
-            <Stat label="Subcoordinadores" value={stats.subcoordinadores} />
-            <Stat label="Votantes Directos" value={stats.votantesDirectos} />
-            <Stat label="Total en Red" value={stats.total} />
-          </>
-        )}
-
-        {currentUser.role === "subcoordinador" && (
-          <Stat label="Mis votantes" value={stats.votantes} />
-        )}
+<div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+  {currentUser.role === "superadmin" && (
+    <>
+      <div className="bg-white rounded-lg shadow p-6">
+        <p className="text-gray-600 text-sm">Coordinadores</p>
+        <p className="text-4xl font-bold text-red-600">{stats.coordinadores}</p>
       </div>
+
+      <div className="bg-white rounded-lg shadow p-6">
+        <p className="text-gray-600 text-sm">Subcoordinadores</p>
+        <p className="text-4xl font-bold text-red-600">{stats.subcoordinadores}</p>
+      </div>
+
+      <div className="bg-white rounded-lg shadow p-6">
+        <p className="text-gray-600 text-sm">Votantes</p>
+        <p className="text-4xl font-bold text-red-600">{stats.votantes}</p>
+      </div>
+    </>
+  )}
+
+  {currentUser.role === "coordinador" && (
+    <>
+      <div className="bg-white rounded-lg shadow p-6">
+        <p className="text-gray-600 text-sm">Subcoordinadores</p>
+        <p className="text-4xl font-bold text-red-600">{stats.subcoordinadores}</p>
+      </div>
+
+      <div className="bg-white rounded-lg shadow p-6">
+        <p className="text-gray-600 text-sm">Votantes Directos</p>
+        <p className="text-4xl font-bold text-red-600">{stats.votantesDirectos}</p>
+      </div>
+
+      <div className="bg-white rounded-lg shadow p-6">
+        <p className="text-gray-600 text-sm">Total en Red</p>
+        <p className="text-4xl font-bold text-red-600">{stats.total}</p>
+      </div>
+    </>
+  )}
+
+  {currentUser.role === "subcoordinador" && (
+    <div className="bg-white rounded-lg shadow p-6">
+      <p className="text-gray-600 text-sm">Mis votantes</p>
+      <p className="text-4xl font-bold text-red-600">{stats.votantes}</p>
+    </div>
+  )}
+</div>
+
 
       {/* BOTONES DE ACCIONES */}
       <div className="max-w-7xl mx-auto px-4 mb-6 flex flex-wrap gap-3">
