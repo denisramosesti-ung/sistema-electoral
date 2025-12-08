@@ -13,43 +13,7 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-
-// ======================GENERADOR DE PADRÓN=======================
-const generarPadron = () => {
-  const nombres = [
-    "María","Carlos","Ana","José","Laura","Pedro","Sofía","Miguel","Lucía","Diego",
-    "Valentina","Santiago","Camila","Mateo","Isabella","Sebastián","Martina","Nicolás",
-    "Elena","Fernando","Paula","Gabriel","Carmen","Andrés","Rosa","Daniel","Beatriz",
-    "Ricardo","Gloria","Javier","Patricia","Alberto","Silvia","Roberto","Mónica"
-  ];
-
-  const apellidos = [
-    "González","Rodríguez","Martínez","López","Fernández","Sánchez","Ramírez","Torres",
-    "Flores","Benítez","Acosta","Vera","Romero","Giménez","Silva","Medina","Coronel",
-    "Pereira","Villalba","Ortiz","Báez","Cabrera","Díaz","Núñez","Maldonado","Escobar",
-    "Cardozo","Mendoza","Paredes","Aguilar","Rojas","Gaona","Valdez","Miranda","Castro"
-  ];
-
-  const localidades = [
-    "Asunción","Lambaré","San Lorenzo","Fernando de la Mora","Luque","Capiatá",
-    "Ñemby","Villa Elisa","San Antonio","Itauguá","Mariano Roque Alonso"
-  ];
-
-  const padron = [];
-
-  for (let i = 1; i <= 110; i++) {
-    const ci = (1000000 + i).toString();
-    const nombre = nombres[Math.floor(Math.random() * nombres.length)];
-    const apellido = apellidos[Math.floor(Math.random() * apellidos.length)];
-    const localidad = localidades[Math.floor(Math.random() * localidades.length)];
-    const mesa = (101 + Math.floor(Math.random() * 50)).toString();
-
-    padron.push({ ci, nombre, apellido, localidad, mesa });
-  }
-
-  return padron;
-};
-
+// ======================= PADRON IMPORTADO ================================
 import PADRON from "./data/padron.json";
 
 // ======================= MODAL PARA AGREGAR PERSONA =======================
