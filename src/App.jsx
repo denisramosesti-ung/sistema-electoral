@@ -638,7 +638,7 @@ y += 4;
             <h1 className="text-3xl font-bold text-gray-800 mt-3">
               Sistema Electoral
             </h1>
-            <p className="text-gray-600">Gestión de Coordinadores</p>
+            <p className="text-gray-600">Gestión de Votantes</p>
           </div>
 
           {/* INPUT LOGIN */}
