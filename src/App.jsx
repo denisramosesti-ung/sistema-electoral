@@ -286,46 +286,51 @@ const App = () => {
   }, []);
 
   // ======================= PADRÓN DISPONIBLE =======================
-  const getPersonasDisponibles = () => {
-    return padron.map((p) => {
-      const coordItem = estructura.coordinadores.find((c) => c.ci === p.ci);
-      if (coordItem) {
-        return {
-          ...p,
-          asignado: true,
-          asignadoPorNombre: `${coordItem.nombre} ${coordItem.apellido}`,
-          asignadoRol: "Coordinador",
-        };
-      }
-
-      const subItem = estructura.subcoordinadores.find((s) => s.ci === p.ci);
-      if (subItem) {
-        return {
-          ...p,
-          asignado: true,
-          asignadoPorNombre: `${subItem.nombre} ${subItem.apellido}`,
-          asignadoRol: "Subcoordinador",
-        };
-      }
-
-      const votItem = estructura.votantes.find((v) => v.ci === p.ci);
-      if (votItem) {
-        return {
-          ...p,
-          asignado: true,
-          asignadoPorNombre: votItem.asignadoPorNombre,
-          asignadoRol: "Votante",
-        };
-      }
-
+const getPersonasDisponibles = () => {
+  return padron.map((p) => {
+    // 1) ¿Es coordinador?
+    const coordItem = estructura.coordinadores.find((c) => c.ci === p.ci);
+    if (coordItem) {
       return {
         ...p,
-        asignado: false,
-        asignadoPorNombre: null,
-        asignadoRol: null,
+        asignado: true,
+        asignadoPorNombre: `${coordItem.nombre} ${coordItem.apellido}`,
+        asignadoRol: "Coordinador",
       };
-    });
-  };
+    }
+
+    // 2) ¿Es subcoordinador?
+    const subItem = estructura.subcoordinadores.find((s) => s.ci === p.ci);
+    if (subItem) {
+      return {
+        ...p,
+        asignado: true,
+        asignadoPorNombre: `${subItem.nombre} ${subItem.apellido}`,
+        asignadoRol: "Subcoordinador",
+      };
+    }
+
+    // 3) ¿Es votante?
+    const votItem = estructura.votantes.find((v) => v.ci === p.ci);
+    if (votItem) {
+      return {
+        ...p,
+        asignado: true,
+        asignadoPorNombre: votItem.asignadoPorNombre || "Referente",
+        asignadoRol: "Votante",
+      };
+    }
+
+    // 4) Libre
+    return {
+      ...p,
+      asignado: false,
+      asignadoPorNombre: null,
+      asignadoRol: null,
+    };
+  });
+};
+
 
   // ======================= AGREGAR PERSONA (Supabase) =======================
   const handleAgregarPersona = async (persona) => {
