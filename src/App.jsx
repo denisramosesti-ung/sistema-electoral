@@ -206,8 +206,10 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
 
 // ======================= APLICACIÓN PRINCIPAL =======================
 const App = () => {
-// ======================= GENERAR REPORTE PDF =======================
-const generarPDF = () => {
+
+  // ======================= GENERAR REPORTE PDF =======================
+  const generarPDF = () => {
+
   const doc = new jsPDF({ orientation: "portrait" });
 
   // ENCABEZADO
