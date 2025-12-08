@@ -310,37 +310,38 @@ const App = () => {
 
   // ======================= PERSONAS DISPONIBLES =======================
   const getPersonasDisponibles = () => {
-    return padron.map((p) => {
-      const coord = estructura.coordinadores.find((c) => c.ci === p.ci);
-      if (coord)
-        return {
-          ...p,
-          asignado: true,
-          asignadoPorNombre: coord.nombre + " " + coord.apellido,
-          asignadoRol: "Coordinador",
-        };
+  return padron.map((p) => {
+    const coord = estructura.coordinadores.find((c) => c.ci === p.ci);
+    if (coord)
+      return {
+        ...p,
+        asignado: true,
+        asignadoPorNombre: coord.nombre + " " + coord.apellido,
+        asignadoRol: "Coordinador",
+      };
 
-      const sub = estructura.subcoordinadores.find((s) => s.ci === p.ci);
-      if (sub)
-        return {
-          ...p,
-          asignado: true,
-          asignadoPorNombre: sub.nombre + " " + sub.apellido,
-          asignadoRol: "Subcoordinador",
-        };
+    const sub = estructura.subcoordinadores.find((s) => s.ci === p.ci);
+    if (sub)
+      return {
+        ...p,
+        asignado: true,
+        asignadoPorNombre: sub.nombre + " " + sub.apellido,
+        asignadoRol: "Subcoordinador",
+      };
 
-      const vot = estructura.votantes.find((v) => v.ci === p.ci);
-      if (v)
-        return {
-          ...p,
-          asignado: true,
-          asignadoPorNombre: v.asignadoPorNombre,
-          asignadoRol: "Votante",
-        };
+    const vot = estructura.votantes.find((v) => v.ci === p.ci);
+    if (vot)
+      return {
+        ...p,
+        asignado: true,
+        asignadoPorNombre: vot.asignadoPorNombre,
+        asignadoRol: "Votante",
+      };
 
-      return { ...p, asignado: false };
-    });
-  };
+    return { ...p, asignado: false };
+  });
+};
+
 
   // ======================= AGREGAR PERSONA =======================
   const generarCodigo = () =>
