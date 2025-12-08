@@ -59,33 +59,28 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
 
   if (!show) return null;
 
-  // === FILTRO MEJORADO: coincidencias más relevantes primero ===
+  // FILTRO MEJORADO
   let filtered = [];
   if (searchTerm.trim()) {
     const term = searchTerm.toLowerCase();
 
-    // 1) Coincidencias exactas por CI al inicio
     const exactCI = disponibles.filter((p) =>
       p.ci.startsWith(searchTerm)
     );
 
-    // 2) Coincidencias por nombre y apellido
     const nameMatches = disponibles.filter(
       (p) =>
         p.nombre.toLowerCase().includes(term) ||
         p.apellido.toLowerCase().includes(term)
     );
 
-    // Unimos sin duplicar
     const combined = [...exactCI, ...nameMatches].filter(
-      (p, index, arr) => arr.findIndex((x) => x.ci === p.ci) === index
+      (p, idx, arr) => arr.findIndex((x) => x.ci === p.ci) === idx
     );
 
-    // 🛑 LIMITAMOS A 5 RESULTADOS
-    filtered = combined.slice(0, 5);
+    filtered = combined.slice(0, 5); // solo 5 items
   }
 
-  // PAGINACIÓN (mantengo por si querés usar luego)
   const pageSize = 5;
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const start = (page - 1) * pageSize;
@@ -138,35 +133,55 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
               ❌ No se encontraron resultados.
             </p>
           ) : (
-            paginated.map((persona) => (
-              <div
-                key={persona.ci}
-                className="p-4 border rounded-lg bg-gray-50 hover:bg-red-50 cursor-pointer transition relative"
-              >
+            paginated.map((persona) => {
+              const yaAsignado = !!persona.asignadoPorNombre;
 
-                {/* INFO → clickeable */}
-                <div onClick={() => onAdd(persona)}>
+              return (
+                <div
+                  key={persona.ci}
+                  className={
+                    "p-4 border rounded-lg bg-gray-50 transition relative " +
+                    (yaAsignado
+                      ? "opacity-50 cursor-not-allowed"
+                      : "hover:bg-red-50 cursor-pointer")
+                  }
+                  onClick={() => {
+                    if (!yaAsignado) onAdd(persona);
+                  }}
+                >
+                  {/* INFO */}
                   <p className="font-semibold text-gray-800">
                     {persona.nombre} {persona.apellido}
                   </p>
+
                   <p className="text-sm text-gray-600">
                     CI: {persona.ci} · {persona.localidad} · Mesa: {persona.mesa}
                   </p>
-                </div>
 
-                {/* BOTÓN CANCELAR EN CADA TARJETA */}
-                <button
-                  className="absolute top-2 right-2 text-gray-500 hover:text-red-600 text-sm"
-                  onClick={onClose}
-                >
-                  Cancelar ✖
-                </button>
-              </div>
-            ))
+                  {/* MENSAJE DE QUE YA FUE AGREGADO */}
+                  {yaAsignado && (
+                    <p className="text-xs text-red-600 mt-1">
+                      Ya fue agregado por <b>{persona.asignadoPorNombre}</b>.
+                    </p>
+                  )}
+
+                  {/* BOTÓN CANCELAR */}
+                  <button
+                    className="absolute top-2 right-2 text-gray-500 hover:text-red-600 text-sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onClose();
+                    }}
+                  >
+                    ✖
+                  </button>
+                </div>
+              );
+            })
           )}
         </div>
 
-        {/* PAGINACIÓN SOLO SI HAY RESULTADOS */}
+        {/* PAGINACIÓN */}
         {filtered.length > 5 && (
           <div className="px-6 pb-3 flex justify-between items-center">
             <button
@@ -189,7 +204,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           </div>
         )}
 
-        {/* BOTÓN CERRAR GENERAL */}
+        {/* BOTÓN CERRAR */}
         <div className="px-6 pb-6">
           <button
             onClick={onClose}
@@ -198,7 +213,6 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
             Cerrar
           </button>
         </div>
-
       </div>
     </div>
   );
@@ -255,13 +269,16 @@ const App = () => {
     subcoords.forEach((sub) => {
       doc.setFontSize(14);
       doc.text(
-        `Subcoordinador: ${sub.nombre} ${sub.apellido} (Código: ${sub.loginCode})`,
+        `Subcoordinador: ${sub.nombre} ${sub.apellido}`,
         14,
         y
       );
       y += 5;
 
       const votantesSub = getVotantesDeSubcoord(sub.ci);
+      doc.setFontSize(12);
+doc.text("Votantes asignados:", 14, y);
+y += 4;
 
       autoTable(doc, {
         startY: y,
@@ -375,49 +392,61 @@ const App = () => {
   };
 
   const getPersonasDisponibles = () => {
-    const asignadas = getPersonasAsignadas();
-    return PADRON_SIMULADO.filter((p) => !asignadas.has(p.ci));
-  };
+  return PADRON_SIMULADO.map((p) => {
+    const yaCoord = estructura.coordinadores.find(c => c.ci === p.ci);
+    const yaSub = estructura.subcoordinadores.find(s => s.ci === p.ci);
+    const yaVot = estructura.votantes.find(v => v.ci === p.ci);
+
+    let asignadoPor = null;
+
+    if (yaCoord) asignadoPor = "Coordinador";
+    else if (yaSub) asignadoPor = "Subcoordinador";
+    else if (yaVot) asignadoPor = "Votante";
+
+    return {
+      ...p,
+      asignado: asignadoPor !== null,
+      asignadoPor
+    };
+  });
+};
+
 
   // ======================= AGREGAR PERSONA =======================
   const handleAgregarPersona = (persona) => {
     const codigo = generarCodigo(); // código para login
 
     if (modalType === "coordinador") {
-      setEstructura((prev) => ({
-        ...prev,
-        coordinadores: [
-          ...prev.coordinadores,
-          {
-            ...persona,
-            loginCode: codigo,
-            subcoordinadores: [],
-            votantes: [],
-          },
-        ],
-      }));
+  setEstructura((prev) => ({
+    ...prev,
+    coordinadores: [
+      ...prev.coordinadores,
+      {
+        ...persona,
+        loginCode: codigo,
+        asignadoPorNombre: `${currentUser ? currentUser.nombre + " " + currentUser.apellido : "Superadmin"}`,
+      },
+    ],
+  }));
+
 
       alert(
         `Coordinador agregado.\nNombre: ${persona.nombre} ${persona.apellido}\nCódigo de acceso: ${codigo}`
       );
     } else if (modalType === "subcoordinador") {
-      if (!currentUser || currentUser.role !== "coordinador") {
-        alert("Solo un coordinador puede agregar subcoordinadores.");
-        return;
-      }
-
-      setEstructura((prev) => ({
-        ...prev,
-        subcoordinadores: [
-          ...prev.subcoordinadores,
-          {
-            ...persona,
-            coordinadorCI: currentUser.ci,
-            loginCode: codigo,
-            votantes: [],
-          },
-        ],
-      }));
+  setEstructura((prev) => ({
+    ...prev,
+    subcoordinadores: [
+      ...prev.subcoordinadores,
+      {
+        ...persona,
+        coordinadorCI: currentUser.ci,
+        loginCode: codigo,
+        asignadoPorNombre: `${currentUser.nombre} ${currentUser.apellido}`,
+      },
+    ],
+  }));
+  
 
       alert(
         `Sub-coordinador agregado.\nNombre: ${persona.nombre} ${persona.apellido}\nCódigo de acceso: ${codigo}`
@@ -431,13 +460,14 @@ const App = () => {
       setEstructura((prev) => ({
         ...prev,
         votantes: [
-          ...prev.votantes,
-          {
-            ...persona,
-            asignadoPor: currentUser.ci,
-            asignadoPorRole: currentUser.role,
-          },
-        ],
+  ...prev.votantes,
+  {
+    ...persona,
+    asignadoPor: currentUser.ci,
+    asignadoPorNombre: `${currentUser.nombre} ${currentUser.apellido}`,
+  },
+],
+
       }));
 
       alert("Votante asignado correctamente.");
