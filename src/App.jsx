@@ -1,5 +1,7 @@
-// App.jsx completo con modal de búsqueda mejorada, paginación y botón Cerrar
+// App.jsx – Versión completa con Supabase + padrón fijo
+
 import React, { useState, useEffect } from "react";
+import { supabase } from "./supabaseClient";
 import {
   Search,
   Users,
@@ -13,10 +15,18 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-// ======================= PADRON IMPORTADO ================================
-import PADRON from "./data/padron.json";
+const [padron, setPadron] = useState([]);
 
-// ======================= MODAL PARA AGREGAR PERSONA =======================
+useEffect(() => {
+  const cargarPadron = async () => {
+    const { data, error } = await supabase.from("padron").select("*");
+    if (!error) setPadron(data);
+  };
+
+  cargarPadron();
+}, []);
+
+
 // ======================= MODAL PARA AGREGAR PERSONA =======================
 const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -28,12 +38,14 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   if (searchTerm.trim()) {
     const term = searchTerm.toLowerCase();
 
-    const exactCI = disponibles.filter((p) => p.ci.startsWith(searchTerm));
+    const exactCI = disponibles.filter((p) =>
+      (p.ci || "").toString().startsWith(searchTerm)
+    );
 
     const nameMatches = disponibles.filter(
       (p) =>
-        p.nombre.toLowerCase().includes(term) ||
-        p.apellido.toLowerCase().includes(term)
+        (p.nombre || "").toLowerCase().includes(term) ||
+        (p.apellido || "").toLowerCase().includes(term)
     );
 
     const combined = [...exactCI, ...nameMatches].filter(
@@ -58,7 +70,6 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl overflow-hidden flex flex-col">
-
         {/* HEADER */}
         <div className="p-6 border-b flex justify-between items-center bg-red-600 text-white">
           <h3 className="text-xl font-bold">{titulo}</h3>
@@ -98,6 +109,12 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
             paginated.map((persona) => {
               const bloqueado = persona.asignado === true;
 
+              const localTexto =
+                persona.localidad ||
+                persona.local ||
+                persona.local_votacion ||
+                "Fernando de la Mora";
+
               return (
                 <div
                   key={persona.ci}
@@ -115,17 +132,25 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
                     {persona.nombre} {persona.apellido}
                   </p>
                   <p className="text-sm text-gray-600">
-                    CI: {persona.ci} • {persona.local} • Mesa: {persona.mesa}
+                    CI: {persona.ci} • {localTexto} • Mesa: {persona.mesa}
                   </p>
 
                   {/* MENSAJE DE YA ASIGNADO */}
                   {bloqueado && (
                     <p className="text-xs text-red-600 mt-2">
-                      Ya fue agregado por <b>{persona.asignadoPor}</b>.
+                      Ya fue agregado por{" "}
+                      <b>
+                        {persona.asignadoPorNombre ||
+                          persona.asignadoPor ||
+                          "otro referente"}
+                      </b>{" "}
+                      {persona.asignadoRol
+                        ? `(${persona.asignadoRol})`
+                        : null}
                     </p>
                   )}
 
-                  {/* BOTÓN CANCELAR */}
+                  {/* BOTÓN CERRAR DEL CARD */}
                   <button
                     className="absolute top-2 right-2 text-gray-500 hover:text-red-600 text-sm"
                     onClick={(e) => {
@@ -152,7 +177,9 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
               ◀ Anterior
             </button>
 
-            <span>Página {page} de {totalPages}</span>
+            <span>
+              Página {page} de {totalPages}
+            </span>
 
             <button
               disabled={page === totalPages}
@@ -164,7 +191,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           </div>
         )}
 
-        {/* BOTÓN CERRAR */}
+        {/* BOTÓN CERRAR MODAL */}
         <div className="px-6 pb-6">
           <button
             onClick={onClose}
@@ -178,296 +205,225 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   );
 };
 
-
 // ======================= APLICACIÓN PRINCIPAL =======================
 const App = () => {
-
-  // ======================= GENERAR REPORTE PDF =======================
-  const generarPDF = () => {
-
-  const doc = new jsPDF({ orientation: "portrait" });
-
-  // ENCABEZADO
-  doc.setFontSize(16);
-  doc.text("Reporte de Estructura Electoral", 14, 20);
-
-  doc.setFontSize(12);
-  doc.text(
-    `Generado por: ${currentUser.nombre} ${currentUser.apellido} (${currentUser.role})`,
-    14,
-    30
-  );
-  doc.text(`Fecha: ${new Date().toLocaleString()}`, 14, 38);
-
-  let y = 50;
-
-  // SUPERADMIN → LISTA DE COORDINADORES
-  if (currentUser.role === "superadmin") {
-    doc.setFontSize(14);
-    doc.text("Listado de Coordinadores", 14, y);
-    y += 6;
-
-    autoTable(doc, {
-      startY: y,
-      head: [["CI", "Nombre", "Apellido", "Código"]],
-      body: estructura.coordinadores.map((c) => [
-        c.ci,
-        c.nombre,
-        c.apellido,
-        c.loginCode || "-",
-      ]),
-      theme: "striped",
-      headStyles: { fillColor: [220, 0, 0] },
-    });
-
-    y = doc.lastAutoTable.finalY + 15;
-  }
-
-  // COORDINADOR → LISTA DE SUBCOORDINADORES
-  if (currentUser.role === "coordinador") {
-    const subcoords = getMisSubcoordinadores();
-
-    subcoords.forEach((sub) => {
-      doc.setFontSize(14);
-      doc.text(
-        `Subcoordinador: ${sub.nombre} ${sub.apellido}`,
-        14,
-        y
-      );
-      y += 5;
-
-      const votantesSub = getVotantesDeSubcoord(sub.ci);
-      doc.setFontSize(12);
-doc.text("Votantes asignados:", 14, y);
-y += 4;
-
-      autoTable(doc, {
-        startY: y,
-        head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa"]],
-        body: votantesSub.map((v) => [
-          v.ci,
-          v.nombre,
-          v.apellido,
-          v.localidad,
-          v.mesa,
-        ]),
-        theme: "grid",
-        headStyles: { fillColor: [255, 80, 80] },
-      });
-
-      y = doc.lastAutoTable.finalY + 12;
-    });
-
-    // VOTANTES DIRECTOS DEL COORDINADOR
-    const directos = getMisVotantes();
-    if (directos.length > 0) {
-      doc.setFontSize(14);
-      doc.text("Votantes directos del Coordinador:", 14, y);
-      y += 6;
-
-      autoTable(doc, {
-        startY: y,
-        head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa"]],
-        body: directos.map((v) => [
-          v.ci,
-          v.nombre,
-          v.apellido,
-          v.localidad,
-          v.mesa,
-        ]),
-        theme: "grid",
-        headStyles: { fillColor: [255, 80, 80] },
-      });
-
-      y = doc.lastAutoTable.finalY + 10;
-    }
-  }
-
-  // SUBCOORDINADOR → SUS PROPIOS VOTANTES
-  if (currentUser.role === "subcoordinador") {
-    doc.setFontSize(14);
-    doc.text("Mis votantes asignados:", 14, y);
-
-    autoTable(doc, {
-      startY: y + 4,
-      head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa"]],
-      body: getMisVotantes().map((v) => [
-        v.ci,
-        v.nombre,
-        v.apellido,
-        v.localidad,
-        v.mesa,
-      ]),
-      theme: "grid",
-      headStyles: { fillColor: [255, 80, 80] },
-    });
-  }
-
-  doc.save("reporte_estructura.pdf");
-};
+  // ESTADO PRINCIPAL
   const [currentUser, setCurrentUser] = useState(null);
-
-  // Login
-  const [loginID, setLoginID] = useState("");        // CI o código
-  const [loginPass, setLoginPass] = useState("");    // solo superadmin
-
-  // Estructura
+  const [loginID, setLoginID] = useState("");
+  const [loginPass, setLoginPass] = useState("");
   const [estructura, setEstructura] = useState({
-    coordinadores: [],   // { ci, nombre, apellido, localidad, mesa, loginCode }
-    subcoordinadores: [],// { ci, nombre, apellido, localidad, mesa, loginCode, coordinadorCI }
-    votantes: []         // { ci, nombre, apellido, localidad, mesa, asignadoPor, asignadoPorRole }
+    coordinadores: [],
+    subcoordinadores: [],
+    votantes: [],
   });
 
-  // UI
   const [showAddModal, setShowAddModal] = useState(false);
-  const [modalType, setModalType] = useState("");        // 'coordinador' | 'subcoordinador' | 'votante'
-  const [expandedCoords, setExpandedCoords] = useState({}); // para desplegar estructura
-  const [openPanel, setOpenPanel] = useState(null);      // reservado si luego agregás acordeones adicionales
-
-  // Cargar desde localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem("estructura");
-    if (saved) {
-      setEstructura(JSON.parse(saved));
-    }
-  }, []);
-
-  // Guardar en localStorage
-  useEffect(() => {
-    localStorage.setItem("estructura", JSON.stringify(estructura));
-  }, [estructura]);
+  const [modalType, setModalType] = useState("");
+  const [expandedCoords, setExpandedCoords] = useState({});
 
   // ======================= HELPERS =======================
-  const generarCodigo = () => {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
-  };
+  const generarCodigo = () =>
+    Math.random().toString(36).substring(2, 8).toUpperCase();
 
-  const getPersonasAsignadas = () => {
-    const asignadas = new Set();
-
-    estructura.coordinadores.forEach((c) => asignadas.add(c.ci));
-    estructura.subcoordinadores.forEach((s) => asignadas.add(s.ci));
-    estructura.votantes.forEach((v) => asignadas.add(v.ci));
-
-    return asignadas;
-  };
-
-  const getPersonasDisponibles = () => {
-  return PADRON.map((p) => {
-    // Verificar si ya es COORDINADOR
-    const yaCoord = estructura.coordinadores.find(c => c.ci === p.ci);
-    if (yaCoord) {
-      return {
-        ...p,
-        asignado: true,
-        asignadoPor: `${yaCoord.nombre} ${yaCoord.apellido}`,
-        asignadoRol: "Coordinador"
-      };
-    }
-
-    // Verificar si ya es SUBCOORDINADOR
-    const yaSub = estructura.subcoordinadores.find(s => s.ci === p.ci);
-    if (yaSub) {
-      // Buscar coordinador dueño
-      const owner = estructura.coordinadores.find(c => c.ci === yaSub.coordinadorCI);
-      return {
-        ...p,
-        asignado: true,
-        asignadoPor: owner ? `${owner.nombre} ${owner.apellido}` : "Un coordinador",
-        asignadoRol: "Subcoordinador"
-      };
-    }
-
-    // Verificar si ya es VOTANTE
-    const yaVot = estructura.votantes.find(v => v.ci === p.ci);
-    if (yaVot) {
-      // Buscar quién lo asignó
-      const owner =
-        estructura.coordinadores.find(c => c.ci === yaVot.asignadoPor) ||
-        estructura.subcoordinadores.find(s => s.ci === yaVot.asignadoPor);
-
-      return {
-        ...p,
-        asignado: true,
-        asignadoPor: owner ? `${owner.nombre} ${owner.apellido}` : "Alguien",
-        asignadoRol: "Votante"
-      };
-    }
-
-    // Si no está asignado a nadie
-    return { ...p, asignado: false, asignadoPor: null, asignadoRol: null };
+  const normalizarCoordinador = (row) => ({
+    ci: row.ci,
+    nombre: row.nombre,
+    apellido: row.apellido,
+    localidad: row.localidad,
+    mesa: row.mesa,
+    loginCode: row.login_code,
+    asignadoPorNombre: row.asignado_por_nombre,
   });
-};
 
+  const normalizarSubcoordinador = (row) => ({
+    ci: row.ci,
+    nombre: row.nombre,
+    apellido: row.apellido,
+    localidad: row.localidad,
+    mesa: row.mesa,
+    coordinadorCI: row.coordinador_ci,
+    loginCode: row.login_code,
+    asignadoPorNombre: row.asignado_por_nombre,
+  });
 
-  // ======================= AGREGAR PERSONA =======================
-  const handleAgregarPersona = (persona) => {
-    const codigo = generarCodigo(); // código para login
+  const normalizarVotante = (row) => ({
+    ci: row.ci,
+    nombre: row.nombre,
+    apellido: row.apellido,
+    localidad: row.localidad,
+    mesa: row.mesa,
+    asignadoPor: row.asignado_por,
+    asignadoPorNombre: row.asignado_por_nombre,
+  });
 
+  const recargarEstructura = async () => {
+    const { data: coords } = await supabase.from("coordinadores").select("*");
+    const { data: subs } = await supabase.from("subcoordinadores").select("*");
+    const { data: votos } = await supabase.from("votantes").select("*");
+
+    setEstructura({
+      coordinadores: (coords || []).map(normalizarCoordinador),
+      subcoordinadores: (subs || []).map(normalizarSubcoordinador),
+      votantes: (votos || []).map(normalizarVotante),
+    });
+  };
+
+  // Cargar estructura una vez
+  useEffect(() => {
+    recargarEstructura();
+  }, []);
+
+  // ======================= PADRÓN DISPONIBLE =======================
+  const getPersonasDisponibles = () => {
+    return padron.map((p) => {
+      const coord = estructura.coordinadores.find((c) => c.ci === p.ci);
+      if (coord) {
+        return {
+          ...p,
+          asignado: true,
+          asignadoPorNombre: `${coord.nombre} ${coord.apellido}`,
+          asignadoRol: "Coordinador",
+        };
+      }
+
+      const sub = estructura.subcoordinadores.find((s) => s.ci === p.ci);
+      if (sub) {
+        return {
+          ...p,
+          asignado: true,
+          asignadoPorNombre: `${sub.nombre} ${sub.apellido}`,
+          asignadoRol: "Subcoordinador",
+        };
+      }
+
+      const vot = estructura.votantes.find((v) => v.ci === p.ci);
+      if (vot) {
+        return {
+          ...p,
+          asignado: true,
+          asignadoPorNombre: vot.asignadoPorNombre || "Referente",
+          asignadoRol: "Votante",
+        };
+      }
+
+      return {
+        ...p,
+        asignado: false,
+        asignadoPorNombre: null,
+        asignadoRol: null,
+      };
+    });
+  };
+
+  // ======================= AGREGAR PERSONA (Supabase) =======================
+  const handleAgregarPersona = async (persona) => {
+    const codigo = generarCodigo();
+
+    // COORDINADOR
     if (modalType === "coordinador") {
-  setEstructura((prev) => ({
-    ...prev,
-    coordinadores: [
-      ...prev.coordinadores,
-      {
-        ...persona,
-        loginCode: codigo,
-        asignadoPorNombre: `${currentUser ? currentUser.nombre + " " + currentUser.apellido : "Superadmin"}`,
-      },
-    ],
-  }));
+      const { error } = await supabase.from("coordinadores").insert([
+        {
+          ci: persona.ci,
+          nombre: persona.nombre,
+          apellido: persona.apellido,
+          localidad:
+            persona.localidad ||
+            persona.local ||
+            persona.local_votacion ||
+            "Fernando de la Mora",
+          mesa: persona.mesa,
+          login_code: codigo,
+          asignado_por_nombre: "Superadmin",
+        },
+      ]);
 
+      if (error) {
+        alert("Error al guardar coordinador en Supabase");
+        console.error(error);
+        return;
+      }
 
       alert(
         `Coordinador agregado.\nNombre: ${persona.nombre} ${persona.apellido}\nCódigo de acceso: ${codigo}`
       );
-    } else if (modalType === "subcoordinador") {
-  setEstructura((prev) => ({
-    ...prev,
-    subcoordinadores: [
-      ...prev.subcoordinadores,
-      {
-        ...persona,
-        coordinadorCI: currentUser.ci,
-        loginCode: codigo,
-        asignadoPorNombre: `${currentUser.nombre} ${currentUser.apellido}`,
-      },
-    ],
-  }));
+    }
+
+    // SUBCOORDINADOR
+    else if (modalType === "subcoordinador") {
+      if (!currentUser || currentUser.role !== "coordinador") {
+        alert("Solo un coordinador puede agregar subcoordinadores.");
+        return;
+      }
+
+      const { error } = await supabase.from("subcoordinadores").insert([
+        {
+          ci: persona.ci,
+          nombre: persona.nombre,
+          apellido: persona.apellido,
+          localidad:
+            persona.localidad ||
+            persona.local ||
+            persona.local_votacion ||
+            "Fernando de la Mora",
+          mesa: persona.mesa,
+          coordinador_ci: currentUser.ci,
+          login_code: codigo,
+          asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+        },
+      ]);
+
+      if (error) {
+        alert("Error al guardar subcoordinador en Supabase");
+        console.error(error);
+        return;
+      }
 
       alert(
         `Sub-coordinador agregado.\nNombre: ${persona.nombre} ${persona.apellido}\nCódigo de acceso: ${codigo}`
       );
-    } else if (modalType === "votante") {
+    }
+
+    // VOTANTE
+    else if (modalType === "votante") {
       if (!currentUser) {
         alert("Debe iniciar sesión para asignar votantes.");
         return;
       }
 
-      setEstructura((prev) => ({
-        ...prev,
-        votantes: [
-  ...prev.votantes,
-  {
-    ...persona,
-    asignadoPor: currentUser.ci,
-    asignadoPorNombre: `${currentUser.nombre} ${currentUser.apellido}`,
-  },
-],
+      const { error } = await supabase.from("votantes").insert([
+        {
+          ci: persona.ci,
+          nombre: persona.nombre,
+          apellido: persona.apellido,
+          localidad:
+            persona.localidad ||
+            persona.local ||
+            persona.local_votacion ||
+            "Fernando de la Mora",
+          mesa: persona.mesa,
+          asignado_por: currentUser.ci,
+          asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+        },
+      ]);
 
-      }));
+      if (error) {
+        alert("Error al guardar votante en Supabase");
+        console.error(error);
+        return;
+      }
 
       alert("Votante asignado correctamente.");
     }
 
     setShowAddModal(false);
+    await recargarEstructura();
   };
 
-  // ======================= QUITAR PERSONA =======================
-  const quitarPersona = (ci, tipo) => {
+  // ======================= QUITAR PERSONA (Supabase) =======================
+  const quitarPersona = async (ci, tipo) => {
     const mensajes = {
       coordinador:
-        "¿Quitar jerarquía de coordinador? También se quitarán sus subcoordinadores y votantes relacionados.",
+        "¿Quitar jerarquía de coordinador? También se quitarán sus subcoordinadores y sus votantes.",
       subcoordinador:
         "¿Quitar jerarquía de sub-coordinador? También se quitarán sus votantes.",
       votante: "¿Quitar votante de la lista? Volverá al padrón disponible.",
@@ -475,41 +431,33 @@ y += 4;
 
     if (!window.confirm(mensajes[tipo])) return;
 
-    setEstructura((prev) => {
-      let nueva = { ...prev };
+    if (tipo === "coordinador") {
+      const { data: subs } = await supabase
+        .from("subcoordinadores")
+        .select("ci")
+        .eq("coordinador_ci", ci);
 
-      if (tipo === "coordinador") {
-        const subcoords = prev.subcoordinadores.filter(
-          (s) => s.coordinadorCI === ci
-        );
-        const subCIs = subcoords.map((s) => s.ci);
+      const subCIs = (subs || []).map((s) => s.ci);
 
-        nueva = {
-          coordinadores: prev.coordinadores.filter((c) => c.ci !== ci),
-          subcoordinadores: prev.subcoordinadores.filter(
-            (s) => s.coordinadorCI !== ci
-          ),
-          votantes: prev.votantes.filter(
-            (v) => v.asignadoPor !== ci && !subCIs.includes(v.asignadoPor)
-          ),
-        };
-      } else if (tipo === "subcoordinador") {
-        nueva = {
-          ...prev,
-          subcoordinadores: prev.subcoordinadores.filter((s) => s.ci !== ci),
-          votantes: prev.votantes.filter((v) => v.asignadoPor !== ci),
-        };
-      } else if (tipo === "votante") {
-        nueva = {
-          ...prev,
-          votantes: prev.votantes.filter((v) => v.ci !== ci),
-        };
+      if (subCIs.length > 0) {
+        await supabase
+          .from("votantes")
+          .delete()
+          .in("asignado_por", subCIs);
       }
 
-      return nueva;
-    });
+      await supabase.from("votantes").delete().eq("asignado_por", ci);
+      await supabase.from("subcoordinadores").delete().eq("coordinador_ci", ci);
+      await supabase.from("coordinadores").delete().eq("ci", ci);
+    } else if (tipo === "subcoordinador") {
+      await supabase.from("votantes").delete().eq("asignado_por", ci);
+      await supabase.from("subcoordinadores").delete().eq("ci", ci);
+    } else if (tipo === "votante") {
+      await supabase.from("votantes").delete().eq("ci", ci);
+    }
 
-    alert("Persona removida. Ahora vuelve a estar disponible en el padrón.");
+    await recargarEstructura();
+    alert("Persona removida correctamente.");
   };
 
   // ======================= MIS SUBS / VOTANTES =======================
@@ -525,9 +473,8 @@ y += 4;
     return estructura.votantes.filter((v) => v.asignadoPor === currentUser.ci);
   };
 
-  const getVotantesDeSubcoord = (subcoordCI) => {
-    return estructura.votantes.filter((v) => v.asignadoPor === subcoordCI);
-  };
+  const getVotantesDeSubcoord = (subcoordCI) =>
+    estructura.votantes.filter((v) => v.asignadoPor === subcoordCI);
 
   // ======================= ESTADÍSTICAS =======================
   const getEstadisticas = () => {
@@ -566,14 +513,131 @@ y += 4;
     return {};
   };
 
+  // ======================= REPORTE PDF =======================
+  const generarPDF = () => {
+    const doc = new jsPDF({ orientation: "portrait" });
+
+    doc.setFontSize(16);
+    doc.text("Reporte de Estructura Electoral", 14, 20);
+
+    doc.setFontSize(12);
+    doc.text(
+      `Generado por: ${currentUser.nombre} ${currentUser.apellido} (${currentUser.role})`,
+      14,
+      30
+    );
+    doc.text(`Fecha: ${new Date().toLocaleString()}`, 14, 38);
+
+    let y = 50;
+
+    if (currentUser.role === "superadmin") {
+      doc.setFontSize(14);
+      doc.text("Listado de Coordinadores", 14, y);
+      y += 6;
+
+      autoTable(doc, {
+        startY: y,
+        head: [["CI", "Nombre", "Apellido", "Código"]],
+        body: estructura.coordinadores.map((c) => [
+          c.ci,
+          c.nombre,
+          c.apellido,
+          c.loginCode || "-",
+        ]),
+        theme: "striped",
+        headStyles: { fillColor: [220, 0, 0] },
+      });
+
+      y = doc.lastAutoTable.finalY + 15;
+    }
+
+    if (currentUser.role === "coordinador") {
+      const subcoords = getMisSubcoordinadores();
+
+      subcoords.forEach((sub) => {
+        doc.setFontSize(14);
+        doc.text(
+          `Subcoordinador: ${sub.nombre} ${sub.apellido}`,
+          14,
+          y
+        );
+        y += 5;
+
+        const votantesSub = getVotantesDeSubcoord(sub.ci);
+        doc.setFontSize(12);
+        doc.text("Votantes asignados:", 14, y);
+        y += 4;
+
+        autoTable(doc, {
+          startY: y,
+          head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa"]],
+          body: votantesSub.map((v) => [
+            v.ci,
+            v.nombre,
+            v.apellido,
+            v.localidad,
+            v.mesa,
+          ]),
+          theme: "grid",
+          headStyles: { fillColor: [255, 80, 80] },
+        });
+
+        y = doc.lastAutoTable.finalY + 12;
+      });
+
+      const directos = getMisVotantes();
+      if (directos.length > 0) {
+        doc.setFontSize(14);
+        doc.text("Votantes directos del Coordinador:", 14, y);
+        y += 6;
+
+        autoTable(doc, {
+          startY: y,
+          head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa"]],
+          body: directos.map((v) => [
+            v.ci,
+            v.nombre,
+            v.apellido,
+            v.localidad,
+            v.mesa,
+          ]),
+          theme: "grid",
+          headStyles: { fillColor: [255, 80, 80] },
+        });
+
+        y = doc.lastAutoTable.finalY + 10;
+      }
+    }
+
+    if (currentUser.role === "subcoordinador") {
+      doc.setFontSize(14);
+      doc.text("Mis votantes asignados:", 14, y);
+
+      autoTable(doc, {
+        startY: y + 4,
+        head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa"]],
+        body: getMisVotantes().map((v) => [
+          v.ci,
+          v.nombre,
+          v.apellido,
+          v.localidad,
+          v.mesa,
+        ]),
+        theme: "grid",
+        headStyles: { fillColor: [255, 80, 80] },
+      });
+    }
+
+    doc.save("reporte_estructura.pdf");
+  };
+
   // ======================= LOGIN =======================
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!loginID.trim()) {
       alert("Ingrese su CI o código de acceso.");
       return;
     }
 
-    // SUPERADMIN: CI + contraseña
     if (loginID === "4630621") {
       if (loginPass !== "12345") {
         alert("Contraseña incorrecta para el Super Administrador.");
@@ -590,34 +654,42 @@ y += 4;
       return;
     }
 
-    // COORDINADOR: login por código
-    const coord = estructura.coordinadores.find(
-      (c) => c.loginCode === loginID.trim()
-    );
-    if (coord) {
-      setCurrentUser({ ...coord, role: "coordinador" });
-      setLoginPass("");
+    const coordRes = await supabase
+      .from("coordinadores")
+      .select("*")
+      .eq("login_code", loginID.trim());
+
+    if (coordRes.data && coordRes.data.length > 0) {
+      const c = normalizarCoordinador(coordRes.data[0]);
+      setCurrentUser({
+        ...c,
+        role: "coordinador",
+      });
       return;
     }
 
-    // SUBCOORDINADOR: login por código
-    const sub = estructura.subcoordinadores.find(
-      (s) => s.loginCode === loginID.trim()
-    );
-    if (sub) {
-      setCurrentUser({ ...sub, role: "subcoordinador" });
-      setLoginPass("");
+    const subRes = await supabase
+      .from("subcoordinadores")
+      .select("*")
+      .eq("login_code", loginID.trim());
+
+    if (subRes.data && subRes.data.length > 0) {
+      const s = normalizarSubcoordinador(subRes.data[0]);
+      setCurrentUser({
+        ...s,
+        role: "subcoordinador",
+      });
       return;
     }
 
-    alert("Usuario no encontrado. Verifique el código o CI.");
+    alert("Usuario no encontrado. Verifique el código.");
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     setLoginID("");
     setLoginPass("");
-    setOpenPanel(null);
+    setExpandedCoords({});
   };
 
   const toggleExpand = (ci) => {
@@ -632,7 +704,6 @@ y += 4;
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center p-4">
         <div className="bg-white/95 backdrop-blur-sm p-8 rounded-2xl shadow-xl w-full max-w-md">
-          {/* ICONO */}
           <div className="text-center mb-8">
             <Users className="w-16 h-16 text-red-600 mx-auto" />
             <h1 className="text-3xl font-bold text-gray-800 mt-3">
@@ -641,7 +712,6 @@ y += 4;
             <p className="text-gray-600">Gestión de Votantes</p>
           </div>
 
-          {/* INPUT LOGIN */}
           <label className="text-sm font-medium text-gray-700">
             CI o Código de Acceso
           </label>
@@ -653,7 +723,6 @@ y += 4;
             placeholder="Ej: 1234567 o ABC123"
           />
 
-          {/* PASSWORD SOLO PARA SUPERADMIN */}
           {loginID === "4630621" && (
             <div className="mb-4">
               <label className="text-sm font-medium text-gray-700">
@@ -669,7 +738,6 @@ y += 4;
             </div>
           )}
 
-          {/* BOTÓN LOGIN */}
           <button
             onClick={handleLogin}
             className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-semibold mb-3"
@@ -677,7 +745,6 @@ y += 4;
             Iniciar Sesión
           </button>
 
-          {/* INSTRUCCIONES */}
           <div className="mt-6 bg-red-50 p-4 rounded-lg border border-red-200 text-sm text-red-700">
             <p className="font-semibold mb-2">📋 Instrucciones:</p>
             <ol className="list-decimal ml-5 space-y-1">
@@ -685,15 +752,6 @@ y += 4;
             </ol>
           </div>
         </div>
-
-        {/* MODAL */}
-        <AddPersonModal
-          show={showAddModal}
-          onClose={() => setShowAddModal(false)}
-          tipo={modalType}
-          onAdd={handleAgregarPersona}
-          disponibles={getPersonasDisponibles()}
-        />
       </div>
     );
   }
@@ -728,7 +786,7 @@ y += 4;
         </div>
       </div>
 
-      {/* ESTADISTICAS */}
+      {/* ESTADÍSTICAS */}
       <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-3 gap-4">
         {currentUser.role === "superadmin" && (
           <>
@@ -791,56 +849,55 @@ y += 4;
       </div>
 
       {/* ACCIONES */}
-<div className="max-w-7xl mx-auto px-4 mb-6 flex flex-wrap gap-3">
-  {currentUser.role === "superadmin" && (
-    <button
-      onClick={() => {
-        setModalType("coordinador");
-        setShowAddModal(true);
-      }}
-      className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
-    >
-      <UserPlus className="w-4 h-4" />
-      Agregar Coordinador
-    </button>
-  )}
+      <div className="max-w-7xl mx-auto px-4 mb-6 flex flex-wrap gap-3">
+        {currentUser.role === "superadmin" && (
+          <button
+            onClick={() => {
+              setModalType("coordinador");
+              setShowAddModal(true);
+            }}
+            className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+          >
+            <UserPlus className="w-4 h-4" />
+            Agregar Coordinador
+          </button>
+        )}
 
-  {currentUser.role === "coordinador" && (
-    <button
-      onClick={() => {
-        setModalType("subcoordinador");
-        setShowAddModal(true);
-      }}
-      className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
-    >
-      <UserPlus className="w-4 h-4" />
-      Agregar Sub-coordinador
-    </button>
-  )}
+        {currentUser.role === "coordinador" && (
+          <button
+            onClick={() => {
+              setModalType("subcoordinador");
+              setShowAddModal(true);
+            }}
+            className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+          >
+            <UserPlus className="w-4 h-4" />
+            Agregar Sub-coordinador
+          </button>
+        )}
 
-  {(currentUser.role === "coordinador" ||
-    currentUser.role === "subcoordinador") && (
-    <button
-      onClick={() => {
-        setModalType("votante");
-        setShowAddModal(true);
-      }}
-      className="flex items-center gap-2 border-2 border-red-600 text-red-600 px-4 py-2 rounded-lg hover:bg-red-50"
-    >
-      <UserPlus className="w-4 h-4" />
-      Agregar Votante
-    </button>
-  )}
+        {(currentUser.role === "coordinador" ||
+          currentUser.role === "subcoordinador") && (
+          <button
+            onClick={() => {
+              setModalType("votante");
+              setShowAddModal(true);
+            }}
+            className="flex items-center gap-2 border-2 border-red-600 text-red-600 px-4 py-2 rounded-lg hover:bg-red-50"
+          >
+            <UserPlus className="w-4 h-4" />
+            Agregar Votante
+          </button>
+        )}
 
-  {/* 🔥 BOTÓN PARA DESCARGAR REPORTE PDF */}
-  <button
-    onClick={generarPDF}
-    className="flex items-center gap-2 border-2 border-red-600 text-red-600 px-4 py-2 rounded-lg hover:bg-red-50"
-  >
-    <BarChart3 className="w-4 h-4" />
-    Descargar Reporte PDF
-  </button>
-</div>
+        <button
+          onClick={generarPDF}
+          className="flex items-center gap-2 border-2 border-red-600 text-red-600 px-4 py-2 rounded-lg hover:bg-red-50"
+        >
+          <BarChart3 className="w-4 h-4" />
+          Descargar Reporte PDF
+        </button>
+      </div>
 
       {/* LISTAS */}
       <div className="max-w-7xl mx-auto px-4 mb-10">
@@ -858,7 +915,6 @@ y += 4;
                     key={coord.ci}
                     className="border rounded-lg mb-3 bg-red-50/40"
                   >
-                    {/* HEADER COORD */}
                     <div
                       className="flex items-center justify-between p-4 cursor-pointer"
                       onClick={() => toggleExpand(coord.ci)}
@@ -896,7 +952,6 @@ y += 4;
                       </button>
                     </div>
 
-                    {/* SUBLISTA */}
                     {expandedCoords[coord.ci] && (
                       <div className="bg-white px-4 pb-4">
                         {estructura.subcoordinadores
@@ -912,12 +967,10 @@ y += 4;
                               <p className="text-sm text-gray-600">
                                 CI: {sub.ci} — Sub-coordinador
                               </p>
-                              {sub.loginCode && (
-                                <p className="text-xs text-gray-500">
-                                  Código de acceso: {sub.loginCode}
-                                </p>
-                              )}
 
+                              <p className="text-sm font-semibold mt-2">
+                                Votantes
+                              </p>
                               {estructura.votantes
                                 .filter((v) => v.asignadoPor === sub.ci)
                                 .map((v) => (
@@ -931,7 +984,6 @@ y += 4;
                             </div>
                           ))}
 
-                        {/* Votantes directos */}
                         {estructura.votantes
                           .filter((v) => v.asignadoPor === coord.ci)
                           .map((v) => (
@@ -963,7 +1015,6 @@ y += 4;
                     key={sub.ci}
                     className="border rounded-lg mb-3 bg-red-50/40"
                   >
-                    {/* HEADER SUB */}
                     <div
                       className="flex items-center justify-between p-4 cursor-pointer"
                       onClick={() => toggleExpand(sub.ci)}
@@ -982,11 +1033,6 @@ y += 4;
                           <p className="text-sm text-gray-600">
                             CI: {sub.ci} — Sub-coordinador
                           </p>
-                          {sub.loginCode && (
-                            <p className="text-xs text-gray-500">
-                              Código de acceso: {sub.loginCode}
-                            </p>
-                          )}
                         </div>
                       </div>
 
@@ -1001,9 +1047,11 @@ y += 4;
                       </button>
                     </div>
 
-                    {/* VOTANTES DEL SUB */}
                     {expandedCoords[sub.ci] && (
                       <div className="bg-white px-4 pb-4">
+                        <p className="text-sm font-semibold mt-2">
+                          Votantes
+                        </p>
                         {getVotantesDeSubcoord(sub.ci).map((v) => (
                           <div
                             key={v.ci}
@@ -1031,7 +1079,6 @@ y += 4;
                   </div>
                 ))}
 
-                {/* VOTANTES DIRECTOS */}
                 {getMisVotantes().length > 0 && (
                   <div className="border rounded-lg mb-3 p-4">
                     <p className="font-semibold text-gray-700 mb-3">
