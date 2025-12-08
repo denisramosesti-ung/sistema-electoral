@@ -59,32 +59,20 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
 
   if (!show) return null;
 
-  // FILTRO MEJORADO
-  let filtered = [];
-  if (searchTerm.trim()) {
-    const term = searchTerm.toLowerCase();
+  // === FILTRO ===
+  const term = searchTerm.toLowerCase();
+  const filtered = term
+    ? disponibles.filter(
+        (p) =>
+          p.ci.includes(searchTerm) ||
+          p.nombre.toLowerCase().includes(term) ||
+          p.apellido.toLowerCase().includes(term)
+      )
+    : [];
 
-    const exactCI = disponibles.filter((p) =>
-      p.ci.startsWith(searchTerm)
-    );
-
-    const nameMatches = disponibles.filter(
-      (p) =>
-        p.nombre.toLowerCase().includes(term) ||
-        p.apellido.toLowerCase().includes(term)
-    );
-
-    const combined = [...exactCI, ...nameMatches].filter(
-      (p, idx, arr) => arr.findIndex((x) => x.ci === p.ci) === idx
-    );
-
-    filtered = combined.slice(0, 5); // solo 5 items
-  }
-
-  const pageSize = 5;
+  const pageSize = 10;
+  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const start = (page - 1) * pageSize;
-  const paginated = filtered.slice(start, start + pageSize);
 
   const titulo =
     tipo === "coordinador"
@@ -100,7 +88,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
         {/* HEADER */}
         <div className="p-6 border-b flex justify-between items-center bg-red-600 text-white">
           <h3 className="text-xl font-bold">{titulo}</h3>
-          <button onClick={onClose} className="hover:text-gray-200">
+          <button onClick={onClose}>
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -133,56 +121,50 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
               ❌ No se encontraron resultados.
             </p>
           ) : (
-            paginated.map((persona) => {
-              const yaAsignado = !!persona.asignadoPorNombre;
+            paginated.map((persona) => (
+              <div
+                key={persona.ci}
+                className={`p-4 border rounded-lg transition relative ${
+                  persona.yaAsignado
+                    ? "bg-gray-200 opacity-60 cursor-not-allowed"
+                    : "bg-gray-50 hover:bg-red-50 cursor-pointer"
+                }`}
+                onClick={() => {
+                  if (!persona.yaAsignado) onAdd(persona);
+                }}
+              >
+                {/* INFO */}
+                <p className="font-semibold text-gray-800">
+                  {persona.nombre} {persona.apellido}
+                </p>
+                <p className="text-sm text-gray-600">
+                  CI: {persona.ci} · {persona.localidad} · Mesa: {persona.mesa}
+                </p>
 
-              return (
-                <div
-                  key={persona.ci}
-                  className={
-                    "p-4 border rounded-lg bg-gray-50 transition relative " +
-                    (yaAsignado
-                      ? "opacity-50 cursor-not-allowed"
-                      : "hover:bg-red-50 cursor-pointer")
-                  }
-                  onClick={() => {
-                    if (!yaAsignado) onAdd(persona);
+                {/* MENSAJE DE ASIGNADO */}
+                {persona.yaAsignado && (
+                  <p className="text-xs text-red-600 mt-1 font-medium">
+                    Ya fue agregado por {persona.asignadoPorNombre}.
+                  </p>
+                )}
+
+                {/* BOTÓN CANCELAR */}
+                <button
+                  className="absolute top-2 right-2 text-gray-500 hover:text-red-600 text-sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClose();
                   }}
                 >
-                  {/* INFO */}
-                  <p className="font-semibold text-gray-800">
-                    {persona.nombre} {persona.apellido}
-                  </p>
-
-                  <p className="text-sm text-gray-600">
-                    CI: {persona.ci} · {persona.localidad} · Mesa: {persona.mesa}
-                  </p>
-
-                  {/* MENSAJE DE QUE YA FUE AGREGADO */}
-                  {yaAsignado && (
-                    <p className="text-xs text-red-600 mt-1">
-                      Ya fue agregado por <b>{persona.asignadoPorNombre}</b>.
-                    </p>
-                  )}
-
-                  {/* BOTÓN CANCELAR */}
-                  <button
-                    className="absolute top-2 right-2 text-gray-500 hover:text-red-600 text-sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onClose();
-                    }}
-                  >
-                    ✖
-                  </button>
-                </div>
-              );
-            })
+                  Cancelar ✖
+                </button>
+              </div>
+            ))
           )}
         </div>
 
         {/* PAGINACIÓN */}
-        {filtered.length > 5 && (
+        {filtered.length > pageSize && (
           <div className="px-6 pb-3 flex justify-between items-center">
             <button
               disabled={page === 1}
@@ -204,11 +186,11 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           </div>
         )}
 
-        {/* BOTÓN CERRAR */}
+        {/* CERRAR */}
         <div className="px-6 pb-6">
           <button
             onClick={onClose}
-            className="w-full mt-2 bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 rounded-lg transition"
+            className="w-full bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 rounded-lg"
           >
             Cerrar
           </button>
@@ -217,6 +199,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
     </div>
   );
 };
+
 
 // ======================= APLICACIÓN PRINCIPAL =======================
 const App = () => {
@@ -446,7 +429,6 @@ y += 4;
       },
     ],
   }));
-  
 
       alert(
         `Sub-coordinador agregado.\nNombre: ${persona.nombre} ${persona.apellido}\nCódigo de acceso: ${codigo}`
