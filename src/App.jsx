@@ -325,8 +325,6 @@ const generarPDF = () => {
 
   doc.save("reporte_estructura.pdf");
 };
-
-};
   const [currentUser, setCurrentUser] = useState(null);
 
   // Login
@@ -1083,6 +1081,6 @@ const generarPDF = () => {
       />
     </div>
   );
-}
+};
 
 export default App;
