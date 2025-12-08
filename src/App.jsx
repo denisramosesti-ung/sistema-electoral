@@ -611,7 +611,7 @@ y += 4;
 
     // SUPERADMIN: CI + contraseña
     if (loginID === "4630621") {
-      if (loginPass !== "Vania.16052018") {
+      if (loginPass !== "12345") {
         alert("Contraseña incorrecta para el Super Administrador.");
         return;
       }
