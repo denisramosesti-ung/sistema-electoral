@@ -291,45 +291,50 @@ const App = () => {
 
   // ======================= PADRÓN DISPONIBLE =======================
   const getPersonasDisponibles = () => {
-    return padron.map((p) => {
-      const coord = estructura.coordinadores.find((c) => c.ci === p.ci);
-      if (coord) {
-        return {
-          ...p,
-          asignado: true,
-          asignadoPorNombre: `${coord.nombre} ${coord.apellido}`,
-          asignadoRol: "Coordinador",
-        };
-      }
-
-      const sub = estructura.subcoordinadores.find((s) => s.ci === p.ci);
-      if (sub) {
-        return {
-          ...p,
-          asignado: true,
-          asignadoPorNombre: `${sub.nombre} ${sub.apellido}`,
-          asignadoRol: "Subcoordinador",
-        };
-      }
-
-      const vot = estructura.votantes.find((v) => v.ci === p.ci);
-      if (vot) {
-        return {
-          ...p,
-          asignado: true,
-          asignadoPorNombre: vot.asignadoPorNombre || "Referente",
-          asignadoRol: "Votante",
-        };
-      }
-
+  return padron.map((p) => {
+    // 1) ¿Es coordenador?
+    const coordItem = estructura.coordinadores.find((c) => c.ci === p.ci);
+    if (coordItem) {
       return {
         ...p,
-        asignado: false,
-        asignadoPorNombre: null,
-        asignadoRol: null,
+        asignado: true,
+        asignadoPorNombre: `${coordItem.nombre} ${coordItem.apellido}`,
+        asignadoRol: "Coordinador",
       };
-    });
-  };
+    }
+
+    // 2) ¿Es subcoordinador?
+    const subItem = estructura.subcoordinadores.find((s) => s.ci === p.ci);
+    if (subItem) {
+      return {
+        ...p,
+        asignado: true,
+        asignadoPorNombre: `${subItem.nombre} ${subItem.apellido}`,
+        asignadoRol: "Subcoordinador",
+      };
+    }
+
+    // 3) ¿Es votante?
+    const votItem = estructura.votantes.find((v) => v.ci === p.ci);
+    if (votItem) {
+      return {
+        ...p,
+        asignado: true,
+        asignadoPorNombre: votItem.asignadoPorNombre,
+        asignadoRol: "Votante",
+      };
+    }
+
+    // 4) Persona libre
+    return {
+      ...p,
+      asignado: false,
+      asignadoPorNombre: null,
+      asignadoRol: null,
+    };
+  });
+};
+
 
   // ======================= AGREGAR PERSONA (Supabase) =======================
   const handleAgregarPersona = async (persona) => {
