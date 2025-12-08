@@ -1,4 +1,4 @@
-// App.jsx – Versión completa con Supabase + padrón fijo
+// App.jsx – Versión Supabase + padrón remoto
 
 import React, { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
@@ -15,18 +15,21 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-const [padron, setPadron] = useState([]);
 
-useEffect(() => {
-  const cargarPadron = async () => {
-    const { data, error } = await supabase.from("padron").select("*");
-    if (!error) setPadron(data);
-  };
+const App = () => {
 
-  cargarPadron();
-}, []);
+  // PADRÓN REMOTO DESDE SUPABASE
+  const [padron, setPadron] = useState([]);
 
+  useEffect(() => {
+    const cargarPadron = async () => {
+      const { data, error } = await supabase.from("padron").select("*");
+      if (!error) setPadron(data);
+    };
 
+    cargarPadron();
+  }, []);
+  
 // ======================= MODAL PARA AGREGAR PERSONA =======================
 const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -1148,5 +1151,5 @@ const App = () => {
     </div>
   );
 };
-
+}
 export default App;
