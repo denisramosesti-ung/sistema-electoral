@@ -121,6 +121,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
                     {persona.nombre} {persona.apellido}
                   </p>
                   <p className="text-sm text-gray-600">
+                    Código de acceso: {coord.loginCode}
                     CI: {persona.ci} • {localTexto} • Mesa: {persona.mesa}
                   </p>
 
@@ -974,6 +975,7 @@ const App = () => {
                               </p>
                               <p className="text-sm text-gray-600">
                                 CI: {sub.ci} — Sub-coordinador
+                                Código de acceso: {sub.loginCode}
                               </p>
                               {sub.localidad && sub.mesa && (
                                 <p className="text-xs text-gray-500">
@@ -1045,6 +1047,7 @@ const App = () => {
                           </p>
                           <p className="text-sm text-gray-600">
                             CI: {sub.ci} — Sub-coordinador
+                            Código: {sub.loginCode}
                           </p>
                           {sub.localidad && sub.mesa && (
                             <p className="text-xs text-gray-500">
