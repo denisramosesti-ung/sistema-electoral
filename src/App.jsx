@@ -1,4 +1,4 @@
-// App.jsx – Versión Supabase + padrón remoto (LIMPIA Y FUNCIONAL)
+// App.jsx – Versión Supabase + padrón remoto (COMPLETA CON BUSCADOR CI)
 
 import React, { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
@@ -208,6 +208,10 @@ const App = () => {
   const [modalType, setModalType] = useState("");
   const [expandedCoords, setExpandedCoords] = useState({});
 
+  // Buscador por CI en el panel principal
+  const [searchCI, setSearchCI] = useState("");
+  const [searchResult, setSearchResult] = useState(null);
+
   // ======================= CARGAR PADRÓN =======================
   useEffect(() => {
     const cargarPadron = async () => {
@@ -286,170 +290,237 @@ const App = () => {
   }, []);
 
   // ======================= PADRÓN DISPONIBLE =======================
-const getPersonasDisponibles = () => {
-  return padron.map((p) => {
-    // 1) ¿Es coordinador?
-    const coordItem = estructura.coordinadores.find((c) => c.ci === p.ci);
-    if (coordItem) {
+  const getPersonasDisponibles = () => {
+    return padron.map((p) => {
+      // 1) ¿Es coordinador?
+      const coordItem = estructura.coordinadores.find((c) => c.ci === p.ci);
+      if (coordItem) {
+        return {
+          ...p,
+          asignado: true,
+          asignadoPorNombre: `${coordItem.nombre} ${coordItem.apellido}`,
+          asignadoRol: "Coordinador",
+        };
+      }
+
+      // 2) ¿Es subcoordinador?
+      const subItem = estructura.subcoordinadores.find((s) => s.ci === p.ci);
+      if (subItem) {
+        return {
+          ...p,
+          asignado: true,
+          asignadoPorNombre: `${subItem.nombre} ${subItem.apellido}`,
+          asignadoRol: "Subcoordinador",
+        };
+      }
+
+      // 3) ¿Es votante?
+      const votItem = estructura.votantes.find((v) => v.ci === p.ci);
+      if (votItem) {
+        return {
+          ...p,
+          asignado: true,
+          asignadoPorNombre: votItem.asignadoPorNombre || "Referente",
+          asignadoRol: "Votante",
+        };
+      }
+
+      // 4) Libre
       return {
         ...p,
-        asignado: true,
-        asignadoPorNombre: `${coordItem.nombre} ${coordItem.apellido}`,
-        asignadoRol: "Coordinador",
+        asignado: false,
+        asignadoPorNombre: null,
+        asignadoRol: null,
       };
+    });
+  };
+
+  // ======================= BUSCAR POR CI (PANEL PRINCIPAL) =======================
+  const buscarPorCI = (ci) => {
+    if (!ci) {
+      setSearchResult(null);
+      return;
     }
 
-    // 2) ¿Es subcoordinador?
-    const subItem = estructura.subcoordinadores.find((s) => s.ci === p.ci);
-    if (subItem) {
-      return {
-        ...p,
-        asignado: true,
-        asignadoPorNombre: `${subItem.nombre} ${subItem.apellido}`,
-        asignadoRol: "Subcoordinador",
-      };
+    const ciStr = ci.toString().trim();
+
+    // Coordinador
+    const coord = estructura.coordinadores.find(
+      (c) => c.ci?.toString() === ciStr
+    );
+    if (coord) {
+      setSearchResult({
+        tipo: "coordinador",
+        data: coord,
+      });
+      return;
     }
 
-    // 3) ¿Es votante?
-    const votItem = estructura.votantes.find((v) => v.ci === p.ci);
-    if (votItem) {
-      return {
-        ...p,
-        asignado: true,
-        asignadoPorNombre: votItem.asignadoPorNombre || "Referente",
-        asignadoRol: "Votante",
-      };
+    // Subcoordinador
+    const sub = estructura.subcoordinadores.find(
+      (s) => s.ci?.toString() === ciStr
+    );
+    if (sub) {
+      const coordPadre = estructura.coordinadores.find(
+        (c) => c.ci === sub.coordinadorCI
+      );
+      setSearchResult({
+        tipo: "subcoordinador",
+        data: sub,
+        coordinador: coordPadre || null,
+      });
+      return;
     }
 
-    // 4) Libre
-    return {
-      ...p,
-      asignado: false,
-      asignadoPorNombre: null,
-      asignadoRol: null,
-    };
-  });
-};
+    // Votante
+    const vot = estructura.votantes.find((v) => v.ci?.toString() === ciStr);
+    if (vot) {
+      const asignadorSub = estructura.subcoordinadores.find(
+        (s) => s.ci === vot.asignadoPor
+      );
+      const asignadorCoord = estructura.coordinadores.find(
+        (c) => c.ci === vot.asignadoPor
+      );
+      const asignador = asignadorSub || asignadorCoord || null;
 
+      setSearchResult({
+        tipo: "votante",
+        data: vot,
+        asignador,
+      });
+      return;
+    }
+
+    // No está en ninguna estructura
+    setSearchResult({
+      tipo: "ninguno",
+      data: { ci: ciStr },
+    });
+  };
 
   // ======================= AGREGAR PERSONA (Supabase) =======================
-const handleAgregarPersona = async (persona) => {
-  const codigo = generarCodigo();
+  const handleAgregarPersona = async (persona) => {
+    const codigo = generarCodigo();
 
-  // 🔒 Validación global: evitar agregar a alguien ya asignado
-  const yaEsCoord = estructura.coordinadores.some((c) => c.ci === persona.ci);
-  const yaEsSub = estructura.subcoordinadores.some((s) => s.ci === persona.ci);
-  const yaEsVotante = estructura.votantes.some((v) => v.ci === persona.ci);
-
-  if (yaEsCoord || yaEsSub || yaEsVotante) {
-    let rol = yaEsCoord
-      ? "Coordinador"
-      : yaEsSub
-      ? "Sub-coordinador"
-      : "Votante";
-
-    alert(
-      `⚠️ Esta persona ya fue agregada anteriormente como ${rol}.\n` +
-        `No puede volver a ser asignada.`
+    // 🔒 Validación global: evitar agregar a alguien ya asignado en cualquier rol
+    const yaEsCoord = estructura.coordinadores.some(
+      (c) => c.ci === persona.ci
     );
-    return;
-  }
-
-  const localidadBase =
-    persona.localidad ||
-    persona.local ||
-    persona.local_votacion ||
-    "Fernando de la Mora";
-
-  // ======================= COORDINADOR =======================
-  if (modalType === "coordinador") {
-    const { error } = await supabase.from("coordinadores").insert([
-      {
-        ci: persona.ci,
-        nombre: persona.nombre,
-        apellido: persona.apellido,
-        localidad: localidadBase,
-        mesa: persona.mesa?.toString() || "",
-        login_code: codigo,
-        asignado_por_nombre: "Superadmin",
-      },
-    ]);
-
-    if (error) {
-      alert("Error al guardar coordinador en Supabase");
-      console.error(error);
-      return;
-    }
-
-    alert(
-      `Coordinador agregado.\nNombre: ${persona.nombre} ${persona.apellido}\nCódigo de acceso: ${codigo}`
+    const yaEsSub = estructura.subcoordinadores.some(
+      (s) => s.ci === persona.ci
     );
-  }
-
-  // ======================= SUBCOORDINADOR =======================
-  else if (modalType === "subcoordinador") {
-    if (!currentUser || currentUser.role !== "coordinador") {
-      alert("Solo un coordinador puede agregar subcoordinadores.");
-      return;
-    }
-
-    const { error } = await supabase.from("subcoordinadores").insert([
-      {
-        ci: persona.ci,
-        nombre: persona.nombre,
-        apellido: persona.apellido,
-        localidad: localidadBase,
-        mesa: persona.mesa?.toString() || "",
-        coordinador_ci: currentUser.ci,
-        login_code: codigo,
-        asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-      },
-    ]);
-
-    if (error) {
-      alert("Error al guardar subcoordinador en Supabase");
-      console.error(error);
-      return;
-    }
-
-    alert(
-      `Sub-coordinador agregado.\nNombre: ${persona.nombre} ${persona.apellido}\nCódigo de acceso: ${codigo}`
+    const yaEsVotante = estructura.votantes.some(
+      (v) => v.ci === persona.ci
     );
-  }
 
-  // ======================= VOTANTE =======================
-  else if (modalType === "votante") {
-    if (!currentUser) {
-      alert("Debe iniciar sesión para asignar votantes.");
+    if (yaEsCoord || yaEsSub || yaEsVotante) {
+      let rol = yaEsCoord
+        ? "Coordinador"
+        : yaEsSub
+        ? "Sub-coordinador"
+        : "Votante";
+
+      alert(
+        `⚠️ Esta persona ya fue agregada anteriormente como ${rol}.\n` +
+          `No puede volver a ser asignada.`
+      );
       return;
     }
 
-    const { error } = await supabase.from("votantes").insert([
-      {
-        ci: persona.ci,
-        nombre: persona.nombre,
-        apellido: persona.apellido,
-        localidad: localidadBase,
-        mesa: persona.mesa?.toString() || "",
-        asignado_por: currentUser.ci,
-        asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-      },
-    ]);
+    const localidadBase =
+      persona.localidad ||
+      persona.local ||
+      persona.local_votacion ||
+      "Fernando de la Mora";
 
-    if (error) {
-      alert("Error al guardar votante en Supabase");
-      console.error(error);
-      return;
+    // ======================= COORDINADOR =======================
+    if (modalType === "coordinador") {
+      const { error } = await supabase.from("coordinadores").insert([
+        {
+          ci: persona.ci,
+          nombre: persona.nombre,
+          apellido: persona.apellido,
+          localidad: localidadBase,
+          mesa: persona.mesa?.toString() || "",
+          login_code: codigo,
+          asignado_por_nombre: "Superadmin",
+        },
+      ]);
+
+      if (error) {
+        alert("Error al guardar coordinador en Supabase");
+        console.error(error);
+        return;
+      }
+
+      alert(
+        `Coordinador agregado.\nNombre: ${persona.nombre} ${persona.apellido}\nCódigo de acceso: ${codigo}`
+      );
     }
 
-    alert("Votante asignado correctamente.");
-  }
+    // ======================= SUBCOORDINADOR =======================
+    else if (modalType === "subcoordinador") {
+      if (!currentUser || currentUser.role !== "coordinador") {
+        alert("Solo un coordinador puede agregar subcoordinadores.");
+        return;
+      }
 
-  // Cerrar modal y actualizar
-  setShowAddModal(false);
-  await recargarEstructura();
-};
+      const { error } = await supabase.from("subcoordinadores").insert([
+        {
+          ci: persona.ci,
+          nombre: persona.nombre,
+          apellido: persona.apellido,
+          localidad: localidadBase,
+          mesa: persona.mesa?.toString() || "",
+          coordinador_ci: currentUser.ci,
+          login_code: codigo,
+          asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+        },
+      ]);
 
+      if (error) {
+        alert("Error al guardar subcoordinador en Supabase");
+        console.error(error);
+        return;
+      }
+
+      alert(
+        `Sub-coordinador agregado.\nNombre: ${persona.nombre} ${persona.apellido}\nCódigo de acceso: ${codigo}`
+      );
+    }
+
+    // ======================= VOTANTE =======================
+    else if (modalType === "votante") {
+      if (!currentUser) {
+        alert("Debe iniciar sesión para asignar votantes.");
+        return;
+      }
+
+      const { error } = await supabase.from("votantes").insert([
+        {
+          ci: persona.ci,
+          nombre: persona.nombre,
+          apellido: persona.apellido,
+          localidad: localidadBase,
+          mesa: persona.mesa?.toString() || "",
+          asignado_por: currentUser.ci,
+          asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+        },
+      ]);
+
+      if (error) {
+        alert("Error al guardar votante en Supabase");
+        console.error(error);
+        return;
+      }
+
+      alert("Votante asignado correctamente.");
+    }
+
+    // Cerrar modal y actualizar
+    setShowAddModal(false);
+    await recargarEstructura();
+  };
 
   // ======================= QUITAR PERSONA (Supabase) =======================
   const quitarPersona = async (ci, tipo) => {
@@ -482,16 +553,15 @@ const handleAgregarPersona = async (persona) => {
       await supabase.from("votantes").delete().eq("asignado_por", ci);
       await supabase.from("subcoordinadores").delete().eq("ci", ci);
     } else if (tipo === "votante") {
-  // Solo eliminar el votante asignado por este usuario
-  await supabase
-    .from("votantes")
-    .delete()
-    .match({
-      ci: ci,
-      asignado_por: currentUser.ci
-    });
-}
-
+      // Solo eliminar el votante asignado por este usuario
+      await supabase
+        .from("votantes")
+        .delete()
+        .match({
+          ci: ci,
+          asignado_por: currentUser.ci,
+        });
+    }
 
     await recargarEstructura();
     alert("Persona removida correctamente.");
@@ -576,6 +646,7 @@ const handleAgregarPersona = async (persona) => {
       autoTable(doc, {
         startY: y,
         head: [["CI", "Nombre", "Apellido", "Código"]],
+
         body: estructura.coordinadores.map((c) => [
           c.ci,
           c.nombre,
@@ -934,6 +1005,98 @@ const handleAgregarPersona = async (persona) => {
           <BarChart3 className="w-4 h-4" />
           Descargar Reporte PDF
         </button>
+      </div>
+
+      {/* BUSCADOR GLOBAL POR CI */}
+      <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="bg-white p-4 rounded-lg shadow mb-4">
+          <label className="font-semibold">Buscar persona por CI</label>
+          <input
+            type="text"
+            value={searchCI}
+            onChange={(e) => {
+              const value = e.target.value.replace(/\D/g, "");
+              setSearchCI(value);
+              buscarPorCI(value.trim());
+            }}
+            placeholder="Ingrese CI (solo números)"
+            className="w-full mt-2 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
+          />
+
+          {searchResult && (
+            <div className="mt-4 p-3 border rounded bg-gray-50 text-sm">
+              {searchResult.tipo === "coordinador" && (
+                <p>
+                  <b>Coordinador:</b> {searchResult.data.nombre}{" "}
+                  {searchResult.data.apellido} — CI: {searchResult.data.ci}
+                  {searchResult.data.localidad && (
+                    <>
+                      <br />
+                      Localidad: {searchResult.data.localidad} — Mesa:{" "}
+                      {searchResult.data.mesa}
+                    </>
+                  )}
+                </p>
+              )}
+
+              {searchResult.tipo === "subcoordinador" && (
+                <p>
+                  <b>Subcoordinador:</b> {searchResult.data.nombre}{" "}
+                  {searchResult.data.apellido} — CI: {searchResult.data.ci}
+                  {searchResult.data.localidad && (
+                    <>
+                      <br />
+                      Localidad: {searchResult.data.localidad} — Mesa:{" "}
+                      {searchResult.data.mesa}
+                    </>
+                  )}
+                  {searchResult.coordinador && (
+                    <>
+                      <br />
+                      Depende del Coordinador:{" "}
+                      {searchResult.coordinador.nombre}{" "}
+                      {searchResult.coordinador.apellido} (
+                      {searchResult.coordinador.ci})
+                    </>
+                  )}
+                </p>
+              )}
+
+              {searchResult.tipo === "votante" && (
+                <p>
+                  <b>Votante:</b> {searchResult.data.nombre}{" "}
+                  {searchResult.data.apellido} — CI: {searchResult.data.ci}
+                  <br />
+                  Localidad: {searchResult.data.localidad} — Mesa:{" "}
+                  {searchResult.data.mesa}
+                  <br />
+                  {searchResult.asignador ? (
+                    <>
+                      Asignado a:{" "}
+                      {searchResult.asignador.nombre}{" "}
+                      {searchResult.asignador.apellido} (
+                      {searchResult.asignador.ci}) —{" "}
+                      {estructura.subcoordinadores.some(
+                        (s) => s.ci === searchResult.asignador.ci
+                      )
+                        ? "Subcoordinador"
+                        : "Coordinador"}
+                    </>
+                  ) : (
+                    "Asignador no encontrado (dato incompleto)."
+                  )}
+                </p>
+              )}
+
+              {searchResult.tipo === "ninguno" && (
+                <p className="text-gray-600">
+                  Este CI <b>{searchResult.data.ci}</b> no está asignado a
+                  ninguna estructura todavía.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* LISTAS */}
