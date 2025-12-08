@@ -50,8 +50,9 @@ const generarPadron = () => {
   return padron;
 };
 
-const PADRON_SIMULADO = generarPadron();
+import PADRON from "./data/padron.json";
 
+// ======================= MODAL PARA AGREGAR PERSONA =======================
 // ======================= MODAL PARA AGREGAR PERSONA =======================
 const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -59,20 +60,29 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
 
   if (!show) return null;
 
-  // === FILTRO ===
-  const term = searchTerm.toLowerCase();
-  const filtered = term
-    ? disponibles.filter(
-        (p) =>
-          p.ci.includes(searchTerm) ||
-          p.nombre.toLowerCase().includes(term) ||
-          p.apellido.toLowerCase().includes(term)
-      )
-    : [];
+  let filtered = [];
+  if (searchTerm.trim()) {
+    const term = searchTerm.toLowerCase();
 
-  const pageSize = 10;
-  const paginated = filtered.slice((page - 1) * pageSize, page * pageSize);
+    const exactCI = disponibles.filter((p) => p.ci.startsWith(searchTerm));
+
+    const nameMatches = disponibles.filter(
+      (p) =>
+        p.nombre.toLowerCase().includes(term) ||
+        p.apellido.toLowerCase().includes(term)
+    );
+
+    const combined = [...exactCI, ...nameMatches].filter(
+      (p, index, arr) => arr.findIndex((x) => x.ci === p.ci) === index
+    );
+
+    filtered = combined.slice(0, 5);
+  }
+
+  const pageSize = 5;
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const start = (page - 1) * pageSize;
+  const paginated = filtered.slice(start, start + pageSize);
 
   const titulo =
     tipo === "coordinador"
@@ -88,7 +98,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
         {/* HEADER */}
         <div className="p-6 border-b flex justify-between items-center bg-red-600 text-white">
           <h3 className="text-xl font-bold">{titulo}</h3>
-          <button onClick={onClose}>
+          <button onClick={onClose} className="hover:text-gray-200">
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -121,50 +131,54 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
               ❌ No se encontraron resultados.
             </p>
           ) : (
-            paginated.map((persona) => (
-              <div
-                key={persona.ci}
-                className={`p-4 border rounded-lg transition relative ${
-                  persona.yaAsignado
-                    ? "bg-gray-200 opacity-60 cursor-not-allowed"
-                    : "bg-gray-50 hover:bg-red-50 cursor-pointer"
-                }`}
-                onClick={() => {
-                  if (!persona.yaAsignado) onAdd(persona);
-                }}
-              >
-                {/* INFO */}
-                <p className="font-semibold text-gray-800">
-                  {persona.nombre} {persona.apellido}
-                </p>
-                <p className="text-sm text-gray-600">
-                  CI: {persona.ci} · {persona.localidad} · Mesa: {persona.mesa}
-                </p>
+            paginated.map((persona) => {
+              const bloqueado = persona.asignado === true;
 
-                {/* MENSAJE DE ASIGNADO */}
-                {persona.yaAsignado && (
-                  <p className="text-xs text-red-600 mt-1 font-medium">
-                    Ya fue agregado por {persona.asignadoPorNombre}.
-                  </p>
-                )}
-
-                {/* BOTÓN CANCELAR */}
-                <button
-                  className="absolute top-2 right-2 text-gray-500 hover:text-red-600 text-sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onClose();
+              return (
+                <div
+                  key={persona.ci}
+                  onClick={() => {
+                    if (!bloqueado) onAdd(persona);
                   }}
+                  className={`p-4 border rounded-lg transition relative ${
+                    bloqueado
+                      ? "bg-gray-200 cursor-not-allowed opacity-60"
+                      : "bg-gray-50 hover:bg-red-50 cursor-pointer"
+                  }`}
                 >
-                  Cancelar ✖
-                </button>
-              </div>
-            ))
+                  {/* INFO */}
+                  <p className="font-semibold text-gray-800">
+                    {persona.nombre} {persona.apellido}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    CI: {persona.ci} • {persona.local} • Mesa: {persona.mesa}
+                  </p>
+
+                  {/* MENSAJE DE YA ASIGNADO */}
+                  {bloqueado && (
+                    <p className="text-xs text-red-600 mt-2">
+                      Ya fue agregado por <b>{persona.asignadoPor}</b>.
+                    </p>
+                  )}
+
+                  {/* BOTÓN CANCELAR */}
+                  <button
+                    className="absolute top-2 right-2 text-gray-500 hover:text-red-600 text-sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onClose();
+                    }}
+                  >
+                    ✖
+                  </button>
+                </div>
+              );
+            })
           )}
         </div>
 
         {/* PAGINACIÓN */}
-        {filtered.length > pageSize && (
+        {filtered.length > 5 && (
           <div className="px-6 pb-3 flex justify-between items-center">
             <button
               disabled={page === 1}
@@ -186,11 +200,11 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           </div>
         )}
 
-        {/* CERRAR */}
+        {/* BOTÓN CERRAR */}
         <div className="px-6 pb-6">
           <button
             onClick={onClose}
-            className="w-full bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 rounded-lg"
+            className="w-full mt-2 bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 rounded-lg transition"
           >
             Cerrar
           </button>
@@ -375,22 +389,49 @@ y += 4;
   };
 
   const getPersonasDisponibles = () => {
-  return PADRON_SIMULADO.map((p) => {
+  return PADRON.map((p) => {
+    // Verificar si ya es COORDINADOR
     const yaCoord = estructura.coordinadores.find(c => c.ci === p.ci);
+    if (yaCoord) {
+      return {
+        ...p,
+        asignado: true,
+        asignadoPor: `${yaCoord.nombre} ${yaCoord.apellido}`,
+        asignadoRol: "Coordinador"
+      };
+    }
+
+    // Verificar si ya es SUBCOORDINADOR
     const yaSub = estructura.subcoordinadores.find(s => s.ci === p.ci);
+    if (yaSub) {
+      // Buscar coordinador dueño
+      const owner = estructura.coordinadores.find(c => c.ci === yaSub.coordinadorCI);
+      return {
+        ...p,
+        asignado: true,
+        asignadoPor: owner ? `${owner.nombre} ${owner.apellido}` : "Un coordinador",
+        asignadoRol: "Subcoordinador"
+      };
+    }
+
+    // Verificar si ya es VOTANTE
     const yaVot = estructura.votantes.find(v => v.ci === p.ci);
+    if (yaVot) {
+      // Buscar quién lo asignó
+      const owner =
+        estructura.coordinadores.find(c => c.ci === yaVot.asignadoPor) ||
+        estructura.subcoordinadores.find(s => s.ci === yaVot.asignadoPor);
 
-    let asignadoPor = null;
+      return {
+        ...p,
+        asignado: true,
+        asignadoPor: owner ? `${owner.nombre} ${owner.apellido}` : "Alguien",
+        asignadoRol: "Votante"
+      };
+    }
 
-    if (yaCoord) asignadoPor = "Coordinador";
-    else if (yaSub) asignadoPor = "Subcoordinador";
-    else if (yaVot) asignadoPor = "Votante";
-
-    return {
-      ...p,
-      asignado: asignadoPor !== null,
-      asignadoPor
-    };
+    // Si no está asignado a nadie
+    return { ...p, asignado: false, asignadoPor: null, asignadoRol: null };
   });
 };
 
