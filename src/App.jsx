@@ -1254,6 +1254,9 @@ const App = () => {
                           >
                             <span>
                               {v.nombre} {v.apellido} — CI: {v.ci}
+                              {v.localidad ? ` — ${v.localidad}` : ""}
+                              {v.mesa ? ` — Mesa ${v.mesa}` : ""}
+
                             </span>
                             <button
                               onClick={() => quitarPersona(v.ci, "votante")}
@@ -1287,6 +1290,9 @@ const App = () => {
                       >
                         <span>
                           {v.nombre} {v.apellido} — CI: {v.ci}
+                          {v.localidad ? ` — ${v.localidad}` : ""}
+                          {v.mesa ? ` — Mesa ${v.mesa}` : ""}
+
                         </span>
                         <button
                           onClick={() => quitarPersona(v.ci, "votante")}
@@ -1311,6 +1317,9 @@ const App = () => {
                   >
                     <span>
                       {v.nombre} {v.apellido} — CI: {v.ci}
+                      {v.localidad ? ` — ${v.localidad}` : ""}
+                      {v.mesa ? ` — Mesa ${v.mesa}` : ""}
+
                     </span>
                     <button
                       onClick={() => quitarPersona(v.ci, "votante")}
