@@ -1,4 +1,4 @@
-// App.jsx – Versión Supabase + padrón remoto (COMPLETA, CON LOGIN PERSISTENTE Y BUSCADOR CI)
+// App.jsx — Versión completa con persistencia, loader ANR y mejoras
 
 import React, { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
@@ -16,7 +16,20 @@ import {
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-// ======================= MODAL PARA AGREGAR PERSONA =======================
+/* ====================== LOADER ANR ====================== */
+const LoaderANR = ({ text = "Cargando…" }) => {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 text-gray-700">
+      <div
+        className="animate-spin rounded-full border-4 border-red-600 border-t-transparent h-16 w-16 mb-4"
+        style={{ borderTopColor: "transparent" }}
+      ></div>
+      <p className="text-lg font-semibold">{text}</p>
+    </div>
+  );
+};
+
+/* ====================== MODAL AGREGAR PERSONA ====================== */
 const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
@@ -38,7 +51,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
     );
 
     const combined = [...exactCI, ...nameMatches].filter(
-      (p, index, arr) => arr.findIndex((x) => x.ci === p.ci) === index
+      (p, i, arr) => arr.findIndex((x) => x.ci === p.ci) === i
     );
 
     filtered = combined.slice(0, 50);
@@ -53,16 +66,17 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
     tipo === "coordinador"
       ? "Agregar Coordinador"
       : tipo === "subcoordinador"
-      ? "Agregar Sub-coordinador"
+      ? "Agregar Sub coordinador"
       : "Agregar Votante";
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl overflow-hidden flex flex-col">
+
         {/* HEADER */}
         <div className="p-6 border-b flex justify-between items-center bg-red-600 text-white">
           <h3 className="text-xl font-bold">{titulo}</h3>
-          <button onClick={onClose} className="hover:text-gray-200">
+          <button onClick={onClose}>
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -119,6 +133,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
                   <p className="font-semibold text-gray-800">
                     {persona.nombre} {persona.apellido}
                   </p>
+
                   <p className="text-sm text-gray-600">
                     CI: {persona.ci} • {localTexto} • Mesa: {persona.mesa}
                   </p>
@@ -131,26 +146,16 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
                           persona.asignadoPor ||
                           "otro referente"}
                       </b>{" "}
-                      {persona.asignadoRol ? `(${persona.asignadoRol})` : null}
+                      {persona.asignadoRol ? `(${persona.asignadoRol})` : ""}
                     </p>
                   )}
-
-                  <button
-                    className="absolute top-2 right-2 text-gray-500 hover:text-red-600 text-sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onClose();
-                    }}
-                  >
-                    ✖
-                  </button>
                 </div>
               );
             })
           )}
         </div>
 
-        {/* PAGINACIÓN */}
+        {/* PAGINACION */}
         {filtered.length > pageSize && (
           <div className="px-6 pb-3 flex justify-between items-center">
             <button
@@ -175,7 +180,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           </div>
         )}
 
-        {/* BOTÓN CERRAR MODAL */}
+        {/* BOTÓN CERRAR */}
         <div className="px-6 pb-6">
           <button
             onClick={onClose}
@@ -184,35 +189,44 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
             Cerrar
           </button>
         </div>
+
       </div>
     </div>
   );
 };
 
-// ======================= APLICACIÓN PRINCIPAL =======================
+/* ====================== APP PRINCIPAL ====================== */
 const App = () => {
-  // PADRÓN REMOTO DESDE SUPABASE
+  // Estado del padrón
   const [padron, setPadron] = useState([]);
 
-  // ESTADO PRINCIPAL
+  // Sesión persistente
   const [currentUser, setCurrentUser] = useState(null);
+
+  // Estados de login
   const [loginID, setLoginID] = useState("");
   const [loginPass, setLoginPass] = useState("");
+
+  // Estructura completa
   const [estructura, setEstructura] = useState({
     coordinadores: [],
     subcoordinadores: [],
     votantes: [],
   });
 
+  // Estados varios
   const [showAddModal, setShowAddModal] = useState(false);
   const [modalType, setModalType] = useState("");
   const [expandedCoords, setExpandedCoords] = useState({});
 
-  // Buscador global por CI (en el panel)
+  // Buscador global por CI
   const [searchCI, setSearchCI] = useState("");
   const [searchResult, setSearchResult] = useState(null);
 
-  // ======================= CARGAR SESIÓN DESDE LOCALSTORAGE =======================
+  // Loader general
+  const [loading, setLoading] = useState(true);
+
+  /* ====================== PERSISTENCIA DE SESIÓN ====================== */
   useEffect(() => {
     const saved = localStorage.getItem("currentUser");
     if (saved) {
@@ -222,29 +236,29 @@ const App = () => {
           setCurrentUser(parsed);
         }
       } catch (e) {
-        console.error("Error parseando currentUser desde localStorage", e);
+        console.error("Error leyendo sesión guardada:", e);
       }
     }
   }, []);
 
-  // ======================= CARGAR PADRÓN =======================
+  /* ====================== CARGAR PADRÓN ====================== */
   useEffect(() => {
     const cargarPadron = async () => {
       const { data, error } = await supabase.from("padron").select("*");
+
       if (error) {
         console.error("Error cargando padrón:", error);
+        setPadron([]);
         return;
       }
+
       setPadron(data || []);
     };
 
     cargarPadron();
   }, []);
 
-  // ======================= HELPERS =======================
-  const generarCodigo = () =>
-    Math.random().toString(36).substring(2, 8).toUpperCase();
-
+  /* ====================== FUNCIONES NORMALIZADORAS ====================== */
   const normalizarCoordinador = (row) => ({
     ci: row.ci,
     nombre: row.nombre,
@@ -276,71 +290,84 @@ const App = () => {
     asignadoPorNombre: row.asignado_por_nombre,
   });
 
-  // ======================= RECARGAR ESTRUCTURA =======================
+  /* ====================== RECARGAR ESTRUCTURA ====================== */
   const recargarEstructura = async () => {
+    setLoading(true);
+
     const { data: coords, error: errC } = await supabase
       .from("coordinadores")
       .select("*");
-    if (errC) console.error(errC);
 
     const { data: subs, error: errS } = await supabase
       .from("subcoordinadores")
       .select("*");
-    if (errS) console.error(errS);
 
     const { data: votos, error: errV } = await supabase
       .from("votantes")
       .select("*");
-    if (errV) console.error(errV);
+
+    if (errC) console.error("Error cargando coordinadores:", errC);
+    if (errS) console.error("Error cargando subcoordinadores:", errS);
+    if (errV) console.error("Error cargando votantes:", errV);
 
     setEstructura({
       coordinadores: (coords || []).map(normalizarCoordinador),
       subcoordinadores: (subs || []).map(normalizarSubcoordinador),
       votantes: (votos || []).map(normalizarVotante),
     });
+
+    setLoading(false);
   };
 
   useEffect(() => {
     recargarEstructura();
   }, []);
 
-  // ======================= PADRÓN DISPONIBLE =======================
+  /* ====================== LOADER GLOBAL ====================== */
+  if (loading) {
+    return <LoaderANR text="Cargando estructura electoral…" />;
+  }
+  /* ====================== GENERADOR DE CÓDIGO ====================== */
+  const generarCodigo = () =>
+    Math.random().toString(36).substring(2, 8).toUpperCase();
+
+  /* ====================== PADRÓN DISPONIBLE ====================== */
   const getPersonasDisponibles = () => {
     return padron.map((p) => {
-      // 1) ¿Es coordinador?
-      const coordItem = estructura.coordinadores.find((c) => c.ci === p.ci);
-      if (coordItem) {
+      // ¿Es coordinador?
+      const coord = estructura.coordinadores.find((c) => c.ci === p.ci);
+      if (coord) {
         return {
           ...p,
           asignado: true,
-          asignadoPorNombre: `${coordItem.nombre} ${coordItem.apellido}`,
+          asignadoPorNombre: `${coord.nombre} ${coord.apellido}`,
           asignadoRol: "Coordinador",
         };
       }
 
-      // 2) ¿Es subcoordinador?
-      const subItem = estructura.subcoordinadores.find((s) => s.ci === p.ci);
-      if (subItem) {
+      // ¿Es subcoordinador?
+      const sub = estructura.subcoordinadores.find((s) => s.ci === p.ci);
+      if (sub) {
         return {
           ...p,
           asignado: true,
-          asignadoPorNombre: `${subItem.nombre} ${subItem.apellido}`,
+          asignadoPorNombre: `${sub.nombre} ${sub.apellido}`,
           asignadoRol: "Subcoordinador",
         };
       }
 
-      // 3) ¿Es votante?
-      const votItem = estructura.votantes.find((v) => v.ci === p.ci);
-      if (votItem) {
+      // ¿Es votante?
+      const vot = estructura.votantes.find((v) => v.ci === p.ci);
+      if (vot) {
         return {
           ...p,
           asignado: true,
-          asignadoPorNombre: votItem.asignadoPorNombre || "Referente",
+          asignadoPorNombre: vot.asignadoPorNombre,
           asignadoRol: "Votante",
         };
       }
 
-      // 4) Libre
+      // Libre
       return {
         ...p,
         asignado: false,
@@ -350,7 +377,7 @@ const App = () => {
     });
   };
 
-  // ======================= BUSCADOR GLOBAL POR CI =======================
+  /* ====================== BUSCADOR GLOBAL POR CI ====================== */
   const buscarPorCI = (ci) => {
     if (!ci) {
       setSearchResult(null);
@@ -380,7 +407,7 @@ const App = () => {
     // Votante
     const vot = estructura.votantes.find((v) => v.ci == ci);
     if (vot) {
-      // Buscar quién es la persona que lo tiene asignado (sub o coord)
+      // buscar quién lo asignó
       const asignadoPor =
         estructura.subcoordinadores.find((s) => s.ci == vot.asignadoPor) ||
         estructura.coordinadores.find((c) => c.ci == vot.asignadoPor) ||
@@ -401,30 +428,23 @@ const App = () => {
     });
   };
 
-  // ======================= AGREGAR PERSONA (Supabase) =======================
+  /* ====================== AGREGAR PERSONA ====================== */
   const handleAgregarPersona = async (persona) => {
     const codigo = generarCodigo();
 
-    // 🔒 Validación global: evitar agregar a alguien ya asignado en cualquier rol
-    const yaEsCoord = estructura.coordinadores.some(
-      (c) => c.ci === persona.ci
-    );
-    const yaEsSub = estructura.subcoordinadores.some(
-      (s) => s.ci === persona.ci
-    );
-    const yaEsVotante = estructura.votantes.some((v) => v.ci === persona.ci);
+    // Validación global (NADIE debe agregarse dos veces)
+    const yaCoord = estructura.coordinadores.some((c) => c.ci === persona.ci);
+    const yaSub = estructura.subcoordinadores.some((s) => s.ci === persona.ci);
+    const yaVot = estructura.votantes.some((v) => v.ci === persona.ci);
 
-    if (yaEsCoord || yaEsSub || yaEsVotante) {
-      let rol = yaEsCoord
+    if (yaCoord || yaSub || yaVot) {
+      const rol = yaCoord
         ? "Coordinador"
-        : yaEsSub
-        ? "Sub-coordinador"
+        : yaSub
+        ? "Subcoordinador"
         : "Votante";
 
-      alert(
-        `⚠️ Esta persona ya fue agregada anteriormente como ${rol}.\n` +
-          `No puede volver a ser asignada.`
-      );
+      alert(`⚠️ Esta persona ya está asignada como ${rol}. No se puede repetir.`);
       return;
     }
 
@@ -432,9 +452,9 @@ const App = () => {
       persona.localidad ||
       persona.local ||
       persona.local_votacion ||
-      "Fernando de la Mora";
+      "Sin especificar";
 
-    // ======================= COORDINADOR =======================
+    /* ----------- AGREGAR COORDINADOR ----------- */
     if (modalType === "coordinador") {
       const { error } = await supabase.from("coordinadores").insert([
         {
@@ -442,24 +462,24 @@ const App = () => {
           nombre: persona.nombre,
           apellido: persona.apellido,
           localidad: localidadBase,
-          mesa: persona.mesa?.toString() || "",
+          mesa: persona.mesa || "",
           login_code: codigo,
           asignado_por_nombre: "Superadmin",
         },
       ]);
 
       if (error) {
-        alert("Error al guardar coordinador en Supabase");
+        alert("Error al guardar coordinador.");
         console.error(error);
         return;
       }
 
       alert(
-        `Coordinador agregado.\nNombre: ${persona.nombre} ${persona.apellido}\nCódigo de acceso: ${codigo}`
+        `Coordinador agregado.\nNombre: ${persona.nombre} ${persona.apellido}\nCódigo: ${codigo}`
       );
     }
 
-    // ======================= SUBCOORDINADOR =======================
+    /* ----------- AGREGAR SUBCOORDINADOR ----------- */
     else if (modalType === "subcoordinador") {
       if (!currentUser || currentUser.role !== "coordinador") {
         alert("Solo un coordinador puede agregar subcoordinadores.");
@@ -472,7 +492,7 @@ const App = () => {
           nombre: persona.nombre,
           apellido: persona.apellido,
           localidad: localidadBase,
-          mesa: persona.mesa?.toString() || "",
+          mesa: persona.mesa || "",
           coordinador_ci: currentUser.ci,
           login_code: codigo,
           asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
@@ -480,20 +500,20 @@ const App = () => {
       ]);
 
       if (error) {
-        alert("Error al guardar subcoordinador en Supabase");
+        alert("Error al guardar subcoordinador.");
         console.error(error);
         return;
       }
 
       alert(
-        `Sub-coordinador agregado.\nNombre: ${persona.nombre} ${persona.apellido}\nCódigo de acceso: ${codigo}`
+        `Subcoordinador agregado.\nNombre: ${persona.nombre} ${persona.apellido}\nCódigo: ${codigo}`
       );
     }
 
-    // ======================= VOTANTE =======================
+    /* ----------- AGREGAR VOTANTE ----------- */
     else if (modalType === "votante") {
       if (!currentUser) {
-        alert("Debe iniciar sesión para asignar votantes.");
+        alert("Debe iniciar sesión.");
         return;
       }
 
@@ -503,14 +523,14 @@ const App = () => {
           nombre: persona.nombre,
           apellido: persona.apellido,
           localidad: localidadBase,
-          mesa: persona.mesa?.toString() || "",
+          mesa: persona.mesa || "",
           asignado_por: currentUser.ci,
           asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
         },
       ]);
 
       if (error) {
-        alert("Error al guardar votante en Supabase");
+        alert("Error al guardar votante.");
         console.error(error);
         return;
       }
@@ -522,19 +542,20 @@ const App = () => {
     await recargarEstructura();
   };
 
-  // ======================= QUITAR PERSONA (Supabase) =======================
+  /* ====================== QUITAR PERSONA ====================== */
   const quitarPersona = async (ci, tipo) => {
     const mensajes = {
       coordinador:
-        "¿Quitar jerarquía de coordinador? También se quitarán sus subcoordinadores y sus votantes.",
+        "Quitar coordinador eliminará también todos sus subcoordinadores y votantes. ¿Seguro?",
       subcoordinador:
-        "¿Quitar jerarquía de sub-coordinador? También se quitarán sus votantes.",
-      votante: "¿Quitar votante de la lista? Volverá al padrón disponible.",
+        "Quitar subcoordinador eliminará también sus votantes. ¿Seguro?",
+      votante: "¿Quitar votante?",
     };
 
     if (!window.confirm(mensajes[tipo])) return;
 
     if (tipo === "coordinador") {
+      // eliminar votantes de sus subcoordinadores
       const { data: subs } = await supabase
         .from("subcoordinadores")
         .select("ci")
@@ -549,41 +570,24 @@ const App = () => {
       await supabase.from("votantes").delete().eq("asignado_por", ci);
       await supabase.from("subcoordinadores").delete().eq("coordinador_ci", ci);
       await supabase.from("coordinadores").delete().eq("ci", ci);
-    } else if (tipo === "subcoordinador") {
+    }
+
+    if (tipo === "subcoordinador") {
       await supabase.from("votantes").delete().eq("asignado_por", ci);
       await supabase.from("subcoordinadores").delete().eq("ci", ci);
-    } else if (tipo === "votante") {
-      // Solo eliminar la asignación hecha por el usuario logueado
+    }
+
+    if (tipo === "votante") {
       await supabase
         .from("votantes")
         .delete()
-        .match({
-          ci: ci,
-          asignado_por: currentUser.ci,
-        });
+        .match({ ci: ci, asignado_por: currentUser.ci });
     }
 
     await recargarEstructura();
-    alert("Persona removida correctamente.");
+    alert("Persona removida.");
   };
-
-  // ======================= MIS SUBS / VOTANTES =======================
-  const getMisSubcoordinadores = () => {
-    if (!currentUser || currentUser.role !== "coordinador") return [];
-    return estructura.subcoordinadores.filter(
-      (s) => s.coordinadorCI === currentUser.ci
-    );
-  };
-
-  const getMisVotantes = () => {
-    if (!currentUser) return [];
-    return estructura.votantes.filter((v) => v.asignadoPor === currentUser.ci);
-  };
-
-  const getVotantesDeSubcoord = (subcoordCI) =>
-    estructura.votantes.filter((v) => v.asignadoPor === subcoordCI);
-
-  // ======================= ESTADÍSTICAS =======================
+  /* ====================== ESTADÍSTICAS ====================== */
   const getEstadisticas = () => {
     if (currentUser?.role === "superadmin") {
       return {
@@ -594,16 +598,23 @@ const App = () => {
     }
 
     if (currentUser?.role === "coordinador") {
-      const misSubcoords = getMisSubcoordinadores();
-      const directos = getMisVotantes();
-      let indirectos = 0;
+      const misSubs = estructura.subcoordinadores.filter(
+        (s) => s.coordinadorCI === currentUser.ci
+      );
 
-      misSubcoords.forEach((s) => {
-        indirectos += getVotantesDeSubcoord(s.ci).length;
+      const directos = estructura.votantes.filter(
+        (v) => v.asignadoPor === currentUser.ci
+      );
+
+      let indirectos = 0;
+      misSubs.forEach((s) => {
+        indirectos += estructura.votantes.filter(
+          (v) => v.asignadoPor === s.ci
+        ).length;
       });
 
       return {
-        subcoordinadores: misSubcoords.length,
+        subcoordinadores: misSubs.length,
         votantesDirectos: directos.length,
         votantesIndirectos: indirectos,
         total: directos.length + indirectos,
@@ -611,7 +622,10 @@ const App = () => {
     }
 
     if (currentUser?.role === "subcoordinador") {
-      const directos = getMisVotantes();
+      const directos = estructura.votantes.filter(
+        (v) => v.asignadoPor === currentUser.ci
+      );
+
       return {
         votantes: directos.length,
       };
@@ -620,11 +634,11 @@ const App = () => {
     return {};
   };
 
-  // ======================= REPORTE PDF =======================
+  /* ====================== REPORTE PDF ====================== */
   const generarPDF = () => {
     if (!currentUser) return;
-    const doc = new jsPDF({ orientation: "portrait" });
 
+    const doc = new jsPDF({ orientation: "portrait" });
     doc.setFontSize(16);
     doc.text("Reporte de Estructura Electoral", 14, 20);
 
@@ -660,17 +674,18 @@ const App = () => {
     }
 
     if (currentUser.role === "coordinador") {
-      const subcoords = getMisSubcoordinadores();
+      const misSubs = estructura.subcoordinadores.filter(
+        (s) => s.coordinadorCI === currentUser.ci
+      );
 
-      subcoords.forEach((sub) => {
+      misSubs.forEach((sub) => {
         doc.setFontSize(14);
         doc.text(`Subcoordinador: ${sub.nombre} ${sub.apellido}`, 14, y);
         y += 5;
 
-        const votantesSub = getVotantesDeSubcoord(sub.ci);
-        doc.setFontSize(12);
-        doc.text("Votantes asignados:", 14, y);
-        y += 4;
+        const votantesSub = estructura.votantes.filter(
+          (v) => v.asignadoPor === sub.ci
+        );
 
         autoTable(doc, {
           startY: y,
@@ -689,14 +704,16 @@ const App = () => {
         y = doc.lastAutoTable.finalY + 12;
       });
 
-      const directos = getMisVotantes();
+      const directos = estructura.votantes.filter(
+        (v) => v.asignadoPor === currentUser.ci
+      );
+
       if (directos.length > 0) {
         doc.setFontSize(14);
         doc.text("Votantes directos del Coordinador:", 14, y);
-        y += 6;
 
         autoTable(doc, {
-          startY: y,
+          startY: y + 4,
           head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa"]],
           body: directos.map((v) => [
             v.ci,
@@ -708,25 +725,25 @@ const App = () => {
           theme: "grid",
           headStyles: { fillColor: [255, 80, 80] },
         });
-
-        y = doc.lastAutoTable.finalY + 10;
       }
     }
 
     if (currentUser.role === "subcoordinador") {
       doc.setFontSize(14);
-      doc.text("Mis votantes asignados:", 14, y);
+      doc.text("Mis votantes:", 14, y);
 
       autoTable(doc, {
         startY: y + 4,
         head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa"]],
-        body: getMisVotantes().map((v) => [
-          v.ci,
-          v.nombre,
-          v.apellido,
-          v.localidad,
-          v.mesa,
-        ]),
+        body: estructura.votantes
+          .filter((v) => v.asignadoPor === currentUser.ci)
+          .map((v) => [
+            v.ci,
+            v.nombre,
+            v.apellido,
+            v.localidad,
+            v.mesa,
+          ]),
         theme: "grid",
         headStyles: { fillColor: [255, 80, 80] },
       });
@@ -735,7 +752,7 @@ const App = () => {
     doc.save("reporte_estructura.pdf");
   };
 
-  // ======================= LOGIN =======================
+  /* ====================== LOGIN ====================== */
   const handleLogin = async () => {
     if (!loginID.trim()) {
       alert("Ingrese su CI o código de acceso.");
@@ -745,7 +762,7 @@ const App = () => {
     // SUPERADMIN
     if (loginID === "4630621") {
       if (loginPass !== "12345") {
-        alert("Contraseña incorrecta para el Super Administrador.");
+        alert("Contraseña incorrecta.");
         return;
       }
 
@@ -758,7 +775,6 @@ const App = () => {
 
       setCurrentUser(superUser);
       localStorage.setItem("currentUser", JSON.stringify(superUser));
-      setLoginPass("");
       return;
     }
 
@@ -768,9 +784,14 @@ const App = () => {
       .select("*")
       .eq("login_code", loginID.trim());
 
-    if (coordRes.data && coordRes.data.length > 0) {
-      const c = normalizarCoordinador(coordRes.data[0]);
-      const user = { ...c, role: "coordinador" };
+    if (coordRes.data?.length > 0) {
+      const c = coordRes.data[0];
+      const user = {
+        ci: c.ci,
+        nombre: c.nombre,
+        apellido: c.apellido,
+        role: "coordinador",
+      };
       setCurrentUser(user);
       localStorage.setItem("currentUser", JSON.stringify(user));
       return;
@@ -782,17 +803,23 @@ const App = () => {
       .select("*")
       .eq("login_code", loginID.trim());
 
-    if (subRes.data && subRes.data.length > 0) {
-      const s = normalizarSubcoordinador(subRes.data[0]);
-      const user = { ...s, role: "subcoordinador" };
+    if (subRes.data?.length > 0) {
+      const s = subRes.data[0];
+      const user = {
+        ci: s.ci,
+        nombre: s.nombre,
+        apellido: s.apellido,
+        role: "subcoordinador",
+      };
       setCurrentUser(user);
       localStorage.setItem("currentUser", JSON.stringify(user));
       return;
     }
 
-    alert("Usuario no encontrado. Verifique el código.");
+    alert("Código no encontrado.");
   };
 
+  /* ====================== LOGOUT ====================== */
   const handleLogout = () => {
     setCurrentUser(null);
     setLoginID("");
@@ -803,18 +830,11 @@ const App = () => {
     localStorage.removeItem("currentUser");
   };
 
-  const toggleExpand = (ci) => {
-    setExpandedCoords((prev) => ({
-      ...prev,
-      [ci]: !prev[ci],
-    }));
-  };
-
-  // ======================= LOGIN SCREEN =======================
+  /* ====================== LOGIN UI ====================== */
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center p-4">
-        <div className="bg-white/95 backdrop-blur-sm p-8 rounded-2xl shadow-xl w-full max-w-md">
+        <div className="bg-white/95 p-8 rounded-xl shadow-xl w-full max-w-md">
           <div className="text-center mb-8">
             <Users className="w-16 h-16 text-red-600 mx-auto" />
             <h1 className="text-3xl font-bold text-gray-800 mt-3">
@@ -824,27 +844,25 @@ const App = () => {
           </div>
 
           <label className="text-sm font-medium text-gray-700">
-            CI o Código de Acceso
+            CI o Código
           </label>
           <input
             type="text"
             value={loginID}
             onChange={(e) => setLoginID(e.target.value)}
             className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 mb-4"
-            placeholder="Ej: 1234567 o ABC123"
           />
 
           {loginID === "4630621" && (
             <div className="mb-4">
               <label className="text-sm font-medium text-gray-700">
-                Contraseña de Superadmin
+                Contraseña
               </label>
               <input
                 type="password"
                 value={loginPass}
                 onChange={(e) => setLoginPass(e.target.value)}
                 className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500"
-                placeholder="Ingrese contraseña"
               />
             </div>
           )}
@@ -855,19 +873,12 @@ const App = () => {
           >
             Iniciar Sesión
           </button>
-
-          <div className="mt-6 bg-red-50 p-4 rounded-lg border border-red-200 text-sm text-red-700">
-            <p className="font-semibold mb-2">📋 Instrucciones:</p>
-            <ol className="list-decimal ml-5 space-y-1">
-              <li>Ingrese el código proporcionado por el Admin.</li>
-            </ol>
-          </div>
         </div>
       </div>
     );
   }
 
-  // ======================= DASHBOARD =======================
+  /* ====================== DASHBOARD ====================== */
   const stats = getEstadisticas();
 
   return (
@@ -883,16 +894,15 @@ const App = () => {
                 ? "⭐ Superadmin"
                 : currentUser.role === "coordinador"
                 ? "Coordinador"
-                : "Sub-coordinador"}
+                : "Subcoordinador"}
             </p>
           </div>
 
           <button
             onClick={handleLogout}
-            className="flex items-center gap-2 bg-red-700 hover:bg-red-800 px-4 py-2 rounded-lg transition"
+            className="flex items-center gap-2 bg-red-700 hover:bg-red-800 px-4 py-2 rounded-lg"
           >
-            <LogOut className="w-4 h-4" />
-            Salir
+            <LogOut className="w-4 h-4" /> Salir
           </button>
         </div>
       </div>
@@ -958,7 +968,6 @@ const App = () => {
           </div>
         )}
       </div>
-
       {/* ACCIONES */}
       <div className="max-w-7xl mx-auto px-4 mb-6 flex flex-wrap gap-3">
         {currentUser.role === "superadmin" && (
@@ -1018,15 +1027,14 @@ const App = () => {
             type="text"
             value={searchCI}
             onChange={(e) => {
-              const value = e.target.value.trim();
-              setSearchCI(e.target.value);
-              buscarPorCI(value);
+              const valor = e.target.value;
+              setSearchCI(valor);
+              buscarPorCI(valor.trim());
             }}
             placeholder="Ingrese CI (solo números)"
             className="w-full mt-2 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
           />
 
-          {/* RESULTADOS DE BÚSQUEDA */}
           {searchResult && (
             <div className="mt-4 p-3 border rounded bg-gray-50 text-sm">
               {searchResult.tipo === "coordinador" && (
@@ -1041,25 +1049,30 @@ const App = () => {
                   <b>Subcoordinador:</b> {searchResult.data.nombre}{" "}
                   {searchResult.data.apellido} — CI: {searchResult.data.ci}
                   <br />
-                  Asignado por: {searchResult.data.asignadoPorNombre}
+                  Asignado por:{" "}
+                  {searchResult.data.asignadoPorNombre || "Superadmin"}
                 </p>
               )}
 
               {searchResult.tipo === "votante" && (
-                <p>
-                  <b>Votante asignado por:</b>{" "}
-                  {searchResult.asignadoPor?.nombre}{" "}
-                  {searchResult.asignadoPor?.apellido} (
-                  {searchResult.asignadoPor?.ci})
-                  <br />
-                  Localidad: {searchResult.data.localidad} – Mesa:{" "}
-                  {searchResult.data.mesa}
-                </p>
+                <>
+                  <p>
+                    <b>Votante asignado por:</b>{" "}
+                    {searchResult.asignadoPor?.nombre}{" "}
+                    {searchResult.asignadoPor?.apellido} (
+                    {searchResult.asignadoPor?.ci || "CI no registrado"})
+                  </p>
+                  <p>
+                    Localidad: {searchResult.data.localidad || "Sin datos"} –{" "}
+                    Mesa: {searchResult.data.mesa || "-"}
+                  </p>
+                </>
               )}
 
               {searchResult.tipo === "ninguno" && (
                 <p className="text-gray-600">
-                  Este CI <b>{searchResult.data.ci}</b> no está asignado a nadie.
+                  Este CI <b>{searchResult.data.ci}</b> no está asignado a
+                  nadie.
                 </p>
               )}
             </div>
@@ -1127,6 +1140,7 @@ const App = () => {
 
                     {expandedCoords[coord.ci] && (
                       <div className="bg-white px-4 pb-4">
+                        {/* Subcoordinadores de este coordinador */}
                         {estructura.subcoordinadores
                           .filter((s) => s.coordinadorCI === coord.ci)
                           .map((sub) => (
@@ -1138,7 +1152,7 @@ const App = () => {
                                 {sub.nombre} {sub.apellido}
                               </p>
                               <p className="text-sm text-gray-600">
-                                CI: {sub.ci} — Sub-coordinador
+                                CI: {sub.ci} — Subcoordinador
                               </p>
                               {sub.loginCode && (
                                 <p className="text-xs text-gray-500">
@@ -1162,11 +1176,16 @@ const App = () => {
                                     className="bg-white border p-2 mt-2 rounded text-sm"
                                   >
                                     {v.nombre} {v.apellido} — CI: {v.ci}
+                                    {v.localidad
+                                      ? ` — ${v.localidad}`
+                                      : ""}
+                                    {v.mesa ? ` — Mesa ${v.mesa}` : ""}
                                   </div>
                                 ))}
                             </div>
                           ))}
 
+                        {/* Votantes directos del coordinador */}
                         {estructura.votantes
                           .filter((v) => v.asignadoPor === coord.ci)
                           .map((v) => (
@@ -1175,6 +1194,8 @@ const App = () => {
                               className="bg-white border p-2 mt-2 rounded text-sm"
                             >
                               {v.nombre} {v.apellido} — CI: {v.ci}
+                              {v.localidad ? ` — ${v.localidad}` : ""}
+                              {v.mesa ? ` — Mesa ${v.mesa}` : ""}
                             </div>
                           ))}
                       </div>
@@ -1193,105 +1214,124 @@ const App = () => {
             {/* COORDINADOR */}
             {currentUser.role === "coordinador" && (
               <>
-                {getMisSubcoordinadores().map((sub) => (
-                  <div
-                    key={sub.ci}
-                    className="border rounded-lg mb-3 bg-red-50/40"
-                  >
+                {estructura.subcoordinadores
+                  .filter((s) => s.coordinadorCI === currentUser.ci)
+                  .map((sub) => (
                     <div
-                      className="flex items-center justify-between p-4 cursor-pointer"
-                      onClick={() => toggleExpand(sub.ci)}
+                      key={sub.ci}
+                      className="border rounded-lg mb-3 bg-red-50/40"
                     >
-                      <div className="flex items-center gap-3 flex-1">
-                        {expandedCoords[sub.ci] ? (
-                          <ChevronDown className="w-5 h-5 text-red-600" />
-                        ) : (
-                          <ChevronRight className="w-5 h-5 text-red-600" />
-                        )}
-
-                        <div>
-                          <p className="font-semibold text-gray-800">
-                            {sub.nombre} {sub.apellido}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            CI: {sub.ci} — Sub-coordinador
-                          </p>
-                          {sub.loginCode && (
-                            <p className="text-xs text-gray-500">
-                              Código: {sub.loginCode}
-                            </p>
+                      <div
+                        className="flex items-center justify-between p-4 cursor-pointer"
+                        onClick={() => toggleExpand(sub.ci)}
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          {expandedCoords[sub.ci] ? (
+                            <ChevronDown className="w-5 h-5 text-red-600" />
+                          ) : (
+                            <ChevronRight className="w-5 h-5 text-red-600" />
                           )}
-                          {sub.localidad && sub.mesa && (
-                            <p className="text-xs text-gray-500">
-                              {sub.localidad} — Mesa {sub.mesa}
+
+                          <div>
+                            <p className="font-semibold text-gray-800">
+                              {sub.nombre} {sub.apellido}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              CI: {sub.ci} — Subcoordinador
+                            </p>
+                            {sub.loginCode && (
+                              <p className="text-xs text-gray-500">
+                                Código: {sub.loginCode}
+                              </p>
+                            )}
+                            {sub.localidad && sub.mesa && (
+                              <p className="text-xs text-gray-500">
+                                {sub.localidad} — Mesa {sub.mesa}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            quitarPersona(sub.ci, "subcoordinador");
+                          }}
+                          className="bg-red-600 text-white p-2 rounded hover:bg-red-700"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {expandedCoords[sub.ci] && (
+                        <div className="bg-white px-4 pb-4">
+                          <p className="text-sm font-semibold mt-2">
+                            Votantes
+                          </p>
+                          {estructura.votantes
+                            .filter((v) => v.asignadoPor === sub.ci)
+                            .map((v) => (
+                              <div
+                                key={v.ci}
+                                className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
+                              >
+                                <span>
+                                  {v.nombre} {v.apellido} — CI: {v.ci}
+                                  {v.localidad ? ` — ${v.localidad}` : ""}
+                                  {v.mesa ? ` — Mesa ${v.mesa}` : ""}
+                                </span>
+                                <button
+                                  onClick={() =>
+                                    quitarPersona(v.ci, "votante")
+                                  }
+                                  className="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
+
+                          {estructura.votantes.filter(
+                            (v) => v.asignadoPor === sub.ci
+                          ).length === 0 && (
+                            <p className="text-gray-500 text-sm mt-2">
+                              Sin votantes asignados.
                             </p>
                           )}
                         </div>
-                      </div>
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          quitarPersona(sub.ci, "subcoordinador");
-                        }}
-                        className="bg-red-600 text-white p-2 rounded hover:bg-red-700"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      )}
                     </div>
+                  ))}
 
-                    {expandedCoords[sub.ci] && (
-                      <div className="bg-white px-4 pb-4">
-                        <p className="text-sm font-semibold mt-2">Votantes</p>
-                        {getVotantesDeSubcoord(sub.ci).map((v) => (
-                          <div
-                            key={v.ci}
-                            className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
-                          >
-                            <span>
-                              {v.nombre} {v.apellido} — CI: {v.ci}
-                            </span>
-                            <button
-                              onClick={() => quitarPersona(v.ci, "votante")}
-                              className="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ))}
-
-                        {getVotantesDeSubcoord(sub.ci).length === 0 && (
-                          <p className="text-gray-500 text-sm mt-2">
-                            Sin votantes asignados.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                {getMisVotantes().length > 0 && (
+                {/* Votantes directos del coordinador */}
+                {estructura.votantes.filter(
+                  (v) => v.asignadoPor === currentUser.ci
+                ).length > 0 && (
                   <div className="border rounded-lg mb-3 p-4">
                     <p className="font-semibold text-gray-700 mb-3">
                       Mis votantes directos
                     </p>
 
-                    {getMisVotantes().map((v) => (
-                      <div
-                        key={v.ci}
-                        className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
-                      >
-                        <span>
-                          {v.nombre} {v.apellido} — CI: {v.ci}
-                        </span>
-                        <button
-                          onClick={() => quitarPersona(v.ci, "votante")}
-                          className="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700"
+                    {estructura.votantes
+                      .filter((v) => v.asignadoPor === currentUser.ci)
+                      .map((v) => (
+                        <div
+                          key={v.ci}
+                          className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
                         >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
+                          <span>
+                            {v.nombre} {v.apellido} — CI: {v.ci}
+                            {v.localidad ? ` — ${v.localidad}` : ""}
+                            {v.mesa ? ` — Mesa ${v.mesa}` : ""}
+                          </span>
+                          <button
+                            onClick={() => quitarPersona(v.ci, "votante")}
+                            className="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
                   </div>
                 )}
               </>
@@ -1300,24 +1340,30 @@ const App = () => {
             {/* SUBCOORDINADOR */}
             {currentUser.role === "subcoordinador" && (
               <>
-                {getMisVotantes().map((v) => (
-                  <div
-                    key={v.ci}
-                    className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
-                  >
-                    <span>
-                      {v.nombre} {v.apellido} — CI: {v.ci}
-                    </span>
-                    <button
-                      onClick={() => quitarPersona(v.ci, "votante")}
-                      className="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700"
+                {estructura.votantes
+                  .filter((v) => v.asignadoPor === currentUser.ci)
+                  .map((v) => (
+                    <div
+                      key={v.ci}
+                      className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                      <span>
+                        {v.nombre} {v.apellido} — CI: {v.ci}
+                        {v.localidad ? ` — ${v.localidad}` : ""}
+                        {v.mesa ? ` — Mesa ${v.mesa}` : ""}
+                      </span>
+                      <button
+                        onClick={() => quitarPersona(v.ci, "votante")}
+                        className="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
 
-                {getMisVotantes().length === 0 && (
+                {estructura.votantes.filter(
+                  (v) => v.asignadoPor === currentUser.ci
+                ).length === 0 && (
                   <p className="text-gray-500 py-6">
                     No tiene votantes asignados.
                   </p>
