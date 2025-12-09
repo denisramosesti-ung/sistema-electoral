@@ -1,4 +1,4 @@
-// App.jsx – Versión Supabase + padrón remoto (COMPLETA CON BUSCADOR CI)
+// App.jsx – Versión Supabase + padrón remoto (COMPLETA, CON LOGIN PERSISTENTE Y BUSCADOR CI)
 
 import React, { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
@@ -41,7 +41,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
       (p, index, arr) => arr.findIndex((x) => x.ci === p.ci) === index
     );
 
-    filtered = combined.slice(0, 50); // hasta 50 resultados internos
+    filtered = combined.slice(0, 50);
   }
 
   const pageSize = 5;
@@ -208,9 +208,24 @@ const App = () => {
   const [modalType, setModalType] = useState("");
   const [expandedCoords, setExpandedCoords] = useState({});
 
-  // Buscador por CI en el panel principal
+  // Buscador global por CI (en el panel)
   const [searchCI, setSearchCI] = useState("");
   const [searchResult, setSearchResult] = useState(null);
+
+  // ======================= CARGAR SESIÓN DESDE LOCALSTORAGE =======================
+  useEffect(() => {
+    const saved = localStorage.getItem("currentUser");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.ci && parsed.role) {
+          setCurrentUser(parsed);
+        }
+      } catch (e) {
+        console.error("Error parseando currentUser desde localStorage", e);
+      }
+    }
+  }, []);
 
   // ======================= CARGAR PADRÓN =======================
   useEffect(() => {
@@ -335,19 +350,15 @@ const App = () => {
     });
   };
 
-  // ======================= BUSCAR POR CI (PANEL PRINCIPAL) =======================
+  // ======================= BUSCADOR GLOBAL POR CI =======================
   const buscarPorCI = (ci) => {
     if (!ci) {
       setSearchResult(null);
       return;
     }
 
-    const ciStr = ci.toString().trim();
-
     // Coordinador
-    const coord = estructura.coordinadores.find(
-      (c) => c.ci?.toString() === ciStr
-    );
+    const coord = estructura.coordinadores.find((c) => c.ci == ci);
     if (coord) {
       setSearchResult({
         tipo: "coordinador",
@@ -357,44 +368,36 @@ const App = () => {
     }
 
     // Subcoordinador
-    const sub = estructura.subcoordinadores.find(
-      (s) => s.ci?.toString() === ciStr
-    );
+    const sub = estructura.subcoordinadores.find((s) => s.ci == ci);
     if (sub) {
-      const coordPadre = estructura.coordinadores.find(
-        (c) => c.ci === sub.coordinadorCI
-      );
       setSearchResult({
         tipo: "subcoordinador",
         data: sub,
-        coordinador: coordPadre || null,
       });
       return;
     }
 
     // Votante
-    const vot = estructura.votantes.find((v) => v.ci?.toString() === ciStr);
+    const vot = estructura.votantes.find((v) => v.ci == ci);
     if (vot) {
-      const asignadorSub = estructura.subcoordinadores.find(
-        (s) => s.ci === vot.asignadoPor
-      );
-      const asignadorCoord = estructura.coordinadores.find(
-        (c) => c.ci === vot.asignadoPor
-      );
-      const asignador = asignadorSub || asignadorCoord || null;
+      // Buscar quién es la persona que lo tiene asignado (sub o coord)
+      const asignadoPor =
+        estructura.subcoordinadores.find((s) => s.ci == vot.asignadoPor) ||
+        estructura.coordinadores.find((c) => c.ci == vot.asignadoPor) ||
+        null;
 
       setSearchResult({
         tipo: "votante",
         data: vot,
-        asignador,
+        asignadoPor,
       });
       return;
     }
 
-    // No está en ninguna estructura
+    // Nadie lo tiene
     setSearchResult({
       tipo: "ninguno",
-      data: { ci: ciStr },
+      data: { ci },
     });
   };
 
@@ -409,9 +412,7 @@ const App = () => {
     const yaEsSub = estructura.subcoordinadores.some(
       (s) => s.ci === persona.ci
     );
-    const yaEsVotante = estructura.votantes.some(
-      (v) => v.ci === persona.ci
-    );
+    const yaEsVotante = estructura.votantes.some((v) => v.ci === persona.ci);
 
     if (yaEsCoord || yaEsSub || yaEsVotante) {
       let rol = yaEsCoord
@@ -517,7 +518,6 @@ const App = () => {
       alert("Votante asignado correctamente.");
     }
 
-    // Cerrar modal y actualizar
     setShowAddModal(false);
     await recargarEstructura();
   };
@@ -553,7 +553,7 @@ const App = () => {
       await supabase.from("votantes").delete().eq("asignado_por", ci);
       await supabase.from("subcoordinadores").delete().eq("ci", ci);
     } else if (tipo === "votante") {
-      // Solo eliminar el votante asignado por este usuario
+      // Solo eliminar la asignación hecha por el usuario logueado
       await supabase
         .from("votantes")
         .delete()
@@ -646,7 +646,6 @@ const App = () => {
       autoTable(doc, {
         startY: y,
         head: [["CI", "Nombre", "Apellido", "Código"]],
-
         body: estructura.coordinadores.map((c) => [
           c.ci,
           c.nombre,
@@ -750,12 +749,15 @@ const App = () => {
         return;
       }
 
-      setCurrentUser({
+      const superUser = {
         ci: "4630621",
         nombre: "Denis",
         apellido: "Ramos",
         role: "superadmin",
-      });
+      };
+
+      setCurrentUser(superUser);
+      localStorage.setItem("currentUser", JSON.stringify(superUser));
       setLoginPass("");
       return;
     }
@@ -768,10 +770,9 @@ const App = () => {
 
     if (coordRes.data && coordRes.data.length > 0) {
       const c = normalizarCoordinador(coordRes.data[0]);
-      setCurrentUser({
-        ...c,
-        role: "coordinador",
-      });
+      const user = { ...c, role: "coordinador" };
+      setCurrentUser(user);
+      localStorage.setItem("currentUser", JSON.stringify(user));
       return;
     }
 
@@ -783,10 +784,9 @@ const App = () => {
 
     if (subRes.data && subRes.data.length > 0) {
       const s = normalizarSubcoordinador(subRes.data[0]);
-      setCurrentUser({
-        ...s,
-        role: "subcoordinador",
-      });
+      const user = { ...s, role: "subcoordinador" };
+      setCurrentUser(user);
+      localStorage.setItem("currentUser", JSON.stringify(user));
       return;
     }
 
@@ -798,6 +798,9 @@ const App = () => {
     setLoginID("");
     setLoginPass("");
     setExpandedCoords({});
+    setSearchCI("");
+    setSearchResult(null);
+    localStorage.removeItem("currentUser");
   };
 
   const toggleExpand = (ci) => {
@@ -1010,32 +1013,26 @@ const App = () => {
       {/* BUSCADOR GLOBAL POR CI */}
       <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="bg-white p-4 rounded-lg shadow mb-4">
-          <label className="font-semibold">Buscar persona por CI</label>
+          <label className="font-semibold">Buscar por CI</label>
           <input
             type="text"
             value={searchCI}
             onChange={(e) => {
-              const value = e.target.value.replace(/\D/g, "");
-              setSearchCI(value);
-              buscarPorCI(value.trim());
+              const value = e.target.value.trim();
+              setSearchCI(e.target.value);
+              buscarPorCI(value);
             }}
             placeholder="Ingrese CI (solo números)"
             className="w-full mt-2 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
           />
 
+          {/* RESULTADOS DE BÚSQUEDA */}
           {searchResult && (
             <div className="mt-4 p-3 border rounded bg-gray-50 text-sm">
               {searchResult.tipo === "coordinador" && (
                 <p>
                   <b>Coordinador:</b> {searchResult.data.nombre}{" "}
                   {searchResult.data.apellido} — CI: {searchResult.data.ci}
-                  {searchResult.data.localidad && (
-                    <>
-                      <br />
-                      Localidad: {searchResult.data.localidad} — Mesa:{" "}
-                      {searchResult.data.mesa}
-                    </>
-                  )}
                 </p>
               )}
 
@@ -1043,55 +1040,26 @@ const App = () => {
                 <p>
                   <b>Subcoordinador:</b> {searchResult.data.nombre}{" "}
                   {searchResult.data.apellido} — CI: {searchResult.data.ci}
-                  {searchResult.data.localidad && (
-                    <>
-                      <br />
-                      Localidad: {searchResult.data.localidad} — Mesa:{" "}
-                      {searchResult.data.mesa}
-                    </>
-                  )}
-                  {searchResult.coordinador && (
-                    <>
-                      <br />
-                      Depende del Coordinador:{" "}
-                      {searchResult.coordinador.nombre}{" "}
-                      {searchResult.coordinador.apellido} (
-                      {searchResult.coordinador.ci})
-                    </>
-                  )}
+                  <br />
+                  Asignado por: {searchResult.data.asignadoPorNombre}
                 </p>
               )}
 
               {searchResult.tipo === "votante" && (
                 <p>
-                  <b>Votante:</b> {searchResult.data.nombre}{" "}
-                  {searchResult.data.apellido} — CI: {searchResult.data.ci}
+                  <b>Votante asignado por:</b>{" "}
+                  {searchResult.asignadoPor?.nombre}{" "}
+                  {searchResult.asignadoPor?.apellido} (
+                  {searchResult.asignadoPor?.ci})
                   <br />
-                  Localidad: {searchResult.data.localidad} — Mesa:{" "}
+                  Localidad: {searchResult.data.localidad} – Mesa:{" "}
                   {searchResult.data.mesa}
-                  <br />
-                  {searchResult.asignador ? (
-                    <>
-                      Asignado a:{" "}
-                      {searchResult.asignador.nombre}{" "}
-                      {searchResult.asignador.apellido} (
-                      {searchResult.asignador.ci}) —{" "}
-                      {estructura.subcoordinadores.some(
-                        (s) => s.ci === searchResult.asignador.ci
-                      )
-                        ? "Subcoordinador"
-                        : "Coordinador"}
-                    </>
-                  ) : (
-                    "Asignador no encontrado (dato incompleto)."
-                  )}
                 </p>
               )}
 
               {searchResult.tipo === "ninguno" && (
                 <p className="text-gray-600">
-                  Este CI <b>{searchResult.data.ci}</b> no está asignado a
-                  ninguna estructura todavía.
+                  Este CI <b>{searchResult.data.ci}</b> no está asignado a nadie.
                 </p>
               )}
             </div>
