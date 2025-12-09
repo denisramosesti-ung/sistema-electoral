@@ -24,25 +24,29 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   if (!show) return null;
 
   let filtered = [];
-  if (searchTerm.trim()) {
-    const term = searchTerm.toLowerCase();
+if (searchTerm.trim()) {
+  const term = searchTerm.toLowerCase().trim();
 
-    const exactCI = disponibles.filter((p) =>
-      (p.ci || "").toString().startsWith(searchTerm)
+  filtered = disponibles.filter((p) => {
+    const ci = (p.ci || "").toString();
+    const nombre = (p.nombre || "").toLowerCase();
+    const apellido = (p.apellido || "").toLowerCase();
+
+    const nombreCompleto = `${nombre} ${apellido}`;
+    const apellidoNombre = `${apellido} ${nombre}`;
+
+    return (
+      ci.includes(term) ||
+      nombre.includes(term) ||
+      apellido.includes(term) ||
+      nombreCompleto.includes(term) ||
+      apellidoNombre.includes(term)
     );
+  });
 
-    const nameMatches = disponibles.filter(
-      (p) =>
-        (p.nombre || "").toLowerCase().includes(term) ||
-        (p.apellido || "").toLowerCase().includes(term)
-    );
+  filtered = filtered.slice(0, 50);
+}
 
-    const combined = [...exactCI, ...nameMatches].filter(
-      (p, index, arr) => arr.findIndex((x) => x.ci === p.ci) === index
-    );
-
-    filtered = combined.slice(0, 50);
-  }
 
   const pageSize = 5;
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
