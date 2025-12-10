@@ -1142,11 +1142,29 @@ const App = () => {
         <p><b>Teléfono:</b> {searchResult.data.telefono || "-"}</p>
 
         <p className="mt-2">
-          <b>Asignado por:</b>{" "}
-          {searchResult.asignadoPor
-            ? `${searchResult.asignadoPor.nombre} ${searchResult.asignadoPor.apellido} (CI: ${searchResult.asignadoPor.ci})`
-            : "No encontrado"}
-        </p>
+  <b>Asignado por:</b>{" "}
+  {searchResult.asignadoPor ? (
+    <>
+      {searchResult.asignadoPor.nombre} {searchResult.asignadoPor.apellido} —{" "}
+      <b>
+        {
+          estructura.coordinadores.some(
+            (c) => c.ci === searchResult.asignadoPor.ci
+          )
+            ? "Coordinador"
+            : estructura.subcoordinadores.some(
+                (s) => s.ci === searchResult.asignadoPor.ci
+              )
+            ? "Subcoordinador"
+            : "Rol desconocido"
+        }
+      </b>
+    </>
+  ) : (
+    "No encontrado"
+  )}
+</p>
+
       </>
     )}
 
