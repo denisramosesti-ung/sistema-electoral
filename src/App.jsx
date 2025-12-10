@@ -707,12 +707,13 @@ const App = () => {
 
       autoTable(doc, {
         startY: y,
-        head: [["CI", "Nombre", "Apellido", "Código"]],
+        head: [["CI", "Nombre", "Apellido", "Código", "Telefono"]],
         body: estructura.coordinadores.map((c) => [
           c.ci,
           c.nombre,
           c.apellido,
           c.loginCode || "-",
+          c.telefono || "-",
         ]),
         theme: "striped",
         headStyles: { fillColor: [220, 0, 0] },
@@ -736,13 +737,14 @@ const App = () => {
 
         autoTable(doc, {
           startY: y,
-          head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa"]],
+          head: [["CI", "Nombre", "Apellido", "Código", "Telefono"]],
           body: votantesSub.map((v) => [
             v.ci,
             v.nombre,
             v.apellido,
             v.localidad,
             v.mesa,
+            v.telefono || "_", 
           ]),
           theme: "grid",
           headStyles: { fillColor: [255, 80, 80] },
@@ -759,13 +761,14 @@ const App = () => {
 
         autoTable(doc, {
           startY: y,
-          head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa"]],
+          head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa", "Telefono"]],
           body: directos.map((v) => [
             v.ci,
             v.nombre,
             v.apellido,
             v.localidad,
             v.mesa,
+            v.telefono || "_",
           ]),
           theme: "grid",
           headStyles: { fillColor: [255, 80, 80] },
@@ -781,13 +784,14 @@ const App = () => {
 
       autoTable(doc, {
         startY: y + 4,
-        head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa"]],
+        head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa", "Telefono"]],
         body: getMisVotantes().map((v) => [
           v.ci,
           v.nombre,
           v.apellido,
           v.localidad,
           v.mesa,
+          v.telefono || "_",
         ]),
         theme: "grid",
         headStyles: { fillColor: [255, 80, 80] },
@@ -1090,51 +1094,71 @@ const App = () => {
 
           {/* RESULTADOS DE BÚSQUEDA */}
           {searchResult && (
-            <div className="mt-4 p-3 border rounded bg-gray-50 text-sm">
-              {searchResult.tipo === "coordinador" && (
-                <p>
-                  <b>Coordinador:</b> {searchResult.data.nombre}{" "}
-                  {searchResult.data.apellido} — CI: {searchResult.data.ci}
-                  {searchResult.data.telefono
-                    ? ` — Tel: ${searchResult.data.telefono}`
-                    : ""}
-                </p>
-              )}
+  <div className="mt-4 p-4 border rounded bg-gray-50 text-sm">
 
-              {searchResult.tipo === "subcoordinador" && (
-                <p>
-                  <b>Subcoordinador:</b> {searchResult.data.nombre}{" "}
-                  {searchResult.data.apellido} — CI: {searchResult.data.ci}
-                  <br />
-                  Asignado por: {searchResult.data.asignadoPorNombre}
-                  {searchResult.data.telefono
-                    ? ` — Tel: ${searchResult.data.telefono}`
-                    : ""}
-                </p>
-              )}
+    {/* === COORDINADOR === */}
+    {searchResult.tipo === "coordinador" && (
+      <>
+        <p className="font-bold text-red-700 mb-1">
+          Coordinador encontrado
+        </p>
 
-              {searchResult.tipo === "votante" && (
-                <p>
-                  <b>Votante asignado por:</b>{" "}
-                  {searchResult.asignadoPor?.nombre}{" "}
-                  {searchResult.asignadoPor?.apellido} (
-                  {searchResult.asignadoPor?.ci})
-                  <br />
-                  Localidad: {searchResult.data.localidad} – Mesa:{" "}
-                  {searchResult.data.mesa}
-                  {searchResult.data.telefono
-                    ? ` — Tel: ${searchResult.data.telefono}`
-                    : ""}
-                </p>
-              )}
+        <p><b>Nombre:</b> {searchResult.data.nombre} {searchResult.data.apellido}</p>
+        <p><b>CI:</b> {searchResult.data.ci}</p>
+        <p><b>Localidad:</b> {searchResult.data.localidad || "Sin datos"}</p>
+        <p><b>Mesa:</b> {searchResult.data.mesa || "-"}</p>
+        <p><b>Teléfono:</b> {searchResult.data.telefono || "-"}</p>
+      </>
+    )}
 
-              {searchResult.tipo === "ninguno" && (
-                <p className="text-gray-600">
-                  Este CI <b>{searchResult.data.ci}</b> no está asignado a nadie.
-                </p>
-              )}
-            </div>
-          )}
+    {/* === SUBCOORDINADOR === */}
+    {searchResult.tipo === "subcoordinador" && (
+      <>
+        <p className="font-bold text-red-700 mb-1">
+          Subcoordinador encontrado
+        </p>
+
+        <p><b>Nombre:</b> {searchResult.data.nombre} {searchResult.data.apellido}</p>
+        <p><b>CI:</b> {searchResult.data.ci}</p>
+        <p><b>Localidad:</b> {searchResult.data.localidad || "Sin datos"}</p>
+        <p><b>Mesa:</b> {searchResult.data.mesa || "-"}</p>
+        <p><b>Teléfono:</b> {searchResult.data.telefono || "-"}</p>
+
+        <p className="mt-2"><b>Asignado por:</b> {searchResult.data.asignadoPorNombre || "Superadmin"}</p>
+      </>
+    )}
+
+    {/* === VOTANTE === */}
+    {searchResult.tipo === "votante" && (
+      <>
+        <p className="font-bold text-red-700 mb-1">
+          Votante encontrado
+        </p>
+
+        <p><b>Nombre:</b> {searchResult.data.nombre} {searchResult.data.apellido}</p>
+        <p><b>CI:</b> {searchResult.data.ci}</p>
+        <p><b>Localidad:</b> {searchResult.data.localidad || "Sin datos"}</p>
+        <p><b>Mesa:</b> {searchResult.data.mesa || "-"}</p>
+        <p><b>Teléfono:</b> {searchResult.data.telefono || "-"}</p>
+
+        <p className="mt-2">
+          <b>Asignado por:</b>{" "}
+          {searchResult.asignadoPor
+            ? `${searchResult.asignadoPor.nombre} ${searchResult.asignadoPor.apellido} (CI: ${searchResult.asignadoPor.ci})`
+            : "No encontrado"}
+        </p>
+      </>
+    )}
+
+    {/* === NADIE LO TIENE === */}
+    {searchResult.tipo === "ninguno" && (
+      <p className="text-gray-600">
+        Este CI <b>{searchResult.data.ci}</b> no está asignado a nadie.
+      </p>
+    )}
+  </div>
+)}
+
         </div>
       </div>
 
