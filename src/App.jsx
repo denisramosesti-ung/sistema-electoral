@@ -804,7 +804,7 @@ const App = () => {
   // ======================= LOGIN =======================
   const handleLogin = async () => {
     if (!loginID.trim()) {
-      alert("Ingrese su CI o código de acceso.");
+      alert("Ingrese su Código de acceso.");
       return;
     }
 
@@ -925,7 +925,9 @@ const App = () => {
           <div className="mt-6 bg-red-50 p-4 rounded-lg border border-red-200 text-sm text-red-700">
             <p className="font-semibold mb-2">📋 Instrucciones:</p>
             <ol className="list-decimal ml-5 space-y-1">
-              <li>Ingrese el código proporcionado por el Admin.</li>
+              <li>Ingrese el código proporcionado por el Coordinador.</li>
+              <li>Ante dudas o consultas, comuniquese con el Admin del Sistema.</li>
+              <li>En caso de ser Subcoordinador cuide su clave de ingreso.</li>
             </ol>
           </div>
         </div>
