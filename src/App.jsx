@@ -1,5 +1,4 @@
-// App.jsx — Sistema electoral completo con Supabase, login persistente,
-// buscador CI, loader ANR y teléfonos editables por rol.
+// App.jsx – Versión Supabase + padrón remoto (COMPLETA, CON LOGIN PERSISTENTE, BUSCADOR CI Y TELÉFONO)
 
 import React, { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
@@ -13,102 +12,17 @@ import {
   ChevronRight,
   X,
   Trash2,
-  Phone,
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-/* ====================== LOADER ANR ====================== */
-const LoaderANR = ({ text = "Cargando…" }) => {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 text-gray-700">
-      <div
-        className="animate-spin rounded-full border-4 border-red-600 border-t-transparent h-16 w-16 mb-4"
-        style={{ borderTopColor: "transparent" }}
-      ></div>
-      <p className="text-lg font-semibold">{text}</p>
-    </div>
-  );
-};
-
-/* ======================= MODAL EDITAR TELÉFONO ======================= */
-const EditPhoneModal = ({
-  open,
-  persona,
-  tipo,
-  onClose,
-  newTelefono,
-  setNewTelefono,
-  onSave,
-}) => {
-  if (!open || !persona) return null;
-
-  const tituloTipo =
-    tipo === "coordinador"
-      ? "Coordinador"
-      : tipo === "subcoordinador"
-      ? "Subcoordinador"
-      : "Votante";
-
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl p-6 shadow-xl w-full max-w-sm">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-bold text-red-600 flex items-center gap-2">
-            <Phone className="w-5 h-5" />
-            Editar teléfono ({tituloTipo})
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <p className="text-sm text-gray-700 mb-3">
-          {persona.nombre} {persona.apellido} — CI: {persona.ci}
-        </p>
-
-        <label className="text-sm font-medium text-gray-700">
-          Teléfono (formato +595…)
-        </label>
-        <input
-          type="text"
-          value={newTelefono}
-          onChange={(e) => setNewTelefono(e.target.value)}
-          className="w-full mt-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
-          placeholder="+595..."
-        />
-
-        <div className="mt-6 flex justify-between">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400"
-          >
-            Cancelar
-          </button>
-
-          <button
-            onClick={onSave}
-            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-          >
-            Guardar
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-/* ====================== MODAL AGREGAR PERSONA ====================== */
+// ======================= MODAL PARA AGREGAR PERSONA =======================
 const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
 
   if (!show) return null;
 
-  // Filtro mejorado: CI, nombre, apellido, nombre+apellido
   let filtered = [];
   if (searchTerm.trim()) {
     const term = searchTerm.toLowerCase();
@@ -117,22 +31,14 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
       (p.ci || "").toString().startsWith(searchTerm)
     );
 
-    const nameMatches = disponibles.filter((p) => {
-      const nombre = (p.nombre || "").toLowerCase();
-      const apellido = (p.apellido || "").toLowerCase();
-      const full1 = `${nombre} ${apellido}`.trim();
-      const full2 = `${apellido} ${nombre}`.trim();
-
-      return (
-        nombre.includes(term) ||
-        apellido.includes(term) ||
-        full1.includes(term) ||
-        full2.includes(term)
-      );
-    });
+    const nameMatches = disponibles.filter(
+      (p) =>
+        (p.nombre || "").toLowerCase().includes(term) ||
+        (p.apellido || "").toLowerCase().includes(term)
+    );
 
     const combined = [...exactCI, ...nameMatches].filter(
-      (p, i, arr) => arr.findIndex((x) => x.ci === p.ci) === i
+      (p, index, arr) => arr.findIndex((x) => x.ci === p.ci) === index
     );
 
     filtered = combined.slice(0, 50);
@@ -147,7 +53,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
     tipo === "coordinador"
       ? "Agregar Coordinador"
       : tipo === "subcoordinador"
-      ? "Agregar Subcoordinador"
+      ? "Agregar Sub-coordinador"
       : "Agregar Votante";
 
   return (
@@ -168,7 +74,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
             <input
               type="text"
               value={searchTerm}
-              placeholder="Buscar por CI, nombre o apellido..."
+              placeholder="Buscar CI, nombre o apellido..."
               onChange={(e) => {
                 setSearchTerm(e.target.value);
                 setPage(1);
@@ -196,7 +102,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
                 persona.localidad ||
                 persona.local ||
                 persona.local_votacion ||
-                "Sin localidad";
+                "Fernando de la Mora";
 
               return (
                 <div
@@ -214,8 +120,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
                     {persona.nombre} {persona.apellido}
                   </p>
                   <p className="text-sm text-gray-600">
-                    CI: {persona.ci} • {localTexto} • Mesa:{" "}
-                    {persona.mesa || "-"}
+                    CI: {persona.ci} • {localTexto} • Mesa: {persona.mesa}
                   </p>
 
                   {bloqueado && (
@@ -226,9 +131,19 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
                           persona.asignadoPor ||
                           "otro referente"}
                       </b>{" "}
-                      {persona.asignadoRol ? `(${persona.asignadoRol})` : ""}
+                      {persona.asignadoRol ? `(${persona.asignadoRol})` : null}
                     </p>
                   )}
+
+                  <button
+                    className="absolute top-2 right-2 text-gray-500 hover:text-red-600 text-sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onClose();
+                    }}
+                  >
+                    ✖
+                  </button>
                 </div>
               );
             })
@@ -260,7 +175,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           </div>
         )}
 
-        {/* BOTÓN CERRAR */}
+        {/* BOTÓN CERRAR MODAL */}
         <div className="px-6 pb-6">
           <button
             onClick={onClose}
@@ -274,42 +189,35 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   );
 };
 
-/* ====================== APP PRINCIPAL ====================== */
+// ======================= APLICACIÓN PRINCIPAL =======================
 const App = () => {
-  // PADRÓN REMOTO
+  // PADRÓN REMOTO DESDE SUPABASE
   const [padron, setPadron] = useState([]);
 
-  // SESIÓN
+  // ESTADO PRINCIPAL
   const [currentUser, setCurrentUser] = useState(null);
   const [loginID, setLoginID] = useState("");
   const [loginPass, setLoginPass] = useState("");
-
-  // ESTRUCTURA
   const [estructura, setEstructura] = useState({
     coordinadores: [],
     subcoordinadores: [],
     votantes: [],
   });
 
-  // UI
   const [showAddModal, setShowAddModal] = useState(false);
   const [modalType, setModalType] = useState("");
   const [expandedCoords, setExpandedCoords] = useState({});
 
-  // Buscador global CI
+  // Buscador global por CI (en el panel)
   const [searchCI, setSearchCI] = useState("");
   const [searchResult, setSearchResult] = useState(null);
 
-  // Loader
-  const [loading, setLoading] = useState(true);
+  // Estado para modal de teléfono
+  const [phoneModalOpen, setPhoneModalOpen] = useState(false);
+  const [phoneTarget, setPhoneTarget] = useState(null); // {tipo, ci, nombre, apellido}
+  const [phoneValue, setPhoneValue] = useState("+595");
 
-  // Editar teléfono
-  const [editPhoneOpen, setEditPhoneOpen] = useState(false);
-  const [editPhoneTipo, setEditPhoneTipo] = useState(null); // "coordinador" | "subcoordinador" | "votante"
-  const [editPhonePersona, setEditPhonePersona] = useState(null);
-  const [newTelefono, setNewTelefono] = useState("+595");
-
-  /* ===== Persistencia de sesión ===== */
+  // ======================= CARGAR SESIÓN DESDE LOCALSTORAGE =======================
   useEffect(() => {
     const saved = localStorage.getItem("currentUser");
     if (saved) {
@@ -319,18 +227,17 @@ const App = () => {
           setCurrentUser(parsed);
         }
       } catch (e) {
-        console.error("Error leyendo sesión:", e);
+        console.error("Error parseando currentUser desde localStorage", e);
       }
     }
   }, []);
 
-  /* ===== Cargar padrón ===== */
+  // ======================= CARGAR PADRÓN =======================
   useEffect(() => {
     const cargarPadron = async () => {
       const { data, error } = await supabase.from("padron").select("*");
       if (error) {
         console.error("Error cargando padrón:", error);
-        setPadron([]);
         return;
       }
       setPadron(data || []);
@@ -339,7 +246,10 @@ const App = () => {
     cargarPadron();
   }, []);
 
-  /* ===== Normalizadores ===== */
+  // ======================= HELPERS =======================
+  const generarCodigo = () =>
+    Math.random().toString(36).substring(2, 8).toUpperCase();
+
   const normalizarCoordinador = (row) => ({
     ci: row.ci,
     nombre: row.nombre,
@@ -374,79 +284,71 @@ const App = () => {
     telefono: row.telefono || null,
   });
 
-  /* ===== Recargar estructura ===== */
+  // ======================= RECARGAR ESTRUCTURA =======================
   const recargarEstructura = async () => {
-    setLoading(true);
-
     const { data: coords, error: errC } = await supabase
       .from("coordinadores")
       .select("*");
+    if (errC) console.error(errC);
+
     const { data: subs, error: errS } = await supabase
       .from("subcoordinadores")
       .select("*");
+    if (errS) console.error(errS);
+
     const { data: votos, error: errV } = await supabase
       .from("votantes")
       .select("*");
-
-    if (errC) console.error("Error coordinadores:", errC);
-    if (errS) console.error("Error subcoordinadores:", errS);
-    if (errV) console.error("Error votantes:", errV);
+    if (errV) console.error(errV);
 
     setEstructura({
       coordinadores: (coords || []).map(normalizarCoordinador),
       subcoordinadores: (subs || []).map(normalizarSubcoordinador),
       votantes: (votos || []).map(normalizarVotante),
     });
-
-    setLoading(false);
   };
 
   useEffect(() => {
     recargarEstructura();
   }, []);
 
-  /* ===== Loader global ===== */
-  if (loading) {
-    return <LoaderANR text="Cargando estructura electoral…" />;
-  }
-
-  /* ===== Helpers ===== */
-  const generarCodigo = () =>
-    Math.random().toString(36).substring(2, 8).toUpperCase();
-
-  /* ===== Padrón disponible con flags de asignación ===== */
+  // ======================= PADRÓN DISPONIBLE =======================
   const getPersonasDisponibles = () => {
     return padron.map((p) => {
-      const coord = estructura.coordinadores.find((c) => c.ci === p.ci);
-      if (coord) {
+      // 1) ¿Es coordinador?
+      const coordItem = estructura.coordinadores.find((c) => c.ci === p.ci);
+      if (coordItem) {
         return {
           ...p,
           asignado: true,
-          asignadoPorNombre: `${coord.nombre} ${coord.apellido}`,
+          asignadoPorNombre: `${coordItem.nombre} ${coordItem.apellido}`,
           asignadoRol: "Coordinador",
         };
       }
 
-      const sub = estructura.subcoordinadores.find((s) => s.ci === p.ci);
-      if (sub) {
+      // 2) ¿Es subcoordinador?
+      const subItem = estructura.subcoordinadores.find((s) => s.ci === p.ci);
+      if (subItem) {
         return {
           ...p,
           asignado: true,
-          asignadoPorNombre: `${sub.nombre} ${sub.apellido}`,
+          asignadoPorNombre: `${subItem.nombre} ${subItem.apellido}`,
           asignadoRol: "Subcoordinador",
         };
       }
 
-      const vot = estructura.votantes.find((v) => v.ci === p.ci);
-      if (vot) {
+      // 3) ¿Es votante?
+      const votItem = estructura.votantes.find((v) => v.ci === p.ci);
+      if (votItem) {
         return {
           ...p,
           asignado: true,
-          asignadoPorNombre: vot.asignadoPorNombre || "Referente",
+          asignadoPorNombre: votItem.asignadoPorNombre || "Referente",
           asignadoRol: "Votante",
         };
       }
 
+      // 4) Libre
       return {
         ...p,
         asignado: false,
@@ -456,27 +358,37 @@ const App = () => {
     });
   };
 
-  /* ===== Buscador global por CI ===== */
+  // ======================= BUSCADOR GLOBAL POR CI =======================
   const buscarPorCI = (ci) => {
     if (!ci) {
       setSearchResult(null);
       return;
     }
 
+    // Coordinador
     const coord = estructura.coordinadores.find((c) => c.ci == ci);
     if (coord) {
-      setSearchResult({ tipo: "coordinador", data: coord });
+      setSearchResult({
+        tipo: "coordinador",
+        data: coord,
+      });
       return;
     }
 
+    // Subcoordinador
     const sub = estructura.subcoordinadores.find((s) => s.ci == ci);
     if (sub) {
-      setSearchResult({ tipo: "subcoordinador", data: sub });
+      setSearchResult({
+        tipo: "subcoordinador",
+        data: sub,
+      });
       return;
     }
 
+    // Votante
     const vot = estructura.votantes.find((v) => v.ci == ci);
     if (vot) {
+      // Buscar quién es la persona que lo tiene asignado (sub o coord)
       const asignadoPor =
         estructura.subcoordinadores.find((s) => s.ci == vot.asignadoPor) ||
         estructura.coordinadores.find((c) => c.ci == vot.asignadoPor) ||
@@ -490,26 +402,86 @@ const App = () => {
       return;
     }
 
-    setSearchResult({ tipo: "ninguno", data: { ci } });
+    // Nadie lo tiene
+    setSearchResult({
+      tipo: "ninguno",
+      data: { ci },
+    });
   };
 
-  /* ===== Agregar persona (coordinador/sub/votante) ===== */
+  // ======================= MODAL TELÉFONO =======================
+  const abrirTelefono = (tipo, persona) => {
+    setPhoneTarget({
+      tipo,
+      ci: persona.ci,
+      nombre: persona.nombre,
+      apellido: persona.apellido,
+    });
+    setPhoneValue(persona.telefono || "+595");
+    setPhoneModalOpen(true);
+  };
+
+  const guardarTelefono = async () => {
+    if (!phoneTarget) return;
+    const telefono = phoneValue.trim();
+
+    if (!telefono) {
+      alert("Ingrese un número de teléfono.");
+      return;
+    }
+
+    if (!telefono.startsWith("+595")) {
+      const ok = window.confirm(
+        "El número no inicia con +595. ¿Desea guardar de todas formas?"
+      );
+      if (!ok) return;
+    }
+
+    let tabla = "votantes";
+    if (phoneTarget.tipo === "coordinador") tabla = "coordinadores";
+    else if (phoneTarget.tipo === "subcoordinador") tabla = "subcoordinadores";
+
+    const { error } = await supabase
+      .from(tabla)
+      .update({ telefono })
+      .eq("ci", phoneTarget.ci);
+
+    if (error) {
+      alert("Error al guardar teléfono.");
+      console.error(error);
+      return;
+    }
+
+    alert("Teléfono actualizado correctamente.");
+    setPhoneModalOpen(false);
+    setPhoneTarget(null);
+    setPhoneValue("+595");
+    await recargarEstructura();
+  };
+
+  // ======================= AGREGAR PERSONA (Supabase) =======================
   const handleAgregarPersona = async (persona) => {
     const codigo = generarCodigo();
 
-    const yaCoord = estructura.coordinadores.some((c) => c.ci === persona.ci);
-    const yaSub = estructura.subcoordinadores.some((s) => s.ci === persona.ci);
-    const yaVot = estructura.votantes.some((v) => v.ci === persona.ci);
+    // 🔒 Validación global: evitar agregar a alguien ya asignado en cualquier rol
+    const yaEsCoord = estructura.coordinadores.some(
+      (c) => c.ci === persona.ci
+    );
+    const yaEsSub = estructura.subcoordinadores.some(
+      (s) => s.ci === persona.ci
+    );
+    const yaEsVotante = estructura.votantes.some((v) => v.ci === persona.ci);
 
-    if (yaCoord || yaSub || yaVot) {
-      const rol = yaCoord
+    if (yaEsCoord || yaEsSub || yaEsVotante) {
+      let rol = yaEsCoord
         ? "Coordinador"
-        : yaSub
-        ? "Subcoordinador"
+        : yaEsSub
+        ? "Sub-coordinador"
         : "Votante";
 
       alert(
-        `⚠️ Esta persona ya está asignada como ${rol}. No puede repetirse en la estructura.`
+        `⚠️ Esta persona ya fue agregada anteriormente como ${rol}.\n` +
+          `No puede volver a ser asignada.`
       );
       return;
     }
@@ -518,9 +490,9 @@ const App = () => {
       persona.localidad ||
       persona.local ||
       persona.local_votacion ||
-      "Sin especificar";
+      "Fernando de la Mora";
 
-    // COORDINADOR
+    // ======================= COORDINADOR =======================
     if (modalType === "coordinador") {
       const { error } = await supabase.from("coordinadores").insert([
         {
@@ -528,25 +500,25 @@ const App = () => {
           nombre: persona.nombre,
           apellido: persona.apellido,
           localidad: localidadBase,
-          mesa: persona.mesa || "",
+          mesa: persona.mesa?.toString() || "",
           login_code: codigo,
           asignado_por_nombre: "Superadmin",
-          telefono: null,
+          // telefono inicialmente null
         },
       ]);
 
       if (error) {
-        alert("Error al guardar coordinador.");
+        alert("Error al guardar coordinador en Supabase");
         console.error(error);
         return;
       }
 
       alert(
-        `Coordinador agregado.\nNombre: ${persona.nombre} ${persona.apellido}\nCódigo: ${codigo}`
+        `Coordinador agregado.\nNombre: ${persona.nombre} ${persona.apellido}\nCódigo de acceso: ${codigo}`
       );
     }
 
-    // SUBCOORDINADOR
+    // ======================= SUBCOORDINADOR =======================
     else if (modalType === "subcoordinador") {
       if (!currentUser || currentUser.role !== "coordinador") {
         alert("Solo un coordinador puede agregar subcoordinadores.");
@@ -559,26 +531,26 @@ const App = () => {
           nombre: persona.nombre,
           apellido: persona.apellido,
           localidad: localidadBase,
-          mesa: persona.mesa || "",
+          mesa: persona.mesa?.toString() || "",
           coordinador_ci: currentUser.ci,
           login_code: codigo,
           asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-          telefono: null,
+          // telefono inicialmente null
         },
       ]);
 
       if (error) {
-        alert("Error al guardar subcoordinador.");
+        alert("Error al guardar subcoordinador en Supabase");
         console.error(error);
         return;
       }
 
       alert(
-        `Subcoordinador agregado.\nNombre: ${persona.nombre} ${persona.apellido}\nCódigo: ${codigo}`
+        `Sub-coordinador agregado.\nNombre: ${persona.nombre} ${persona.apellido}\nCódigo de acceso: ${codigo}`
       );
     }
 
-    // VOTANTE
+    // ======================= VOTANTE =======================
     else if (modalType === "votante") {
       if (!currentUser) {
         alert("Debe iniciar sesión para asignar votantes.");
@@ -591,15 +563,15 @@ const App = () => {
           nombre: persona.nombre,
           apellido: persona.apellido,
           localidad: localidadBase,
-          mesa: persona.mesa || "",
+          mesa: persona.mesa?.toString() || "",
           asignado_por: currentUser.ci,
           asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-          telefono: null,
+          // telefono inicialmente null
         },
       ]);
 
       if (error) {
-        alert("Error al guardar votante.");
+        alert("Error al guardar votante en Supabase");
         console.error(error);
         return;
       }
@@ -607,18 +579,19 @@ const App = () => {
       alert("Votante asignado correctamente.");
     }
 
+    // Cerrar modal y actualizar
     setShowAddModal(false);
     await recargarEstructura();
   };
 
-  /* ===== Quitar persona ===== */
+  // ======================= QUITAR PERSONA (Supabase) =======================
   const quitarPersona = async (ci, tipo) => {
     const mensajes = {
       coordinador:
-        "Quitar coordinador eliminará también sus subcoordinadores y sus votantes. ¿Seguro?",
+        "¿Quitar jerarquía de coordinador? También se quitarán sus subcoordinadores y sus votantes.",
       subcoordinador:
-        "Quitar subcoordinador eliminará también sus votantes. ¿Seguro?",
-      votante: "¿Quitar votante de la estructura?",
+        "¿Quitar jerarquía de sub-coordinador? También se quitarán sus votantes.",
+      votante: "¿Quitar votante de la lista? Volverá al padrón disponible.",
     };
 
     if (!window.confirm(mensajes[tipo])) return;
@@ -642,17 +615,37 @@ const App = () => {
       await supabase.from("votantes").delete().eq("asignado_por", ci);
       await supabase.from("subcoordinadores").delete().eq("ci", ci);
     } else if (tipo === "votante") {
+      // Solo eliminar la asignación hecha por el usuario logueado
       await supabase
         .from("votantes")
         .delete()
-        .match({ ci: ci, asignado_por: currentUser.ci });
+        .match({
+          ci: ci,
+          asignado_por: currentUser.ci,
+        });
     }
 
     await recargarEstructura();
-    alert("Persona removida.");
+    alert("Persona removida correctamente.");
   };
 
-  /* ===== Estadísticas ===== */
+  // ======================= MIS SUBS / VOTANTES =======================
+  const getMisSubcoordinadores = () => {
+    if (!currentUser || currentUser.role !== "coordinador") return [];
+    return estructura.subcoordinadores.filter(
+      (s) => s.coordinadorCI === currentUser.ci
+    );
+  };
+
+  const getMisVotantes = () => {
+    if (!currentUser) return [];
+    return estructura.votantes.filter((v) => v.asignadoPor === currentUser.ci);
+  };
+
+  const getVotantesDeSubcoord = (subcoordCI) =>
+    estructura.votantes.filter((v) => v.asignadoPor === subcoordCI);
+
+  // ======================= ESTADÍSTICAS =======================
   const getEstadisticas = () => {
     if (currentUser?.role === "superadmin") {
       return {
@@ -663,23 +656,16 @@ const App = () => {
     }
 
     if (currentUser?.role === "coordinador") {
-      const misSubs = estructura.subcoordinadores.filter(
-        (s) => s.coordinadorCI === currentUser.ci
-      );
-
-      const directos = estructura.votantes.filter(
-        (v) => v.asignadoPor === currentUser.ci
-      );
-
+      const misSubcoords = getMisSubcoordinadores();
+      const directos = getMisVotantes();
       let indirectos = 0;
-      misSubs.forEach((s) => {
-        indirectos += estructura.votantes.filter(
-          (v) => v.asignadoPor === s.ci
-        ).length;
+
+      misSubcoords.forEach((s) => {
+        indirectos += getVotantesDeSubcoord(s.ci).length;
       });
 
       return {
-        subcoordinadores: misSubs.length,
+        subcoordinadores: misSubcoords.length,
         votantesDirectos: directos.length,
         votantesIndirectos: indirectos,
         total: directos.length + indirectos,
@@ -687,21 +673,20 @@ const App = () => {
     }
 
     if (currentUser?.role === "subcoordinador") {
-      const directos = estructura.votantes.filter(
-        (v) => v.asignadoPor === currentUser.ci
-      );
-
-      return { votantes: directos.length };
+      const directos = getMisVotantes();
+      return {
+        votantes: directos.length,
+      };
     }
 
     return {};
   };
 
-  /* ===== Reporte PDF ===== */
+  // ======================= REPORTE PDF =======================
   const generarPDF = () => {
     if (!currentUser) return;
-
     const doc = new jsPDF({ orientation: "portrait" });
+
     doc.setFontSize(16);
     doc.text("Reporte de Estructura Electoral", 14, 20);
 
@@ -722,12 +707,11 @@ const App = () => {
 
       autoTable(doc, {
         startY: y,
-        head: [["CI", "Nombre", "Apellido", "Teléfono", "Código"]],
+        head: [["CI", "Nombre", "Apellido", "Código"]],
         body: estructura.coordinadores.map((c) => [
           c.ci,
           c.nombre,
           c.apellido,
-          c.telefono || "-",
           c.loginCode || "-",
         ]),
         theme: "striped",
@@ -738,29 +722,27 @@ const App = () => {
     }
 
     if (currentUser.role === "coordinador") {
-      const misSubs = estructura.subcoordinadores.filter(
-        (s) => s.coordinadorCI === currentUser.ci
-      );
+      const subcoords = getMisSubcoordinadores();
 
-      misSubs.forEach((sub) => {
+      subcoords.forEach((sub) => {
         doc.setFontSize(14);
         doc.text(`Subcoordinador: ${sub.nombre} ${sub.apellido}`, 14, y);
         y += 5;
 
-        const votantesSub = estructura.votantes.filter(
-          (v) => v.asignadoPor === sub.ci
-        );
+        const votantesSub = getVotantesDeSubcoord(sub.ci);
+        doc.setFontSize(12);
+        doc.text("Votantes asignados:", 14, y);
+        y += 4;
 
         autoTable(doc, {
           startY: y,
-          head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa", "Teléfono"]],
+          head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa"]],
           body: votantesSub.map((v) => [
             v.ci,
             v.nombre,
             v.apellido,
             v.localidad,
             v.mesa,
-            v.telefono || "-",
           ]),
           theme: "grid",
           headStyles: { fillColor: [255, 80, 80] },
@@ -769,49 +751,43 @@ const App = () => {
         y = doc.lastAutoTable.finalY + 12;
       });
 
-      const directos = estructura.votantes.filter(
-        (v) => v.asignadoPor === currentUser.ci
-      );
-
+      const directos = getMisVotantes();
       if (directos.length > 0) {
         doc.setFontSize(14);
         doc.text("Votantes directos del Coordinador:", 14, y);
+        y += 6;
 
         autoTable(doc, {
-          startY: y + 4,
-          head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa", "Teléfono"]],
+          startY: y,
+          head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa"]],
           body: directos.map((v) => [
             v.ci,
             v.nombre,
             v.apellido,
             v.localidad,
             v.mesa,
-            v.telefono || "-",
           ]),
           theme: "grid",
           headStyles: { fillColor: [255, 80, 80] },
         });
+
+        y = doc.lastAutoTable.finalY + 10;
       }
     }
 
     if (currentUser.role === "subcoordinador") {
       doc.setFontSize(14);
-      doc.text("Mis votantes:", 14, y);
-
-      const directos = estructura.votantes.filter(
-        (v) => v.asignadoPor === currentUser.ci
-      );
+      doc.text("Mis votantes asignados:", 14, y);
 
       autoTable(doc, {
         startY: y + 4,
-        head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa", "Teléfono"]],
-        body: directos.map((v) => [
+        head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa"]],
+        body: getMisVotantes().map((v) => [
           v.ci,
           v.nombre,
           v.apellido,
           v.localidad,
           v.mesa,
-          v.telefono || "-",
         ]),
         theme: "grid",
         headStyles: { fillColor: [255, 80, 80] },
@@ -821,7 +797,7 @@ const App = () => {
     doc.save("reporte_estructura.pdf");
   };
 
-  /* ===== LOGIN ===== */
+  // ======================= LOGIN =======================
   const handleLogin = async () => {
     if (!loginID.trim()) {
       alert("Ingrese su CI o código de acceso.");
@@ -831,7 +807,7 @@ const App = () => {
     // SUPERADMIN
     if (loginID === "4630621") {
       if (loginPass !== "12345") {
-        alert("Contraseña incorrecta.");
+        alert("Contraseña incorrecta para el Super Administrador.");
         return;
       }
 
@@ -854,7 +830,7 @@ const App = () => {
       .select("*")
       .eq("login_code", loginID.trim());
 
-    if (coordRes.data?.length > 0) {
+    if (coordRes.data && coordRes.data.length > 0) {
       const c = normalizarCoordinador(coordRes.data[0]);
       const user = { ...c, role: "coordinador" };
       setCurrentUser(user);
@@ -868,7 +844,7 @@ const App = () => {
       .select("*")
       .eq("login_code", loginID.trim());
 
-    if (subRes.data?.length > 0) {
+    if (subRes.data && subRes.data.length > 0) {
       const s = normalizarSubcoordinador(subRes.data[0]);
       const user = { ...s, role: "subcoordinador" };
       setCurrentUser(user);
@@ -876,10 +852,9 @@ const App = () => {
       return;
     }
 
-    alert("Código no encontrado.");
+    alert("Usuario no encontrado. Verifique el código.");
   };
 
-  /* ===== LOGOUT ===== */
   const handleLogout = () => {
     setCurrentUser(null);
     setLoginID("");
@@ -897,44 +872,11 @@ const App = () => {
     }));
   };
 
-  /* ===== Editar teléfono (guardar) ===== */
-  const guardarTelefono = async () => {
-    if (!editPhonePersona || !editPhoneTipo) return;
-
-    if (!newTelefono.startsWith("+595")) {
-      alert("El número debe comenzar con +595");
-      return;
-    }
-
-    let table = "";
-    if (editPhoneTipo === "coordinador") table = "coordinadores";
-    if (editPhoneTipo === "subcoordinador") table = "subcoordinadores";
-    if (editPhoneTipo === "votante") table = "votantes";
-
-    const { error } = await supabase
-      .from(table)
-      .update({ telefono: newTelefono })
-      .eq("ci", editPhonePersona.ci);
-
-    if (error) {
-      alert("Error al actualizar teléfono");
-      console.error(error);
-      return;
-    }
-
-    alert("Teléfono actualizado correctamente");
-    setEditPhoneOpen(false);
-    setEditPhonePersona(null);
-    setEditPhoneTipo(null);
-    setNewTelefono("+595");
-    await recargarEstructura();
-  };
-
-  /* ===== LOGIN SCREEN ===== */
+  // ======================= LOGIN SCREEN =======================
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center p-4">
-        <div className="bg-white/95 p-8 rounded-xl shadow-xl w-full max-w-md">
+        <div className="bg-white/95 backdrop-blur-sm p-8 rounded-2xl shadow-xl w-full max-w-md">
           <div className="text-center mb-8">
             <Users className="w-16 h-16 text-red-600 mx-auto" />
             <h1 className="text-3xl font-bold text-gray-800 mt-3">
@@ -944,25 +886,27 @@ const App = () => {
           </div>
 
           <label className="text-sm font-medium text-gray-700">
-            CI o Código
+            CI o Código de Acceso
           </label>
           <input
             type="text"
             value={loginID}
             onChange={(e) => setLoginID(e.target.value)}
             className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 mb-4"
+            placeholder="Ej: 1234567 o ABC123"
           />
 
           {loginID === "4630621" && (
             <div className="mb-4">
               <label className="text-sm font-medium text-gray-700">
-                Contraseña
+                Contraseña de Superadmin
               </label>
               <input
                 type="password"
                 value={loginPass}
                 onChange={(e) => setLoginPass(e.target.value)}
                 className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500"
+                placeholder="Ingrese contraseña"
               />
             </div>
           )}
@@ -973,12 +917,19 @@ const App = () => {
           >
             Iniciar Sesión
           </button>
+
+          <div className="mt-6 bg-red-50 p-4 rounded-lg border border-red-200 text-sm text-red-700">
+            <p className="font-semibold mb-2">📋 Instrucciones:</p>
+            <ol className="list-decimal ml-5 space-y-1">
+              <li>Ingrese el código proporcionado por el Admin.</li>
+            </ol>
+          </div>
         </div>
       </div>
     );
   }
 
-  /* ===== DASHBOARD ===== */
+  // ======================= DASHBOARD =======================
   const stats = getEstadisticas();
 
   return (
@@ -994,15 +945,16 @@ const App = () => {
                 ? "⭐ Superadmin"
                 : currentUser.role === "coordinador"
                 ? "Coordinador"
-                : "Subcoordinador"}
+                : "Sub-coordinador"}
             </p>
           </div>
 
           <button
             onClick={handleLogout}
-            className="flex items-center gap-2 bg-red-700 hover:bg-red-800 px-4 py-2 rounded-lg"
+            className="flex items-center gap-2 bg-red-700 hover:bg-red-800 px-4 py-2 rounded-lg transition"
           >
-            <LogOut className="w-4 h-4" /> Salir
+            <LogOut className="w-4 h-4" />
+            Salir
           </button>
         </div>
       </div>
@@ -1077,7 +1029,7 @@ const App = () => {
               setModalType("coordinador");
               setShowAddModal(true);
             }}
-            className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+            className="flex items-center gap-2 bg-red-600 text_WHITE px-4 py-2 rounded-lg hover:bg-red-700 text-white"
           >
             <UserPlus className="w-4 h-4" />
             Agregar Coordinador
@@ -1122,20 +1074,21 @@ const App = () => {
 
       {/* BUSCADOR GLOBAL POR CI */}
       <div className="max-w-7xl mx-auto px-4 py-4">
-        <div className="bg-white p-4 rounded-lg shadow mb-4">
+        <div className="bg_white p-4 rounded-lg shadow mb-4 bg-white">
           <label className="font-semibold">Buscar por CI</label>
           <input
             type="text"
             value={searchCI}
             onChange={(e) => {
-              const valor = e.target.value;
-              setSearchCI(valor);
-              buscarPorCI(valor.trim());
+              const value = e.target.value.trim();
+              setSearchCI(e.target.value);
+              buscarPorCI(value);
             }}
             placeholder="Ingrese CI (solo números)"
             className="w-full mt-2 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
           />
 
+          {/* RESULTADOS DE BÚSQUEDA */}
           {searchResult && (
             <div className="mt-4 p-3 border rounded bg-gray-50 text-sm">
               {searchResult.tipo === "coordinador" && (
@@ -1153,8 +1106,7 @@ const App = () => {
                   <b>Subcoordinador:</b> {searchResult.data.nombre}{" "}
                   {searchResult.data.apellido} — CI: {searchResult.data.ci}
                   <br />
-                  Asignado por:{" "}
-                  {searchResult.data.asignadoPorNombre || "Superadmin"}
+                  Asignado por: {searchResult.data.asignadoPorNombre}
                   {searchResult.data.telefono
                     ? ` — Tel: ${searchResult.data.telefono}`
                     : ""}
@@ -1162,27 +1114,23 @@ const App = () => {
               )}
 
               {searchResult.tipo === "votante" && (
-                <>
-                  <p>
-                    <b>Votante asignado por:</b>{" "}
-                    {searchResult.asignadoPor?.nombre}{" "}
-                    {searchResult.asignadoPor?.apellido} (
-                    {searchResult.asignadoPor?.ci || "CI no registrado"})
-                  </p>
-                  <p>
-                    Localidad: {searchResult.data.localidad || "Sin datos"} –{" "}
-                    Mesa: {searchResult.data.mesa || "-"}
-                    {searchResult.data.telefono
-                      ? ` — Tel: ${searchResult.data.telefono}`
-                      : ""}
-                  </p>
-                </>
+                <p>
+                  <b>Votante asignado por:</b>{" "}
+                  {searchResult.asignadoPor?.nombre}{" "}
+                  {searchResult.asignadoPor?.apellido} (
+                  {searchResult.asignadoPor?.ci})
+                  <br />
+                  Localidad: {searchResult.data.localidad} – Mesa:{" "}
+                  {searchResult.data.mesa}
+                  {searchResult.data.telefono
+                    ? ` — Tel: ${searchResult.data.telefono}`
+                    : ""}
+                </p>
               )}
 
               {searchResult.tipo === "ninguno" && (
                 <p className="text-gray-600">
-                  Este CI <b>{searchResult.data.ci}</b> no está asignado a
-                  nadie.
+                  Este CI <b>{searchResult.data.ci}</b> no está asignado a nadie.
                 </p>
               )}
             </div>
@@ -1226,7 +1174,7 @@ const App = () => {
                           </p>
                           {coord.telefono && (
                             <p className="text-xs text-gray-500">
-                              Teléfono: {coord.telefono}
+                              Tel: {coord.telefono}
                             </p>
                           )}
                           {coord.loginCode && (
@@ -1242,35 +1190,31 @@ const App = () => {
                         </div>
                       </div>
 
-                      <div className="flex gap-2">
+                      <div className="flex flex-col md:flex-row gap-2">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setEditPhoneTipo("coordinador");
-                            setEditPhonePersona(coord);
-                            setNewTelefono(coord.telefono || "+595");
-                            setEditPhoneOpen(true);
+                            abrirTelefono("coordinador", coord);
                           }}
-                          className="text-blue-600 text-xs hover:underline"
+                          className="px-3 py-2 border-2 border-green-600 text-green-700 rounded-lg text-xs md:text-sm hover:bg-green-50"
                         >
                           Teléfono
                         </button>
-
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             quitarPersona(coord.ci, "coordinador");
                           }}
-                          className="bg-red-600 text-white p-2 rounded hover:bg-red-700"
+                          className="flex items-center gap-1 bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 text-xs md:text-sm"
                         >
                           <Trash2 className="w-4 h-4" />
+                          Borrar
                         </button>
                       </div>
                     </div>
 
                     {expandedCoords[coord.ci] && (
                       <div className="bg-white px-4 pb-4">
-                        {/* Subcoordinadores */}
                         {estructura.subcoordinadores
                           .filter((s) => s.coordinadorCI === coord.ci)
                           .map((sub) => (
@@ -1278,53 +1222,27 @@ const App = () => {
                               key={sub.ci}
                               className="border rounded p-3 mb-2 bg-red-50/40"
                             >
-                              <div className="flex justify-between items-start">
-                                <div>
-                                  <p className="font-semibold text-gray-800">
-                                    {sub.nombre} {sub.apellido}
-                                  </p>
-                                  <p className="text-sm text-gray-600">
-                                    CI: {sub.ci} — Subcoordinador
-                                  </p>
-                                  {sub.telefono && (
-                                    <p className="text-xs text-gray-500">
-                                      Teléfono: {sub.telefono}
-                                    </p>
-                                  )}
-                                  {sub.loginCode && (
-                                    <p className="text-xs text-gray-500">
-                                      Código de acceso: {sub.loginCode}
-                                    </p>
-                                  )}
-                                  {sub.localidad && sub.mesa && (
-                                    <p className="text-xs text-gray-500">
-                                      {sub.localidad} — Mesa {sub.mesa}
-                                    </p>
-                                  )}
-                                </div>
-
-                                <div className="flex flex-col gap-1">
-                                  <button
-                                    onClick={() => {
-                                      setEditPhoneTipo("subcoordinador");
-                                      setEditPhonePersona(sub);
-                                      setNewTelefono(sub.telefono || "+595");
-                                      setEditPhoneOpen(true);
-                                    }}
-                                    className="text-blue-600 text-xs hover:underline"
-                                  >
-                                    Teléfono
-                                  </button>
-                                  <button
-                                    onClick={() =>
-                                      quitarPersona(sub.ci, "subcoordinador")
-                                    }
-                                    className="bg-red-600 text-white p-1 rounded hover:bg-red-700"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </div>
+                              <p className="font-semibold text-gray-800">
+                                {sub.nombre} {sub.apellido}
+                              </p>
+                              <p className="text-sm text-gray-600">
+                                CI: {sub.ci} — Sub-coordinador
+                              </p>
+                              {sub.telefono && (
+                                <p className="text-xs text-gray-500">
+                                  Tel: {sub.telefono}
+                                </p>
+                              )}
+                              {sub.loginCode && (
+                                <p className="text-xs text-gray-500">
+                                  Código de acceso: {sub.loginCode}
+                                </p>
+                              )}
+                              {sub.localidad && sub.mesa && (
+                                <p className="text-xs text-gray-500">
+                                  {sub.localidad} — Mesa {sub.mesa}
+                                </p>
+                              )}
 
                               <p className="text-sm font-semibold mt-2">
                                 Votantes
@@ -1334,83 +1252,28 @@ const App = () => {
                                 .map((v) => (
                                   <div
                                     key={v.ci}
-                                    className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
+                                    className="bg-white border p-2 mt-2 rounded text-sm"
                                   >
-                                    <span>
-                                      {v.nombre} {v.apellido} — CI: {v.ci}
-                                      {v.localidad
-                                        ? ` — ${v.localidad}`
-                                        : ""}
-                                      {v.mesa ? ` — Mesa ${v.mesa}` : ""}
-                                      {v.telefono
-                                        ? ` — Tel: ${v.telefono}`
-                                        : ""}
-                                    </span>
-
-                                    <div className="flex gap-2">
-                                      <button
-                                        onClick={() => {
-                                          setEditPhoneTipo("votante");
-                                          setEditPhonePersona(v);
-                                          setNewTelefono(
-                                            v.telefono || "+595"
-                                          );
-                                          setEditPhoneOpen(true);
-                                        }}
-                                        className="text-blue-600 text-xs hover:underline"
-                                      >
-                                        Teléfono
-                                      </button>
-                                      <button
-                                        onClick={() =>
-                                          quitarPersona(v.ci, "votante")
-                                        }
-                                        className="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700"
-                                      >
-                                        <Trash2 className="w-4 h-4" />
-                                      </button>
-                                    </div>
+                                    {v.nombre} {v.apellido} — CI: {v.ci}
+                                    {v.localidad ? ` — ${v.localidad}` : ""}
+                                    {v.mesa ? ` — Mesa ${v.mesa}` : ""}
+                                    {v.telefono ? ` — Tel: ${v.telefono}` : ""}
                                   </div>
                                 ))}
                             </div>
                           ))}
 
-                        {/* Votantes directos del coordinador */}
                         {estructura.votantes
                           .filter((v) => v.asignadoPor === coord.ci)
                           .map((v) => (
                             <div
                               key={v.ci}
-                              className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
+                              className="bg-white border p-2 mt-2 rounded text-sm"
                             >
-                              <span>
-                                {v.nombre} {v.apellido} — CI: {v.ci}
-                                {v.localidad ? ` — ${v.localidad}` : ""}
-                                {v.mesa ? ` — Mesa ${v.mesa}` : ""}
-                                {v.telefono ? ` — Tel: ${v.telefono}` : ""}
-                              </span>
-
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => {
-                                    setEditPhoneTipo("votante");
-                                    setEditPhonePersona(v);
-                                    setNewTelefono(v.telefono || "+595");
-                                    setEditPhoneOpen(true);
-                                  }}
-                                  className="text-blue-600 text-xs hover:underline"
-                                >
-                                  Teléfono
-                                </button>
-                                <button
-                                  onClick={() =>
-                                    quitarPersona(v.ci, "votante")
-                                  }
-                                  className="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
+                              {v.nombre} {v.apellido} — CI: {v.ci}
+                              {v.localidad ? ` — ${v.localidad}` : ""}
+                              {v.mesa ? ` — Mesa ${v.mesa}` : ""}
+                              {v.telefono ? ` — Tel: ${v.telefono}` : ""}
                             </div>
                           ))}
                       </div>
@@ -1429,174 +1292,146 @@ const App = () => {
             {/* COORDINADOR */}
             {currentUser.role === "coordinador" && (
               <>
-                {/* Subcoordinadores */}
-                {estructura.subcoordinadores
-                  .filter((s) => s.coordinadorCI === currentUser.ci)
-                  .map((sub) => (
+                {getMisSubcoordinadores().map((sub) => (
+                  <div
+                    key={sub.ci}
+                    className="border rounded-lg mb-3 bg-red-50/40"
+                  >
                     <div
-                      key={sub.ci}
-                      className="border rounded-lg mb-3 bg-red-50/40"
+                      className="flex items-center justify-between p-4 cursor-pointer"
+                      onClick={() => toggleExpand(sub.ci)}
                     >
-                      <div
-                        className="flex items-center justify-between p-4 cursor-pointer"
-                        onClick={() => toggleExpand(sub.ci)}
-                      >
-                        <div className="flex items-center gap-3 flex-1">
-                          {expandedCoords[sub.ci] ? (
-                            <ChevronDown className="w-5 h-5 text-red-600" />
-                          ) : (
-                            <ChevronRight className="w-5 h-5 text-red-600" />
+                      <div className="flex items-center gap-3 flex-1">
+                        {expandedCoords[sub.ci] ? (
+                          <ChevronDown className="w-5 h-5 text-red-600" />
+                        ) : (
+                          <ChevronRight className="w-5 h-5 text-red-600" />
+                        )}
+
+                        <div>
+                          <p className="font-semibold text-gray-800">
+                            {sub.nombre} {sub.apellido}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            CI: {sub.ci} — Sub-coordinador
+                          </p>
+                          {sub.telefono && (
+                            <p className="text-xs text-gray-500">
+                              Tel: {sub.telefono}
+                            </p>
                           )}
-
-                          <div>
-                            <p className="font-semibold text-gray-800">
-                              {sub.nombre} {sub.apellido}
+                          {sub.loginCode && (
+                            <p className="text-xs text-gray-500">
+                              Código: {sub.loginCode}
                             </p>
-                            <p className="text-sm text-gray-600">
-                              CI: {sub.ci} — Subcoordinador
+                          )}
+                          {sub.localidad && sub.mesa && (
+                            <p className="text-xs text-gray-500">
+                              {sub.localidad} — Mesa {sub.mesa}
                             </p>
-                            {sub.telefono && (
-                              <p className="text-xs text-gray-500">
-                                Teléfono: {sub.telefono}
-                              </p>
-                            )}
-                            {sub.loginCode && (
-                              <p className="text-xs text-gray-500">
-                                Código: {sub.loginCode}
-                              </p>
-                            )}
-                            {sub.localidad && sub.mesa && (
-                              <p className="text-xs text-gray-500">
-                                {sub.localidad} — Mesa {sub.mesa}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col gap-1">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditPhoneTipo("subcoordinador");
-                              setEditPhonePersona(sub);
-                              setNewTelefono(sub.telefono || "+595");
-                              setEditPhoneOpen(true);
-                            }}
-                            className="text-blue-600 text-xs hover:underline"
-                          >
-                            Teléfono
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              quitarPersona(sub.ci, "subcoordinador");
-                            }}
-                            className="bg-red-600 text-white p-2 rounded hover:bg-red-700"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          )}
                         </div>
                       </div>
 
-                      {expandedCoords[sub.ci] && (
-                        <div className="bg-white px-4 pb-4">
-                          <p className="text-sm font-semibold mt-2">
-                            Votantes
-                          </p>
-                          {estructura.votantes
-                            .filter((v) => v.asignadoPor === sub.ci)
-                            .map((v) => (
-                              <div
-                                key={v.ci}
-                                className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
-                              >
-                                <span>
-                                  {v.nombre} {v.apellido} — CI: {v.ci}
-                                  {v.localidad ? ` — ${v.localidad}` : ""}
-                                  {v.mesa ? ` — Mesa ${v.mesa}` : ""}
-                                  {v.telefono ? ` — Tel: ${v.telefono}` : ""}
-                                </span>
-
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() => {
-                                      setEditPhoneTipo("votante");
-                                      setEditPhonePersona(v);
-                                      setNewTelefono(v.telefono || "+595");
-                                      setEditPhoneOpen(true);
-                                    }}
-                                    className="text-blue-600 text-xs hover:underline"
-                                  >
-                                    Teléfono
-                                  </button>
-                                  <button
-                                    onClick={() =>
-                                      quitarPersona(v.ci, "votante")
-                                    }
-                                    className="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-
-                          {estructura.votantes.filter(
-                            (v) => v.asignadoPor === sub.ci
-                          ).length === 0 && (
-                            <p className="text-gray-500 text-sm mt-2">
-                              Sin votantes asignados.
-                            </p>
-                          )}
-                        </div>
-                      )}
+                      <div className="flex flex-col md:flex-row gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            abrirTelefono("subcoordinador", sub);
+                          }}
+                          className="px-3 py-2 border-2 border-green-600 text-green-700 rounded-lg text-xs md:text-sm hover:bg-green-50"
+                        >
+                          Teléfono
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            quitarPersona(sub.ci, "subcoordinador");
+                          }}
+                          className="flex items-center gap-1 bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 text-xs md:text-sm"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Borrar
+                        </button>
+                      </div>
                     </div>
-                  ))}
 
-                {/* Votantes directos del coordinador */}
-                {estructura.votantes.filter(
-                  (v) => v.asignadoPor === currentUser.ci
-                ).length > 0 && (
+                    {expandedCoords[sub.ci] && (
+                      <div className="bg-white px-4 pb-4">
+                        <p className="text-sm font-semibold mt-2">Votantes</p>
+                        {getVotantesDeSubcoord(sub.ci).map((v) => (
+                          <div
+                            key={v.ci}
+                            className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
+                          >
+                            <span>
+                              {v.nombre} {v.apellido} — CI: {v.ci}
+                              {v.localidad ? ` — ${v.localidad}` : ""}
+                              {v.mesa ? ` — Mesa ${v.mesa}` : ""}
+                              {v.telefono ? ` — Tel: ${v.telefono}` : ""}
+                            </span>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => abrirTelefono("votante", v)}
+                                className="px-3 py-1 border-2 border-green-600 text-green-700 rounded-lg text-xs md:text-sm hover:bg-green-50"
+                              >
+                                Teléfono
+                              </button>
+                              <button
+                                onClick={() => quitarPersona(v.ci, "votante")}
+                                className="flex items-center gap-1 bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 text-xs md:text-sm"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Borrar
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+
+                        {getVotantesDeSubcoord(sub.ci).length === 0 && (
+                          <p className="text-gray-500 text-sm mt-2">
+                            Sin votantes asignados.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {getMisVotantes().length > 0 && (
                   <div className="border rounded-lg mb-3 p-4">
                     <p className="font-semibold text-gray-700 mb-3">
                       Mis votantes directos
                     </p>
 
-                    {estructura.votantes
-                      .filter((v) => v.asignadoPor === currentUser.ci)
-                      .map((v) => (
-                        <div
-                          key={v.ci}
-                          className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
-                        >
-                          <span>
-                            {v.nombre} {v.apellido} — CI: {v.ci}
-                            {v.localidad ? ` — ${v.localidad}` : ""}
-                            {v.mesa ? ` — Mesa ${v.mesa}` : ""}
-                            {v.telefono ? ` — Tel: ${v.telefono}` : ""}
-                          </span>
-
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => {
-                                setEditPhoneTipo("votante");
-                                setEditPhonePersona(v);
-                                setNewTelefono(v.telefono || "+595");
-                                setEditPhoneOpen(true);
-                              }}
-                              className="text-blue-600 text-xs hover:underline"
-                            >
-                              Teléfono
-                            </button>
-                            <button
-                              onClick={() => quitarPersona(v.ci, "votante")}
-                              className="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
+                    {getMisVotantes().map((v) => (
+                      <div
+                        key={v.ci}
+                        className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
+                      >
+                        <span>
+                          {v.nombre} {v.apellido} — CI: {v.ci}
+                          {v.localidad ? ` — ${v.localidad}` : ""}
+                          {v.mesa ? ` — Mesa ${v.mesa}` : ""}
+                          {v.telefono ? ` — Tel: ${v.telefono}` : ""}
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => abrirTelefono("votante", v)}
+                            className="px-3 py-1 border-2 border-green-600 text-green-700 rounded-lg text-xs md:text-sm hover:bg-green-50"
+                          >
+                            Teléfono
+                          </button>
+                          <button
+                            onClick={() => quitarPersona(v.ci, "votante")}
+                            className="flex items-center gap-1 bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 text-xs md:text-sm"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Borrar
+                          </button>
                         </div>
-                      ))}
+                      </div>
+                    ))}
                   </div>
                 )}
               </>
@@ -1605,45 +1440,36 @@ const App = () => {
             {/* SUBCOORDINADOR */}
             {currentUser.role === "subcoordinador" && (
               <>
-                {estructura.votantes
-                  .filter((v) => v.asignadoPor === currentUser.ci)
-                  .map((v) => (
-                    <div
-                      key={v.ci}
-                      className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
-                    >
-                      <span>
-                        {v.nombre} {v.apellido} — CI: {v.ci}
-                        {v.localidad ? ` — ${v.localidad}` : ""}
-                        {v.mesa ? ` — Mesa ${v.mesa}` : ""}
-                        {v.telefono ? ` — Tel: ${v.telefono}` : ""}
-                      </span>
-
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setEditPhoneTipo("votante");
-                            setEditPhonePersona(v);
-                            setNewTelefono(v.telefono || "+595");
-                            setEditPhoneOpen(true);
-                          }}
-                          className="text-blue-600 text-xs hover:underline"
-                        >
-                          Teléfono
-                        </button>
-                        <button
-                          onClick={() => quitarPersona(v.ci, "votante")}
-                          className="bg-red-600 text-white px-2 py-1 rounded hover:bg-red-700"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                {getMisVotantes().map((v) => (
+                  <div
+                    key={v.ci}
+                    className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
+                  >
+                    <span>
+                      {v.nombre} {v.apellido} — CI: {v.ci}
+                      {v.localidad ? ` — ${v.localidad}` : ""}
+                      {v.mesa ? ` — Mesa ${v.mesa}` : ""}
+                      {v.telefono ? ` — Tel: ${v.telefono}` : ""}
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => abrirTelefono("votante", v)}
+                        className="px-3 py-1 border-2 border-green-600 text-green-700 rounded-lg text-xs md:text-sm hover:bg-green-50"
+                      >
+                        Teléfono
+                      </button>
+                      <button
+                        onClick={() => quitarPersona(v.ci, "votante")}
+                        className="flex items-center gap-1 bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 text-xs md:text-sm"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Borrar
+                      </button>
                     </div>
-                  ))}
+                  </div>
+                ))}
 
-                {estructura.votantes.filter(
-                  (v) => v.asignadoPor === currentUser.ci
-                ).length === 0 && (
+                {getMisVotantes().length === 0 && (
                   <p className="text-gray-500 py-6">
                     No tiene votantes asignados.
                   </p>
@@ -1654,28 +1480,54 @@ const App = () => {
         </div>
       </div>
 
-      {/* MODALES */}
+      {/* MODAL TELÉFONO */}
+      {phoneModalOpen && phoneTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-sm shadow-xl p-6">
+            <h3 className="text-lg font-bold mb-2">Editar teléfono</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              {phoneTarget.nombre} {phoneTarget.apellido} — CI:{" "}
+              {phoneTarget.ci}
+            </p>
+            <label className="text-sm font-medium text-gray-700">
+              Número (formato +595…)
+            </label>
+            <input
+              type="tel"
+              value={phoneValue}
+              onChange={(e) => setPhoneValue(e.target.value)}
+              className="w-full mt-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
+              placeholder="+595..."
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setPhoneModalOpen(false);
+                  setPhoneTarget(null);
+                  setPhoneValue("+595");
+                }}
+                className="px-4 py-2 rounded-lg border"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={guardarTelefono}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL AGREGAR PERSONA */}
       <AddPersonModal
         show={showAddModal}
         onClose={() => setShowAddModal(false)}
         tipo={modalType}
         onAdd={handleAgregarPersona}
         disponibles={getPersonasDisponibles()}
-      />
-
-      <EditPhoneModal
-        open={editPhoneOpen}
-        persona={editPhonePersona}
-        tipo={editPhoneTipo}
-        onClose={() => {
-          setEditPhoneOpen(false);
-          setEditPhonePersona(null);
-          setEditPhoneTipo(null);
-          setNewTelefono("+595");
-        }}
-        newTelefono={newTelefono}
-        setNewTelefono={setNewTelefono}
-        onSave={guardarTelefono}
       />
     </div>
   );
