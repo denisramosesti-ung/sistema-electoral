@@ -737,7 +737,7 @@ const App = () => {
 
         autoTable(doc, {
           startY: y,
-          head: [["CI", "Nombre", "Apellido", "Código", "Telefono"]],
+          head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa", "Telefono"]],
           body: votantesSub.map((v) => [
             v.ci,
             v.nombre,
