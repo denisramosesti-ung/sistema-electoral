@@ -1,32 +1,36 @@
-import React, { useState, useMemo } from "react";
-import { Search, X, UserPlus } from "lucide-react";
+import React, { useState } from "react";
+import { Search, X } from "lucide-react";
 
 const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
 
   if (!show) return null;
 
-  const term = searchTerm.trim().toLowerCase();
+  let filtered = [];
+  if (searchTerm.trim()) {
+    const term = searchTerm.toLowerCase();
 
-  // ORDEN PERSONALIZADO: CI exacto primero
-  const filtered = useMemo(() => {
-    if (!term) return [];
+    filtered = disponibles
+      .filter(
+        (p) =>
+          (p.ci || "").toString().includes(searchTerm) ||
+          (p.nombre || "").toLowerCase().includes(term) ||
+          (p.apellido || "").toLowerCase().includes(term)
+      );
 
-    const exactCI = disponibles.filter((p) =>
-      (p.ci || "").toString().startsWith(term)
-    );
-    const nameMatches = disponibles.filter(
-      (p) =>
-        (p.nombre || "").toLowerCase().includes(term) ||
-        (p.apellido || "").toLowerCase().includes(term)
-    );
+    // Relevancia: coincidencias exactas de CI primero
+    filtered.sort((a, b) => {
+      if (a.ci.toString() === searchTerm) return -1;
+      if (b.ci.toString() === searchTerm) return 1;
+      return 0;
+    });
+  }
 
-    const merge = [...exactCI, ...nameMatches].filter(
-      (p, i, arr) => arr.findIndex((x) => x.ci === p.ci) === i
-    );
-
-    return merge;
-  }, [term, disponibles]);
+  const pageSize = 8; // Cantidad por página para móvil/PC
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const start = (page - 1) * pageSize;
+  const paginated = filtered.slice(start, start + pageSize);
 
   const titulo =
     tipo === "coordinador"
@@ -37,81 +41,80 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl w-full max-w-md shadow-xl overflow-hidden">
-
+      <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+        
         {/* HEADER */}
-        <div className="p-4 bg-red-600 text-white flex justify-between items-center">
-          <h3 className="text-lg font-bold">{titulo}</h3>
-          <button onClick={onClose}><X className="w-6 h-6" /></button>
+        <div className="p-6 border-b flex justify-between items-center bg-red-600 text-white">
+          <h3 className="text-xl font-bold">{titulo}</h3>
+          <button onClick={onClose} className="hover:text-gray-200">
+            <X className="w-6 h-6" />
+          </button>
         </div>
 
         {/* BUSCADOR */}
-        <div className="p-4">
+        <div className="p-6">
           <div className="relative">
-            <Search className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
             <input
               type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={10}
               value={searchTerm}
-              placeholder="Buscar por CI..."
+              placeholder="Buscar CI, nombre o apellido..."
               onChange={(e) => {
-                const v = e.target.value.replace(/\D/g, "");
-                setSearchTerm(v);
+                setSearchTerm(e.target.value);
+                setPage(1); // reset page on new search
               }}
               className="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
             />
           </div>
+
+          {searchTerm.trim() && (
+            <p className="text-xs mt-2 text-gray-600">
+              Resultados: {filtered.length}
+            </p>
+          )}
         </div>
 
-        {/* INFO DE RESULTADOS */}
-        {term.length > 0 && (
-          <p className="px-4 text-xs text-gray-600 mb-1">
-            Resultados: {filtered.length}
-          </p>
-        )}
-
-        {/* LISTA SCROLLEABLE */}
-        <div className="px-4 space-y-2 max-h-[380px] overflow-y-auto pb-3">
-          {filtered.length === 0 ? (
-            <p className="text-center text-gray-500 py-8 text-sm">
-              Sin resultados…
+        {/* RESULTADOS PAGINADOS */}
+        <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-2">
+          {!searchTerm.trim() ? (
+            <p className="text-center text-gray-500 py-6">
+              Escribe para buscar…
+            </p>
+          ) : filtered.length === 0 ? (
+            <p className="text-center text-gray-500 py-6">
+              No se encontraron resultados.
             </p>
           ) : (
-            filtered.map((persona) => {
+            paginated.map((persona) => {
               const bloqueado = persona.asignado === true;
+
               return (
                 <div
                   key={persona.ci}
                   onClick={() => !bloqueado && onAdd(persona)}
-                  className={`flex items-center justify-between p-3 rounded-lg border transition ${
+                  className={`p-4 border rounded-lg transition relative ${
                     bloqueado
-                      ? "bg-gray-200 opacity-60 cursor-not-allowed"
-                      : "hover:border-red-500 cursor-pointer"
+                      ? "bg-gray-200 cursor-not-allowed opacity-60"
+                      : "bg-gray-50 hover:bg-red-50 cursor-pointer"
                   }`}
                 >
-                  <div>
-                    <p className="font-semibold leading-tight">
-                      {persona.nombre} {persona.apellido}
-                    </p>
-                    <p className="text-xs text-gray-600">
-                      CI: {persona.ci}
-                      {persona.localidad ? ` • ${persona.localidad}` : ""}
-                    </p>
-                    {bloqueado && (
-                      <p className="text-[11px] text-red-600 mt-1">
-                        Ya asignado
-                      </p>
-                    )}
-                  </div>
+                  <p className="font-semibold text-gray-800">
+                    {persona.nombre} {persona.apellido}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    CI: {persona.ci}
+                  </p>
 
-                  {!bloqueado && (
-                    <UserPlus className="w-5 h-5 text-red-600" />
-                  )}
+                  <p className="text-xs text-gray-500 mt-1">
+                    {(persona.localidad || "Sin localidad")}
+                    {persona.mesa ? ` • Mesa ${persona.mesa}` : ""}
+                  </p>
 
                   {bloqueado && (
-                    <X className="w-5 h-5 text-gray-400" />
+                    <p className="text-xs text-red-600 mt-2">
+                      Ya asignado por <b>{persona.asignadoPorNombre || "Otro referente"}</b>{" "}
+                      {persona.asignadoRol ? `(${persona.asignadoRol})` : ""}
+                    </p>
                   )}
                 </div>
               );
@@ -119,16 +122,40 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           )}
         </div>
 
-        {/* FOOTER */}
-        <div className="p-4 border-t">
+        {/* PAGINACIÓN */}
+        {filtered.length > pageSize && (
+          <div className="px-6 pb-3 flex justify-between items-center text-sm">
+            <button
+              disabled={page === 1}
+              onClick={() => setPage(page - 1)}
+              className="px-3 py-1 border rounded disabled:opacity-40"
+            >
+              ◀ Anterior
+            </button>
+
+            <span>
+              Página {page} / {totalPages}
+            </span>
+
+            <button
+              disabled={page === totalPages}
+              onClick={() => setPage(page + 1)}
+              className="px-3 py-1 border rounded disabled:opacity-40"
+            >
+              Siguiente ▶
+            </button>
+          </div>
+        )}
+
+        {/* BOTÓN CERRAR */}
+        <div className="px-6 pb-6">
           <button
             onClick={onClose}
-            className="w-full bg-gray-200 hover:bg-gray-300 py-2 rounded-lg text-sm"
+            className="w-full mt-2 bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 rounded-lg transition"
           >
             Cerrar
           </button>
         </div>
-
       </div>
     </div>
   );
