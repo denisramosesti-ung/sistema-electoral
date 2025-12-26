@@ -310,8 +310,9 @@ const App = () => {
   }, []);
 
   // PADRÓN DISPONIBLE
-const getPersonasDisponibles = () => {
-  return padron.map((p) => {
+const getPersonasDisponibles = (padronActual) => {
+  if (!padronActual) return [];
+  return padronActual.map((p) => {
     const ciNum = Number(p.ci);
 
     const coordItem = estructura.coordinadores.find((c) => Number(c.ci) === ciNum);
@@ -1645,12 +1646,13 @@ const seccionalBase = persona.seccional || null;
 
       {/* MODAL AGREGAR PERSONA */}
       <AddPersonModal
-        show={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        tipo={modalType}
-        onAdd={handleAgregarPersona}
-        disponibles={getPersonasDisponibles()}
-      />
+  show={showAddModal}
+  onClose={() => setShowAddModal(false)}
+  tipo={modalType}
+  onAdd={handleAgregarPersona}
+  disponibles={getPersonasDisponibles(padron)}
+/>
+
     </div>
   );
 };
