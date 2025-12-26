@@ -1053,16 +1053,20 @@ const handleAgregarPersona = async (persona) => {
         <div className="bg_white p-4 rounded-lg shadow mb-4 bg-white">
           <label className="font-semibold">Buscar por CI</label>
           <input
-            type="text"
-            value={searchCI}
-            onChange={(e) => {
-              const value = e.target.value.trim();
-              setSearchCI(e.target.value);
-              buscarPorCI(value);
-            }}
-            placeholder="Ingrese CI (solo números)"
-            className="w-full mt-2 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
-          />
+  type="text"
+  value={searchCI}
+  onChange={(e) => {
+    const value = e.target.value.replace(/\D/g, ""); // Eliminar todo lo que no sea número
+    setSearchCI(value);
+    buscarPorCI(value);
+  }}
+  placeholder="Ingrese CI (solo números)"
+  className="w-full mt-2 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
+  inputMode="numeric"
+  pattern="[0-9]*"
+  maxLength={10}
+/>
+
 
           {/* RESULTADOS DE BÚSQUEDA */}
           {searchResult && (
