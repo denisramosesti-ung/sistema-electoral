@@ -6,45 +6,31 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
 
   if (!show) return null;
 
-  let filtered = [];
+  const term = searchTerm.trim().toLowerCase();
 
-  if (searchTerm.trim()) {
-    const term = searchTerm.toLowerCase();
-
-    filtered = disponibles.filter((p) => {
-      const ciTxt = (p.ci || "").toString().toLowerCase();
-      const name = (p.nombre || "").toLowerCase();
-      const lastname = (p.apellido || "").toLowerCase();
-
-      return (
-        ciTxt.includes(term) ||
-        name.includes(term) ||
-        lastname.includes(term)
-      );
-    });
-
-    // Mostrar primero coincidencias exactas de CI
-    filtered.sort((a, b) => {
-      if (a.ci.toString() === searchTerm) return -1;
-      if (b.ci.toString() === searchTerm) return 1;
-      return 0;
-    });
-
-    // Límite para no explotar la app
-    filtered = filtered.slice(0, 20);
-  }
+  const filtered =
+    term === ""
+      ? []
+      : disponibles
+          .filter(
+            (p) =>
+              p.ci.toString().includes(term) ||
+              p.nombre.toLowerCase().includes(term) ||
+              p.apellido.toLowerCase().includes(term)
+          )
+          .slice(0, 30);
 
   const titulo =
     tipo === "coordinador"
       ? "Agregar Coordinador"
       : tipo === "subcoordinador"
-      ? "Agregar Sub-Coordinador"
+      ? "Agregar Sub-coordinador"
       : "Agregar Votante";
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl overflow-hidden">
-        
+
         {/* Header */}
         <div className="p-6 border-b flex justify-between items-center bg-red-600 text-white">
           <h3 className="text-xl font-bold">{titulo}</h3>
@@ -72,32 +58,28 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           {filtered.length === 0 ? (
             <p className="text-center text-gray-500 py-6">Sin resultados…</p>
           ) : (
-            filtered.map((persona) => {
-              const bloqueado = persona.asignado === true;
-
-              return (
-                <div
-                  key={persona.ci}
-                  onClick={() => !bloqueado && onAdd(persona)}
-                  className={`p-4 border rounded-lg transition ${
-                    bloqueado
-                      ? "bg-gray-200 opacity-60 cursor-not-allowed"
-                      : "bg-gray-50 hover:bg-red-50 cursor-pointer"
-                  }`}
-                >
-                  <p className="font-semibold">
-                    {persona.nombre} {persona.apellido}
+            filtered.map((p) => (
+              <div
+                key={p.ci}
+                onClick={() => !p.asignado && onAdd(p)}
+                className={`p-4 border rounded-lg transition ${
+                  p.asignado
+                    ? "bg-gray-200 opacity-60 cursor-not-allowed"
+                    : "bg-gray-50 hover:bg-red-50 cursor-pointer"
+                }`}
+              >
+                <p className="font-semibold">
+                  {p.nombre} {p.apellido}
+                </p>
+                <p className="text-sm text-gray-600">CI: {p.ci}</p>
+                {p.asignado && (
+                  <p className="text-xs text-red-600 mt-2">
+                    Ya asignado como {p.asignadoRol}
+                    {p.asignadoPorNombre && ` — ${p.asignadoPorNombre}`}
                   </p>
-                  <p className="text-sm text-gray-600">CI: {persona.ci}</p>
-
-                  {bloqueado && (
-                    <p className="text-xs text-red-600 mt-2">
-                      Ya asignado por <b>{persona.asignadoPorNombre}</b> ({persona.asignadoRol})
-                    </p>
-                  )}
-                </div>
-              );
-            })
+                )}
+              </div>
+            ))
           )}
         </div>
 
