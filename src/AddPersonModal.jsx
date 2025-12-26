@@ -9,23 +9,28 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   let filtered = [];
 
   if (searchTerm.trim()) {
-    const term = searchTerm.toLowerCase();
+    const term = searchTerm.trim().toLowerCase();
 
-    const exactCI = disponibles.filter((p) =>
-      (p.ci || "").toString().startsWith(searchTerm)
+    const cleaned = disponibles.map(p => ({
+      ...p,
+      ci: (p.ci || "").toString().trim(),
+      nombre: (p.nombre || "").toString().trim(),
+      apellido: (p.apellido || "").toString().trim(),
+    }));
+
+    const exactCI = cleaned.filter(p =>
+      p.ci.startsWith(searchTerm.trim())
     );
 
-    const nameMatches = disponibles.filter(
+    const nameMatches = cleaned.filter(
       (p) =>
-        (p.nombre || "").toLowerCase().includes(term) ||
-        (p.apellido || "").toLowerCase().includes(term)
+        p.nombre.toLowerCase().includes(term) ||
+        p.apellido.toLowerCase().includes(term)
     );
 
-    const combined = [...exactCI, ...nameMatches].filter(
-      (p, index, arr) => arr.findIndex((x) => x.ci === p.ci) === index
-    );
-
-    filtered = combined.slice(0, 200);
+    filtered = [...exactCI, ...nameMatches]
+      .filter((p, index, arr) => arr.findIndex(x => x.ci === p.ci) === index) // evitar duplicados
+      .slice(0, 200);
   }
 
   const titulo =
