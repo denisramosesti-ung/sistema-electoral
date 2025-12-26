@@ -1440,7 +1440,7 @@ const handleAgregarPersona = async (persona) => {
   onClose={() => setShowAddModal(false)}
   tipo={modalType}
   onAdd={handleAgregarPersona}
-  disponibles={getPersonasDisponibles(padron)}
+  disponibles={getPersonasDisponibles()}
 />
 
     </div>
