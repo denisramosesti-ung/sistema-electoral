@@ -1,5 +1,5 @@
 // App.jsx – Versión Supabase + padrón remoto (COMPLETA, CON LOGIN PERSISTENTE, BUSCADOR CI Y TELÉFONO)
-
+import React, { useState, useEffect, useMemo } from "react";
 import React, { useState, useEffect } from "react";
 import AddPersonModal from "./AddPersonModal.jsx";
 import { supabase } from "./supabaseClient";
@@ -31,6 +31,8 @@ const App = () => {
     subcoordinadores: [],
     votantes: [],
   });
+  const disponibles = useMemo(() => getPersonasDisponibles(), [padron, estructura]);
+
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [modalType, setModalType] = useState("");
@@ -187,67 +189,54 @@ const getPersonasDisponibles = () => {
 };
 
 
-
   // ======================= BUSCADOR GLOBAL POR CI =======================
-  const buscarPorCI = (ci) => {
-    if (!ci) {
-      setSearchResult(null);
-      return;
-    }
+  const buscarPorCI = async (ci) => {
+  if (!ci) {
+    setSearchResult(null);
+    return;
+  }
 
-    // Coordinador
+  // 🔎 Buscar directamente en Supabase
+  const { data, error } = await supabase
+    .from("padron")
+    .select("*")
+    .eq("ci", ci)
+    .limit(1);
+
+  if (!error && data && data.length > 0) {
+    const persona = data[0];
+
+    // Verificar si está asignada en alguna tabla
     const coord = estructura.coordinadores.find((c) => c.ci == ci);
     if (coord) {
-      setSearchResult({
-        tipo: "coordinador",
-        data: coord,
-      });
+      setSearchResult({ tipo: "coordinador", data: coord });
       return;
     }
 
-    // Subcoordinador
     const sub = estructura.subcoordinadores.find((s) => s.ci == ci);
     if (sub) {
-      setSearchResult({
-        tipo: "subcoordinador",
-        data: sub,
-      });
+      setSearchResult({ tipo: "subcoordinador", data: sub });
       return;
     }
 
-    // Votante
     const vot = estructura.votantes.find((v) => v.ci == ci);
     if (vot) {
-      // Buscar quién es la persona que lo tiene asignado (sub o coord)
       const asignadoPor =
         estructura.subcoordinadores.find((s) => s.ci == vot.asignadoPor) ||
         estructura.coordinadores.find((c) => c.ci == vot.asignadoPor) ||
         null;
 
-      setSearchResult({
-        tipo: "votante",
-        data: vot,
-        asignadoPor,
-      });
+      setSearchResult({ tipo: "votante", data: vot, asignadoPor });
       return;
     }
 
-    // En padrón pero sin asignar
-    const personaPadron = padron.find((p) => p.ci == ci);
-    if (personaPadron) {
-      setSearchResult({
-        tipo: "padron",
-        data: personaPadron,
-      });
-      return;
-    }
+    setSearchResult({ tipo: "padron", data: persona });
+    return;
+  }
 
-    // Nadie lo tiene y no está en padrón
-    setSearchResult({
-      tipo: "noExiste",
-      data: { ci },
-    });
-  };
+  // ❌ No existe
+  setSearchResult({ tipo: "noExiste", data: { ci } });
+};
 
   // ======================= MODAL TELÉFONO =======================
   const abrirTelefono = (tipo, persona) => {
@@ -1475,12 +1464,14 @@ else if (modalType === "votante") {
       {/* MODAL AGREGAR PERSONA */}
       {padron.length > 0 && (
   <AddPersonModal
-    show={showAddModal}
-    onClose={() => setShowAddModal(false)}
-    tipo={modalType}
-    onAdd={handleAgregarPersona}
-    disponibles={getPersonasDisponibles(padron)}
-  />
+  show={showAddModal}
+  onClose={() => setShowAddModal(false)}
+  tipo={modalType}
+  onAdd={handleAgregarPersona}
+  disponibles={disponibles}
+/>
+
+
 )}
 
 
