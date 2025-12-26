@@ -309,51 +309,53 @@ const App = () => {
     recargarEstructura();
   }, []);
 
-  // ======================= PADRÓN DISPONIBLE =======================
-  const getPersonasDisponibles = () => {
-    return padron.map((p) => {
-      // 1) ¿Es coordinador?
-      const coordItem = estructura.coordinadores.find((c) => c.ci === p.ci);
-      if (coordItem) {
-        return {
-          ...p,
-          asignado: true,
-          asignadoPorNombre: `${coordItem.nombre} ${coordItem.apellido}`,
-          asignadoRol: "Coordinador",
-        };
-      }
+  // PADRÓN DISPONIBLE
+const getPersonasDisponibles = () => {
+  return padron.map((p) => {
+    const ciNum = Number(p.ci);
 
-      // 2) ¿Es subcoordinador?
-      const subItem = estructura.subcoordinadores.find((s) => s.ci === p.ci);
-      if (subItem) {
-        return {
-          ...p,
-          asignado: true,
-          asignadoPorNombre: `${subItem.nombre} ${subItem.apellido}`,
-          asignadoRol: "Subcoordinador",
-        };
-      }
-
-      // 3) ¿Es votante?
-      const votItem = estructura.votantes.find((v) => v.ci === p.ci);
-      if (votItem) {
-        return {
-          ...p,
-          asignado: true,
-          asignadoPorNombre: votItem.asignadoPorNombre || "Referente",
-          asignadoRol: "Votante",
-        };
-      }
-
-      // 4) Libre
+    const coordItem = estructura.coordinadores.find((c) => Number(c.ci) === ciNum);
+    if (coordItem) {
       return {
         ...p,
-        asignado: false,
-        asignadoPorNombre: null,
-        asignadoRol: null,
+        asignado: true,
+        asignadoRol: "Coordinador",
+        asignadoPorNombre: `${coordItem.nombre} ${coordItem.apellido}`,
       };
-    });
-  };
+    }
+
+    const subItem = estructura.subcoordinadores.find((s) => Number(s.ci) === ciNum);
+    if (subItem) {
+      return {
+        ...p,
+        asignado: true,
+        asignadoRol: "Subcoordinador",
+        asignadoPorNombre: `${subItem.nombre} ${subItem.apellido}`,
+      };
+    }
+
+    const votItem = estructura.votantes.find((v) => Number(v.ci) === ciNum);
+    if (votItem) {
+      return {
+        ...p,
+        asignado: true,
+        asignadoRol: "Votante",
+        asignadoPorNombre: votItem.asignadoPorNombre || "Referente",
+      };
+    }
+
+    return {
+      ...p,
+      localidad: p.localidad || "-",
+      mesa: p.mesa || null,
+      seccional: p.seccional || null,
+      asignado: false,
+      asignadoPorNombre: null,
+      asignadoRol: null,
+    };
+  });
+};
+
 
   // ======================= BUSCADOR GLOBAL POR CI =======================
   const buscarPorCI = (ci) => {
