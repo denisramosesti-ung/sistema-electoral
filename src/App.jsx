@@ -3,14 +3,12 @@ import React, { useState, useEffect, useMemo } from "react";
 import AddPersonModal from "./AddPersonModal.jsx";
 import { supabase } from "./supabaseClient";
 import {
-  Search,
   Users,
   UserPlus,
   LogOut,
   BarChart3,
   ChevronDown,
   ChevronRight,
-  X,
   Trash2,
 } from "lucide-react";
 import jsPDF from "jspdf";
@@ -30,20 +28,18 @@ const App = () => {
     subcoordinadores: [],
     votantes: [],
   });
-  const disponibles = useMemo(() => getPersonasDisponibles(), [padron, estructura]);
-
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [modalType, setModalType] = useState("");
   const [expandedCoords, setExpandedCoords] = useState({});
 
-  // Buscador global por CI (en el panel)
+  // Buscador global por CI
   const [searchCI, setSearchCI] = useState("");
   const [searchResult, setSearchResult] = useState(null);
 
-  // Estado para modal de teléfono
+  // Modal teléfono
   const [phoneModalOpen, setPhoneModalOpen] = useState(false);
-  const [phoneTarget, setPhoneTarget] = useState(null); // {tipo, ci, nombre, apellido}
+  const [phoneTarget, setPhoneTarget] = useState(null);
   const [phoneValue, setPhoneValue] = useState("+595");
 
   // ======================= CARGAR SESIÓN DESDE LOCALSTORAGE =======================
@@ -141,101 +137,97 @@ const App = () => {
     recargarEstructura();
   }, []);
 
-  // PADRÓN DISPONIBLE
-const getPersonasDisponibles = () => {
-  return padron.map((p) => {
-    // Coordinador
-    const coordItem = estructura.coordinadores.find((c) => c.ci == p.ci);
-    if (coordItem) {
+  // ======================= PADRÓN DISPONIBLE (MEMO) =======================
+  const disponibles = useMemo(() => {
+    return padron.map((p) => {
+      // Coordinador
+      const coordItem = estructura.coordinadores.find((c) => c.ci == p.ci);
+      if (coordItem) {
+        return {
+          ...p,
+          asignado: true,
+          asignadoRol: "Coordinador",
+          asignadoPorNombre: coordItem.asignadoPorNombre || "Superadmin",
+        };
+      }
+
+      // Subcoordinador
+      const subItem = estructura.subcoordinadores.find((s) => s.ci == p.ci);
+      if (subItem) {
+        return {
+          ...p,
+          asignado: true,
+          asignadoRol: "Subcoordinador",
+          asignadoPorNombre: subItem.asignadoPorNombre || "Coordinador",
+        };
+      }
+
+      // Votante
+      const votItem = estructura.votantes.find((v) => v.ci == p.ci);
+      if (votItem) {
+        return {
+          ...p,
+          asignado: true,
+          asignadoRol: "Votante",
+          asignadoPorNombre: votItem.asignadoPorNombre || "Asignado",
+        };
+      }
+
+      // Libre
       return {
         ...p,
-        asignado: true,
-        asignadoRol: "Coordinador",
-        asignadoPorNombre: "Superadmin",
+        asignado: false,
+        asignadoRol: null,
+        asignadoPorNombre: null,
       };
-    }
-
-    // Subcoordinador
-    const subItem = estructura.subcoordinadores.find((s) => s.ci == p.ci);
-    if (subItem) {
-      return {
-        ...p,
-        asignado: true,
-        asignadoRol: "Subcoordinador",
-        asignadoPorNombre: subItem.coordinador_nombre || "Coordinador",
-      };
-    }
-
-    // Votante
-    const votItem = estructura.votantes.find((v) => v.ci == p.ci);
-    if (votItem) {
-      return {
-        ...p,
-        asignado: true,
-        asignadoRol: "Votante",
-        asignadoPorNombre: votItem.asignado_por_nombre || "Asignado",
-      };
-    }
-
-    // Libre
-    return {
-      ...p,
-      asignado: false,
-      asignadoRol: null,
-      asignadoPorNombre: null,
-    };
-  });
-};
-
+    });
+  }, [padron, estructura]);
 
   // ======================= BUSCADOR GLOBAL POR CI =======================
   const buscarPorCI = async (ci) => {
-  if (!ci) {
-    setSearchResult(null);
-    return;
-  }
-
-  // 🔎 Buscar directamente en Supabase
-  const { data, error } = await supabase
-    .from("padron")
-    .select("*")
-    .eq("ci", ci)
-    .limit(1);
-
-  if (!error && data && data.length > 0) {
-    const persona = data[0];
-
-    // Verificar si está asignada en alguna tabla
-    const coord = estructura.coordinadores.find((c) => c.ci == ci);
-    if (coord) {
-      setSearchResult({ tipo: "coordinador", data: coord });
+    if (!ci) {
+      setSearchResult(null);
       return;
     }
 
-    const sub = estructura.subcoordinadores.find((s) => s.ci == ci);
-    if (sub) {
-      setSearchResult({ tipo: "subcoordinador", data: sub });
+    const { data, error } = await supabase
+      .from("padron")
+      .select("*")
+      .eq("ci", ci)
+      .limit(1);
+
+    if (!error && data && data.length > 0) {
+      const persona = data[0];
+
+      const coord = estructura.coordinadores.find((c) => c.ci == ci);
+      if (coord) {
+        setSearchResult({ tipo: "coordinador", data: coord });
+        return;
+      }
+
+      const sub = estructura.subcoordinadores.find((s) => s.ci == ci);
+      if (sub) {
+        setSearchResult({ tipo: "subcoordinador", data: sub });
+        return;
+      }
+
+      const vot = estructura.votantes.find((v) => v.ci == ci);
+      if (vot) {
+        const asignadoPor =
+          estructura.subcoordinadores.find((s) => s.ci == vot.asignadoPor) ||
+          estructura.coordinadores.find((c) => c.ci == vot.asignadoPor) ||
+          null;
+
+        setSearchResult({ tipo: "votante", data: vot, asignadoPor });
+        return;
+      }
+
+      setSearchResult({ tipo: "padron", data: persona });
       return;
     }
 
-    const vot = estructura.votantes.find((v) => v.ci == ci);
-    if (vot) {
-      const asignadoPor =
-        estructura.subcoordinadores.find((s) => s.ci == vot.asignadoPor) ||
-        estructura.coordinadores.find((c) => c.ci == vot.asignadoPor) ||
-        null;
-
-      setSearchResult({ tipo: "votante", data: vot, asignadoPor });
-      return;
-    }
-
-    setSearchResult({ tipo: "padron", data: persona });
-    return;
-  }
-
-  // ❌ No existe
-  setSearchResult({ tipo: "noExiste", data: { ci } });
-};
+    setSearchResult({ tipo: "noExiste", data: { ci } });
+  };
 
   // ======================= MODAL TELÉFONO =======================
   const abrirTelefono = (tipo, persona) => {
@@ -291,7 +283,6 @@ const getPersonasDisponibles = () => {
   const handleAgregarPersona = async (persona) => {
     const codigo = generarCodigo();
 
-    // 🔒 Validación global: evitar agregar a alguien ya asignado en cualquier rol
     const yaEsCoord = estructura.coordinadores.some(
       (c) => c.ci === persona.ci
     );
@@ -314,99 +305,92 @@ const getPersonasDisponibles = () => {
       return;
     }
 
-    const localidadBase = persona.localidad || "Sin localidad";
-const seccionalBase = persona.seccional || null;
-
-
     // ======================= COORDINADOR =======================
-if (modalType === "coordinador") {
-  const newCoord = {
-    ci: persona.ci.toString(),
-    nombre: persona.nombre,
-    apellido: persona.apellido,
-    localidad: persona.localidad || null,
-    mesa: persona.mesa ? persona.mesa.toString() : null,
-    login_code: persona.ci.toString(),
-    asignado_por_nombre: "Superadmin",
-    created_at: new Date().toISOString(),
-    telefono: null,
-  };
+    if (modalType === "coordinador") {
+      const newCoord = {
+        ci: persona.ci.toString(),
+        nombre: persona.nombre,
+        apellido: persona.apellido,
+        localidad: persona.localidad || null,
+        mesa: persona.mesa ? persona.mesa.toString() : null,
+        login_code: persona.ci.toString(),
+        asignado_por_nombre: "Superadmin",
+        created_at: new Date().toISOString(),
+        telefono: null,
+      };
 
-  const { error } = await supabase.from("coordinadores").insert([newCoord]);
+      const { error } = await supabase.from("coordinadores").insert([newCoord]);
 
-  if (error) {
-    console.error(error);
-    alert("Error al guardar coordinador en Supabase");
-    return;
-  }
+      if (error) {
+        console.error(error);
+        alert("Error al guardar coordinador en Supabase");
+        return;
+      }
 
-  alert(`Coordinador agregado exitosamente.`);
-}
-
+      alert("Coordinador agregado exitosamente.");
+    }
 
     // ======================= SUBCOORDINADOR =======================
-else if (modalType === "subcoordinador") {
+    else if (modalType === "subcoordinador") {
+      if (!currentUser || currentUser.role !== "coordinador") {
+        alert("Solo un coordinador puede agregar subcoordinadores.");
+        return;
+      }
 
-  if (!currentUser || currentUser.role !== "coordinador") {
-    alert("Solo un coordinador puede agregar subcoordinadores.");
-    return;
-  }
+      const newSub = {
+        ci: persona.ci.toString(),
+        nombre: persona.nombre,
+        apellido: persona.apellido,
+        localidad: persona.localidad || null,
+        mesa: persona.mesa ? persona.mesa.toString() : null,
+        coordinador_ci: currentUser.ci.toString(),
+        login_code: persona.ci.toString(),
+        asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+        created_at: new Date().toISOString(),
+      };
 
-  const newSub = {
-    ci: persona.ci.toString(),
-    nombre: persona.nombre,
-    apellido: persona.apellido,
-    localidad: persona.localidad || null,
-    mesa: persona.mesa ? persona.mesa.toString() : null,
-    coordinador_ci: currentUser.ci.toString(),
-    login_code: persona.ci.toString(),
-    asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-    created_at: new Date().toISOString(),
-  };
+      const { error } = await supabase
+        .from("subcoordinadores")
+        .insert([newSub]);
 
-  const { error } = await supabase.from("subcoordinadores").insert([newSub]);
+      if (error) {
+        console.error(error);
+        alert("Error al guardar subcoordinador en Supabase");
+        return;
+      }
 
-  if (error) {
-    console.error(error);
-    alert("Error al guardar subcoordinador en Supabase");
-    return;
-  }
-
-  alert(`Subcoordinador agregado exitosamente.`);
-}
-
+      alert("Subcoordinador agregado exitosamente.");
+    }
 
     // ======================= VOTANTE =======================
-else if (modalType === "votante") {
+    else if (modalType === "votante") {
+      if (!currentUser) {
+        alert("Debe iniciar sesión para asignar votantes.");
+        return;
+      }
 
-  if (!currentUser) {
-    alert("Debe iniciar sesión para asignar votantes.");
-    return;
-  }
+      const newVot = {
+        ci: persona.ci.toString(),
+        nombre: persona.nombre,
+        apellido: persona.apellido,
+        localidad: persona.localidad || null,
+        mesa: persona.mesa ? persona.mesa.toString() : null,
+        asignado_por: currentUser.ci.toString(),
+        asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+        created_at: new Date().toISOString(),
+      };
 
-  const newVot = {
-    ci: persona.ci.toString(),
-    nombre: persona.nombre,
-    apellido: persona.apellido,
-    localidad: persona.localidad || null,
-    mesa: persona.mesa ? persona.mesa.toString() : null,
-    asignado_por: currentUser.ci.toString(),
-    asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-    created_at: new Date().toISOString(),
-  };
+      const { error } = await supabase.from("votantes").insert([newVot]);
 
-  const { error } = await supabase.from("votantes").insert([newVot]);
+      if (error) {
+        console.error(error);
+        alert("Error al guardar votante en Supabase");
+        return;
+      }
 
-  if (error) {
-    console.error(error);
-    alert("Error al guardar votante en Supabase");
-    return;
-  }
+      alert("Votante asignado correctamente.");
+    }
 
-  alert("Votante asignado correctamente.");
-}
-
-    // Cerrar modal y actualizar
     setShowAddModal(false);
     await recargarEstructura();
   };
@@ -442,7 +426,6 @@ else if (modalType === "votante") {
       await supabase.from("votantes").delete().eq("asignado_por", ci);
       await supabase.from("subcoordinadores").delete().eq("ci", ci);
     } else if (tipo === "votante") {
-      // Solo eliminar la asignación hecha por el usuario logueado
       await supabase
         .from("votantes")
         .delete()
@@ -754,10 +737,10 @@ else if (modalType === "votante") {
             <ol className="list-decimal ml-5 space-y-1">
               <li>Ingrese el código proporcionado por el Coordinador.</li>
               <li>
-                Ante dudas o consultas, comuniquese con el Admin del Sistema.
+                Ante dudas o consultas, comuníquese con el Admin del Sistema.
               </li>
               <li>
-                En caso de ser Subcoordinador cuide su clave de ingreso.
+                En caso de ser Subcoordinador, cuide su clave de ingreso.
               </li>
             </ol>
           </div>
@@ -866,7 +849,7 @@ else if (modalType === "votante") {
               setModalType("coordinador");
               setShowAddModal(true);
             }}
-            className="flex items-center gap-2 bg-red-600 text_WHITE px-4 py-2 rounded-lg hover:bg-red-700 text-white"
+            className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
           >
             <UserPlus className="w-4 h-4" />
             Agregar Coordinador
@@ -911,7 +894,7 @@ else if (modalType === "votante") {
 
       {/* BUSCADOR GLOBAL POR CI */}
       <div className="max-w-7xl mx-auto px-4 py-4">
-        <div className="bg_white p-4 rounded-lg shadow mb-4 bg-white">
+        <div className="bg-white p-4 rounded-lg shadow mb-4">
           <label className="font-semibold">Buscar por CI</label>
           <input
             type="text"
@@ -928,7 +911,7 @@ else if (modalType === "votante") {
           {/* RESULTADOS DE BÚSQUEDA */}
           {searchResult && (
             <div className="mt-4 p-4 border rounded bg-gray-50 text-sm">
-              {/* === COORDINADOR === */}
+              {/* COORDINADOR */}
               {searchResult.tipo === "coordinador" && (
                 <>
                   <p className="font-bold text-red-700 mb-1">
@@ -955,7 +938,7 @@ else if (modalType === "votante") {
                 </>
               )}
 
-              {/* === SUBCOORDINADOR === */}
+              {/* SUBCOORDINADOR */}
               {searchResult.tipo === "subcoordinador" && (
                 <>
                   <p className="font-bold text-red-700 mb-1">
@@ -987,7 +970,7 @@ else if (modalType === "votante") {
                 </>
               )}
 
-              {/* === VOTANTE === */}
+              {/* VOTANTE */}
               {searchResult.tipo === "votante" && (
                 <>
                   <p className="font-bold text-red-700 mb-1">
@@ -1037,7 +1020,7 @@ else if (modalType === "votante") {
                 </>
               )}
 
-              {/* === EN PADRÓN PERO NO ASIGNADO === */}
+              {/* EN PADRÓN PERO NO ASIGNADO */}
               {searchResult.tipo === "padron" && (
                 <div className="text-gray-700">
                   <p className="font-bold text-red-700 mb-1">
@@ -1066,7 +1049,7 @@ else if (modalType === "votante") {
                 </div>
               )}
 
-              {/* === NO EXISTE NI EN PADRÓN === */}
+              {/* NO EXISTE */}
               {searchResult.tipo === "noExiste" && (
                 <p className="text-gray-600">
                   Este CI <b>{searchResult.data.ci}</b> no pertenece al padrón.
@@ -1462,18 +1445,14 @@ else if (modalType === "votante") {
 
       {/* MODAL AGREGAR PERSONA */}
       {padron.length > 0 && (
-  <AddPersonModal
-  show={showAddModal}
-  onClose={() => setShowAddModal(false)}
-  tipo={modalType}
-  onAdd={handleAgregarPersona}
-  disponibles={disponibles}
-/>
-
-
-)}
-
-
+        <AddPersonModal
+          show={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          tipo={modalType}
+          onAdd={handleAgregarPersona}
+          disponibles={disponibles}
+        />
+      )}
     </div>
   );
 };
