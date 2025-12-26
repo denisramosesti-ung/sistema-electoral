@@ -141,52 +141,51 @@ const App = () => {
   }, []);
 
   // PADRÓN DISPONIBLE
-const getPersonasDisponibles = (padronActual) => {
-  if (!padronActual) return [];
-  return padronActual.map((p) => {  
-    const ciNum = Number(p.ci);
-
-    const coordItem = estructura.coordinadores.find((c) => Number(c.ci) === ciNum);
+const getPersonasDisponibles = () => {
+  return padron.map((p) => {
+    // Coordinador
+    const coordItem = estructura.coordinadores.find((c) => c.ci == p.ci);
     if (coordItem) {
       return {
         ...p,
         asignado: true,
         asignadoRol: "Coordinador",
-        asignadoPorNombre: `${coordItem.nombre} ${coordItem.apellido}`,
+        asignadoPorNombre: "Superadmin",
       };
     }
 
-    const subItem = estructura.subcoordinadores.find((s) => Number(s.ci) === ciNum);
+    // Subcoordinador
+    const subItem = estructura.subcoordinadores.find((s) => s.ci == p.ci);
     if (subItem) {
       return {
         ...p,
         asignado: true,
         asignadoRol: "Subcoordinador",
-        asignadoPorNombre: `${subItem.nombre} ${subItem.apellido}`,
+        asignadoPorNombre: subItem.coordinador_nombre || "Coordinador",
       };
     }
 
-    const votItem = estructura.votantes.find((v) => Number(v.ci) === ciNum);
+    // Votante
+    const votItem = estructura.votantes.find((v) => v.ci == p.ci);
     if (votItem) {
       return {
         ...p,
         asignado: true,
         asignadoRol: "Votante",
-        asignadoPorNombre: votItem.asignadoPorNombre || "Referente",
+        asignadoPorNombre: votItem.asignado_por_nombre || "Asignado",
       };
     }
 
+    // Libre
     return {
       ...p,
-      localidad: p.localidad || "-",
-      mesa: p.mesa || null,
-      seccional: p.seccional || null,
       asignado: false,
-      asignadoPorNombre: null,
       asignadoRol: null,
+      asignadoPorNombre: null,
     };
   });
 };
+
 
 
   // ======================= BUSCADOR GLOBAL POR CI =======================
