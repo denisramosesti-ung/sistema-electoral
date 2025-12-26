@@ -1,4 +1,5 @@
-// AddPersonModal.jsx — Búsqueda en Supabase
+// AddPersonModal.jsx — Búsqueda directa en Supabase (padron)
+
 import React, { useState } from "react";
 import { supabase } from "./supabaseClient";
 import { Search, X } from "lucide-react";
@@ -10,24 +11,34 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd }) => {
 
   if (!show) return null;
 
-  const buscar = async (term) => {
-    if (term.trim().length < 1) {
+  const buscar = async (rawTerm) => {
+    const term = rawTerm.trim();
+    if (!term) {
       setResultados([]);
       return;
     }
 
     setCargando(true);
 
-    const { data, error } = await supabase
-      .from("padron")
-      .select("*")
-      .or(
-        `ci.ilike.%${term}%,nombre.ilike.%${term}%,apellido.ilike.%${term}%`
-      )
-      .limit(30);
+    const isNumeric = /^\d+$/.test(term);
+    let query = supabase.from("padron").select("*").limit(30);
+
+    if (isNumeric) {
+      // Buscar por CI exacto si son solo números
+      query = query.or(
+        `ci.eq.${term},nombre.ilike.%${term}%,apellido.ilike.%${term}%`
+      );
+    } else {
+      // Buscar por nombre o apellido
+      query = query.or(
+        `nombre.ilike.%${term}%,apellido.ilike.%${term}%`
+      );
+    }
+
+    const { data, error } = await query;
 
     if (error) {
-      console.error("Error en búsqueda:", error);
+      console.error("Error en búsqueda de padron:", error);
       setResultados([]);
     } else {
       setResultados(data || []);
@@ -46,7 +57,6 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd }) => {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl overflow-hidden">
-
         {/* HEADER */}
         <div className="p-6 border-b flex justify-between items-center bg-red-600 text-white">
           <h3 className="text-xl font-bold">{titulo}</h3>
@@ -55,7 +65,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd }) => {
           </button>
         </div>
 
-        {/* SEARCH INPUT */}
+        {/* BUSCADOR */}
         <div className="p-6">
           <div className="relative">
             <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
