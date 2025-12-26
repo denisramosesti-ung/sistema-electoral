@@ -309,50 +309,48 @@ const App = () => {
     recargarEstructura();
   }, []);
 
-  // PADRÓN DISPONIBLE
-const getPersonasDisponibles = (padronActual) => {
-  if (!padronActual) return [];
-  return padronActual.map((p) => {  
-    const ciNum = Number(p.ci);
+  // ======================= PADRÓN DISPONIBLE =======================
+const getPersonasDisponibles = () => {
+  return padron.map((p) => {
+    const ciStr = p.ci.toString();
 
-    const coordItem = estructura.coordinadores.find((c) => Number(c.ci) === ciNum);
+    const coordItem = estructura.coordinadores.find((c) => c.ci === ciStr);
     if (coordItem) {
       return {
         ...p,
         asignado: true,
         asignadoRol: "Coordinador",
-        asignadoPorNombre: `${coordItem.nombre} ${coordItem.apellido}`,
+        asignadoPorNombre: coordItem.asignado_por_nombre || "Superadmin",
       };
     }
 
-    const subItem = estructura.subcoordinadores.find((s) => Number(s.ci) === ciNum);
+    const subItem = estructura.subcoordinadores.find((s) => s.ci === ciStr);
     if (subItem) {
       return {
         ...p,
         asignado: true,
         asignadoRol: "Subcoordinador",
-        asignadoPorNombre: `${subItem.nombre} ${subItem.apellido}`,
+        asignadoPorNombre:
+          subItem.asignado_por_nombre || "Asignado por coordinador",
       };
     }
 
-    const votItem = estructura.votantes.find((v) => Number(v.ci) === ciNum);
+    const votItem = estructura.votantes.find((v) => v.ci === ciStr);
     if (votItem) {
       return {
         ...p,
         asignado: true,
         asignadoRol: "Votante",
-        asignadoPorNombre: votItem.asignadoPorNombre || "Referente",
+        asignadoPorNombre:
+          votItem.asignado_por_nombre || "Asignado",
       };
     }
 
     return {
       ...p,
-      localidad: p.localidad || "-",
-      mesa: p.mesa || null,
-      seccional: p.seccional || null,
       asignado: false,
-      asignadoPorNombre: null,
       asignadoRol: null,
+      asignadoPorNombre: null,
     };
   });
 };
@@ -469,129 +467,82 @@ const getPersonasDisponibles = (padronActual) => {
     await recargarEstructura();
   };
 
-  // ======================= AGREGAR PERSONA (Supabase) =======================
-  const handleAgregarPersona = async (persona) => {
-    const codigo = generarCodigo();
+  // ======================= AGREGAR PERSONA =======================
+const handleAgregarPersona = async (persona) => {
+  if (!modalType) {
+    alert("Seleccione un tipo de asignación.");
+    return;
+  }
 
-    // 🔒 Validación global: evitar agregar a alguien ya asignado en cualquier rol
-    const yaEsCoord = estructura.coordinadores.some(
-      (c) => c.ci === persona.ci
-    );
-    const yaEsSub = estructura.subcoordinadores.some(
-      (s) => s.ci === persona.ci
-    );
-    const yaEsVotante = estructura.votantes.some((v) => v.ci === persona.ci);
+  const ciStr = persona.ci.toString();
 
-    if (yaEsCoord || yaEsSub || yaEsVotante) {
-      let rol = yaEsCoord
-        ? "Coordinador"
-        : yaEsSub
-        ? "Sub-coordinador"
-        : "Votante";
+  const yaEsCoord = estructura.coordinadores.some((c) => c.ci === ciStr);
+  const yaEsSub = estructura.subcoordinadores.some((s) => s.ci === ciStr);
+  const yaEsVot = estructura.votantes.some((v) => v.ci === ciStr);
 
-      alert(
-        `⚠️ Esta persona ya fue agregada anteriormente como ${rol}.\n` +
-          `No puede volver a ser asignada.`
-      );
-      return;
-    }
+  if (yaEsCoord || yaEsSub || yaEsVot) {
+    alert("Esta persona ya fue asignada.");
+    return;
+  }
 
-    const localidadBase = persona.localidad || "Sin localidad";
-const seccionalBase = persona.seccional || null;
+  let tabla = "";
+  let data = {};
 
+  if (modalType === "coordinador") {
+    tabla = "coordinadores";
+    data = {
+      ci: ciStr,
+      nombre: persona.nombre,
+      apellido: persona.apellido,
+      localidad: persona.localidad || null,
+      mesa: persona.mesa ? persona.mesa.toString() : null,
+      login_code: ciStr,
+      asignado_por_nombre: "Superadmin",
+      telefono: null,
+    };
+  }
 
-    // ======================= COORDINADOR =======================
-if (modalType === "coordinador") {
-  const newCoord = {
-    ci: persona.ci.toString(),
-    nombre: persona.nombre,
-    apellido: persona.apellido,
-    localidad: persona.localidad || null,
-    mesa: persona.mesa ? persona.mesa.toString() : null,
-    login_code: persona.ci.toString(),
-    asignado_por_nombre: "Superadmin",
-    created_at: new Date().toISOString(),
-    telefono: null,
-  };
+  if (modalType === "subcoordinador") {
+    tabla = "subcoordinadores";
+    data = {
+      ci: ciStr,
+      nombre: persona.nombre,
+      apellido: persona.apellido,
+      localidad: persona.localidad || null,
+      mesa: persona.mesa ? persona.mesa.toString() : null,
+      coordinador_ci: currentUser.ci.toString(),
+      login_code: ciStr,
+      asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+      telefono: null,
+    };
+  }
 
-  const { error } = await supabase.from("coordinadores").insert([newCoord]);
+  if (modalType === "votante") {
+    tabla = "votantes";
+    data = {
+      ci: ciStr,
+      nombre: persona.nombre,
+      apellido: persona.apellido,
+      localidad: persona.localidad || null,
+      mesa: persona.mesa ? persona.mesa.toString() : null,
+      asignado_por: currentUser.ci.toString(),
+      asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+      telefono: null,
+    };
+  }
+
+  const { error } = await supabase.from(tabla).insert([data]);
 
   if (error) {
     console.error(error);
-    alert("Error al guardar coordinador en Supabase");
+    alert("Error guardando en Supabase");
     return;
   }
 
-  alert(`Coordinador agregado exitosamente.`);
-}
-
-
-    // ======================= SUBCOORDINADOR =======================
-else if (modalType === "subcoordinador") {
-
-  if (!currentUser || currentUser.role !== "coordinador") {
-    alert("Solo un coordinador puede agregar subcoordinadores.");
-    return;
-  }
-
-  const newSub = {
-    ci: persona.ci.toString(),
-    nombre: persona.nombre,
-    apellido: persona.apellido,
-    localidad: persona.localidad || null,
-    mesa: persona.mesa ? persona.mesa.toString() : null,
-    coordinador_ci: currentUser.ci.toString(),
-    login_code: persona.ci.toString(),
-    asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-    created_at: new Date().toISOString(),
-  };
-
-  const { error } = await supabase.from("subcoordinadores").insert([newSub]);
-
-  if (error) {
-    console.error(error);
-    alert("Error al guardar subcoordinador en Supabase");
-    return;
-  }
-
-  alert(`Subcoordinador agregado exitosamente.`);
-}
-
-
-    // ======================= VOTANTE =======================
-else if (modalType === "votante") {
-
-  if (!currentUser) {
-    alert("Debe iniciar sesión para asignar votantes.");
-    return;
-  }
-
-  const newVot = {
-    ci: persona.ci.toString(),
-    nombre: persona.nombre,
-    apellido: persona.apellido,
-    localidad: persona.localidad || null,
-    mesa: persona.mesa ? persona.mesa.toString() : null,
-    asignado_por: currentUser.ci.toString(),
-    asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-    created_at: new Date().toISOString(),
-  };
-
-  const { error } = await supabase.from("votantes").insert([newVot]);
-
-  if (error) {
-    console.error(error);
-    alert("Error al guardar votante en Supabase");
-    return;
-  }
-
-  alert("Votante asignado correctamente.");
-}
-
-    // Cerrar modal y actualizar
-    setShowAddModal(false);
-    await recargarEstructura();
-  };
+  alert("Agregado correctamente.");
+  setShowAddModal(false);
+  await recargarEstructura();
+};
 
   // ======================= QUITAR PERSONA (Supabase) =======================
   const quitarPersona = async (ci, tipo) => {
