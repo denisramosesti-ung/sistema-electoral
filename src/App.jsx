@@ -1,6 +1,5 @@
 // App.jsx – Versión Supabase + padrón remoto (COMPLETA, CON LOGIN PERSISTENTE, BUSCADOR CI Y TELÉFONO)
 import React, { useState, useEffect, useMemo } from "react";
-import React, { useState, useEffect } from "react";
 import AddPersonModal from "./AddPersonModal.jsx";
 import { supabase } from "./supabaseClient";
 import {
