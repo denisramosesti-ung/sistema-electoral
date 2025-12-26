@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import AddPersonModal from "./AddPersonModal";
+import AddPersonModal from "./AddPersonModal.jsx";
 
 // ======================= APLICACIÓN PRINCIPAL =======================
 const App = () => {
