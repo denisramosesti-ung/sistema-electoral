@@ -24,25 +24,17 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   if (!show) return null;
 
   let filtered = [];
-  if (searchTerm.trim()) {
-    const term = searchTerm.toLowerCase();
+if (searchTerm.trim()) {
+  const term = searchTerm.toLowerCase();
 
-    const exactCI = disponibles.filter((p) =>
-      (p.ci || "").toString().startsWith(searchTerm)
-    );
+  filtered = disponibles.filter(
+    (p) =>
+      (p.ci || "").toString().includes(searchTerm) ||
+      (p.nombre || "").toLowerCase().includes(term) ||
+      (p.apellido || "").toLowerCase().includes(term)
+  ).slice(0, 100); // aumentamos límite a 100 opcionalmente
+}
 
-    const nameMatches = disponibles.filter(
-      (p) =>
-        (p.nombre || "").toLowerCase().includes(term) ||
-        (p.apellido || "").toLowerCase().includes(term)
-    );
-
-    const combined = [...exactCI, ...nameMatches].filter(
-      (p, index, arr) => arr.findIndex((x) => x.ci === p.ci) === index
-    );
-
-    filtered = combined.slice(0, 50);
-  }
 
   const pageSize = 5;
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -99,10 +91,10 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
               const bloqueado = persona.asignado === true;
 
               const localTexto =
-                persona.localidad ||
-                persona.local ||
-                persona.local_votacion ||
-                "Fernando de la Mora";
+              p.localidad ||
+              p.local ||
+              p.local_votacion ||
+              "-";
 
               return (
                 <div
