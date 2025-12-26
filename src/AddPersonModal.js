@@ -12,89 +12,92 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
     const term = searchTerm.toLowerCase();
 
     filtered = disponibles
-      .filter(
-        (p) =>
-          (p.ci || "").toString().includes(searchTerm) ||
-          (p.nombre || "").toLowerCase().includes(term) ||
-          (p.apellido || "").toLowerCase().includes(term)
-      );
+      .filter((p) => {
+        const ciTxt = (p.ci || "").toString().toLowerCase();
+        const name = (p.nombre || "").toLowerCase();
+        const lastname = (p.apellido || "").toLowerCase();
+        return (
+          ciTxt.includes(term) ||
+          name.includes(term) ||
+          lastname.includes(term)
+        );
+      })
+      .sort((a, b) => {
+        if (a.ci.toString() === searchTerm) return -1;
+        if (b.ci.toString() === searchTerm) return 1;
+        return a.nombre.localeCompare(b.nombre);
+      });
 
-    // Relevancia: coincidencias exactas de CI primero
-    filtered.sort((a, b) => {
-      if (a.ci.toString() === searchTerm) return -1;
-      if (b.ci.toString() === searchTerm) return 1;
-      return 0;
-    });
+    setPage(1);
   }
-
-  const pageSize = 8; // Cantidad por página para móvil/PC
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const start = (page - 1) * pageSize;
-  const paginated = filtered.slice(start, start + pageSize);
 
   const titulo =
     tipo === "coordinador"
       ? "Agregar Coordinador"
       : tipo === "subcoordinador"
-      ? "Agregar Sub-coordinador"
+      ? "Agregar Subcoordinador"
       : "Agregar Votante";
 
+  const pageSize = 20;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const startIdx = (page - 1) * pageSize;
+  const pageData = filtered.slice(startIdx, startIdx + pageSize);
+
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
-        
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-3xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+
         {/* HEADER */}
-        <div className="p-6 border-b flex justify-between items-center bg-red-600 text-white">
-          <h3 className="text-xl font-bold">{titulo}</h3>
-          <button onClick={onClose} className="hover:text-gray-200">
+        <div className="p-4 border-b bg-red-600 text-white flex justify-between items-center">
+          <h3 className="text-lg font-bold">{titulo}</h3>
+          <button
+            onClick={onClose}
+            className="hover:text-gray-200 transition"
+          >
             <X className="w-6 h-6" />
           </button>
         </div>
 
         {/* BUSCADOR */}
-        <div className="p-6">
+        <div className="p-4 border-b">
           <div className="relative">
             <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
             <input
               type="text"
               value={searchTerm}
               placeholder="Buscar CI, nombre o apellido..."
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setPage(1); // reset page on new search
-              }}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
             />
           </div>
 
-          {searchTerm.trim() && (
-            <p className="text-xs mt-2 text-gray-600">
+          {searchTerm && (
+            <p className="text-sm text-gray-600 mt-2">
               Resultados: {filtered.length}
             </p>
           )}
         </div>
 
-        {/* RESULTADOS PAGINADOS */}
-        <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-2">
-          {!searchTerm.trim() ? (
+        {/* LISTA DE RESULTADOS */}
+        <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2">
+          {!searchTerm ? (
             <p className="text-center text-gray-500 py-6">
-              Escribe para buscar…
+              Escriba para buscar...
             </p>
-          ) : filtered.length === 0 ? (
+          ) : pageData.length === 0 ? (
             <p className="text-center text-gray-500 py-6">
-              No se encontraron resultados.
+              No se encontraron resultados
             </p>
           ) : (
-            paginated.map((persona) => {
+            pageData.map((persona) => {
               const bloqueado = persona.asignado === true;
-
               return (
                 <div
                   key={persona.ci}
                   onClick={() => !bloqueado && onAdd(persona)}
-                  className={`p-4 border rounded-lg transition relative ${
+                  className={`p-4 border rounded-lg transition ${
                     bloqueado
-                      ? "bg-gray-200 cursor-not-allowed opacity-60"
+                      ? "bg-gray-200 opacity-60 cursor-not-allowed"
                       : "bg-gray-50 hover:bg-red-50 cursor-pointer"
                   }`}
                 >
@@ -103,17 +106,16 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
                   </p>
                   <p className="text-sm text-gray-600">
                     CI: {persona.ci}
-                  </p>
-
-                  <p className="text-xs text-gray-500 mt-1">
-                    {(persona.localidad || "Sin localidad")}
-                    {persona.mesa ? ` • Mesa ${persona.mesa}` : ""}
+                    {persona.localidad ? ` — ${persona.localidad}` : ""}
+                    {persona.mesa ? ` — Mesa ${persona.mesa}` : ""}
                   </p>
 
                   {bloqueado && (
                     <p className="text-xs text-red-600 mt-2">
-                      Ya asignado por <b>{persona.asignadoPorNombre || "Otro referente"}</b>{" "}
-                      {persona.asignadoRol ? `(${persona.asignadoRol})` : ""}
+                      Ya asignado
+                      {persona.asignadoPorNombre &&
+                        ` por ${persona.asignadoPorNombre}`}
+                      {persona.asignadoRol && ` (${persona.asignadoRol})`}
                     </p>
                   )}
                 </div>
@@ -124,7 +126,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
 
         {/* PAGINACIÓN */}
         {filtered.length > pageSize && (
-          <div className="px-6 pb-3 flex justify-between items-center text-sm">
+          <div className="flex justify-between items-center p-4 border-t bg-white">
             <button
               disabled={page === 1}
               onClick={() => setPage(page - 1)}
@@ -132,11 +134,9 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
             >
               ◀ Anterior
             </button>
-
             <span>
-              Página {page} / {totalPages}
+              Página {page} de {totalPages}
             </span>
-
             <button
               disabled={page === totalPages}
               onClick={() => setPage(page + 1)}
@@ -148,10 +148,10 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
         )}
 
         {/* BOTÓN CERRAR */}
-        <div className="px-6 pb-6">
+        <div className="p-4 border-t">
           <button
             onClick={onClose}
-            className="w-full mt-2 bg-gray-300 hover:bg-gray-400 text-gray-800 py-2 rounded-lg transition"
+            className="w-full bg-gray-300 hover:bg-gray-400 py-2 rounded-lg"
           >
             Cerrar
           </button>
