@@ -24,19 +24,20 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   if (!show) return null;
 
   let filtered = [];
-if (searchTerm.trim()) {
-  const term = searchTerm.toLowerCase();
+  if (searchTerm.trim()) {
+    const term = searchTerm.toLowerCase();
 
-  filtered = disponibles.filter(
-    (p) =>
-      (p.ci || "").toString().includes(searchTerm) ||
-      (p.nombre || "").toLowerCase().includes(term) ||
-      (p.apellido || "").toLowerCase().includes(term)
-  ).slice(0, 100); // aumentamos límite a 100 opcionalmente
-}
+    filtered = disponibles
+      .filter(
+        (p) =>
+          (p.ci || "").toString().includes(searchTerm) ||
+          (p.nombre || "").toLowerCase().includes(term) ||
+          (p.apellido || "").toLowerCase().includes(term)
+      )
+      .slice(0, 200);
+  }
 
-
-  const pageSize = 5;
+  const pageSize = 10;
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const start = (page - 1) * pageSize;
   const paginated = filtered.slice(start, start + pageSize);
@@ -90,11 +91,10 @@ if (searchTerm.trim()) {
             paginated.map((persona) => {
               const bloqueado = persona.asignado === true;
 
-              const localTexto =
-              p.localidad ||
-              p.local ||
-              p.local_votacion ||
-              "-";
+              const localTexto = persona.localidad || "-";
+              const seccionalTexto = persona.seccional
+                ? `Seccional ${persona.seccional}`
+                : "";
 
               return (
                 <div
@@ -111,8 +111,11 @@ if (searchTerm.trim()) {
                   <p className="font-semibold text-gray-800">
                     {persona.nombre} {persona.apellido}
                   </p>
+
                   <p className="text-sm text-gray-600">
-                    CI: {persona.ci} • {localTexto} • Mesa: {persona.mesa}
+                    CI: {persona.ci} • {localTexto}
+                    {persona.mesa ? ` • Mesa: ${persona.mesa}` : ""}
+                    {seccionalTexto ? ` • ${seccionalTexto}` : ""}
                   </p>
 
                   {bloqueado && (
@@ -123,7 +126,9 @@ if (searchTerm.trim()) {
                           persona.asignadoPor ||
                           "otro referente"}
                       </b>{" "}
-                      {persona.asignadoRol ? `(${persona.asignadoRol})` : null}
+                      {persona.asignadoRol
+                        ? `(${persona.asignadoRol})`
+                        : null}
                     </p>
                   )}
 
@@ -488,26 +493,25 @@ const App = () => {
       return;
     }
 
-    const localidadBase =
-      persona.localidad ||
-      persona.local ||
-      persona.local_votacion ||
-      "Fernando de la Mora";
+    const localidadBase = persona.localidad || "Sin localidad";
+const seccionalBase = persona.seccional || null;
+
 
     // ======================= COORDINADOR =======================
     if (modalType === "coordinador") {
       const { error } = await supabase.from("coordinadores").insert([
-        {
-          ci: persona.ci,
-          nombre: persona.nombre,
-          apellido: persona.apellido,
-          localidad: localidadBase,
-          mesa: persona.mesa?.toString() || "",
-          login_code: codigo,
-          asignado_por_nombre: "Superadmin",
-          // telefono inicialmente null
-        },
-      ]);
+  {
+    ci: persona.ci,
+    nombre: persona.nombre,
+    apellido: persona.apellido,
+    localidad: localidadBase,
+    mesa: persona.mesa?.toString() || "",
+    seccional: seccionalBase,
+    login_code: codigo,
+    asignado_por_nombre: "Superadmin",
+  },
+]);
+
 
       if (error) {
         alert("Error al guardar coordinador en Supabase");
@@ -528,18 +532,19 @@ const App = () => {
       }
 
       const { error } = await supabase.from("subcoordinadores").insert([
-        {
-          ci: persona.ci,
-          nombre: persona.nombre,
-          apellido: persona.apellido,
-          localidad: localidadBase,
-          mesa: persona.mesa?.toString() || "",
-          coordinador_ci: currentUser.ci,
-          login_code: codigo,
-          asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-          // telefono inicialmente null
-        },
-      ]);
+  {
+    ci: persona.ci,
+    nombre: persona.nombre,
+    apellido: persona.apellido,
+    localidad: localidadBase,
+    mesa: persona.mesa?.toString() || "",
+    seccional: seccionalBase,
+    coordinador_ci: currentUser.ci,
+    login_code: codigo,
+    asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+  },
+]);
+
 
       if (error) {
         alert("Error al guardar subcoordinador en Supabase");
@@ -560,17 +565,18 @@ const App = () => {
       }
 
       const { error } = await supabase.from("votantes").insert([
-        {
-          ci: persona.ci,
-          nombre: persona.nombre,
-          apellido: persona.apellido,
-          localidad: localidadBase,
-          mesa: persona.mesa?.toString() || "",
-          asignado_por: currentUser.ci,
-          asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-          // telefono inicialmente null
-        },
-      ]);
+  {
+    ci: persona.ci,
+    nombre: persona.nombre,
+    apellido: persona.apellido,
+    localidad: localidadBase,
+    mesa: persona.mesa?.toString() || "",
+    seccional: seccionalBase,
+    asignado_por: currentUser.ci,
+    asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+  },
+]);
+
 
       if (error) {
         alert("Error al guardar votante en Supabase");
