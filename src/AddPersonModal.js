@@ -1,37 +1,40 @@
+// AddPersonModal.jsx — Búsqueda en Supabase
 import React, { useState } from "react";
+import { supabase } from "./supabaseClient";
 import { Search, X } from "lucide-react";
 
-const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
+const AddPersonModal = ({ show, onClose, tipo, onAdd }) => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [resultados, setResultados] = useState([]);
+  const [cargando, setCargando] = useState(false);
 
   if (!show) return null;
 
-  let filtered = [];
+  const buscar = async (term) => {
+    if (term.trim().length < 1) {
+      setResultados([]);
+      return;
+    }
 
-  if (searchTerm.trim()) {
-    const term = searchTerm.toLowerCase();
-    
-    const exactCI = disponibles.filter(
-      (p) => p.ci && p.ci.toString() === searchTerm
-    );
+    setCargando(true);
 
-    const partialCI = disponibles.filter(
-      (p) =>
-        p.ci &&
-        p.ci.toString().includes(searchTerm) &&
-        p.ci.toString() !== searchTerm
-    );
+    const { data, error } = await supabase
+      .from("padron")
+      .select("*")
+      .or(
+        `ci.ilike.%${term}%,nombre.ilike.%${term}%,apellido.ilike.%${term}%`
+      )
+      .limit(30);
 
-    const nameMatches = disponibles.filter(
-      (p) =>
-        (p.nombre || "").toLowerCase().includes(term) ||
-        (p.apellido || "").toLowerCase().includes(term)
-    );
+    if (error) {
+      console.error("Error en búsqueda:", error);
+      setResultados([]);
+    } else {
+      setResultados(data || []);
+    }
 
-    filtered = [...exactCI, ...partialCI, ...nameMatches]
-      .filter((p, idx, arr) => arr.findIndex((x) => x.ci === p.ci) === idx)
-      .slice(0, 50); // máx 50
-  }
+    setCargando(false);
+  };
 
   const titulo =
     tipo === "coordinador"
@@ -43,14 +46,16 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl overflow-hidden">
-        
+
+        {/* HEADER */}
         <div className="p-6 border-b flex justify-between items-center bg-red-600 text-white">
           <h3 className="text-xl font-bold">{titulo}</h3>
-          <button onClick={onClose}>
+          <button onClick={onClose} className="hover:text-gray-200">
             <X className="w-6 h-6" />
           </button>
         </div>
 
+        {/* SEARCH INPUT */}
         <div className="p-6">
           <div className="relative">
             <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
@@ -58,46 +63,43 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
               type="text"
               value={searchTerm}
               placeholder="Buscar CI, nombre o apellido..."
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setSearchTerm(v);
+                buscar(v);
+              }}
               className="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
             />
           </div>
         </div>
 
-        <div className="px-6 pb-4 space-y-2 max-h-[300px] overflow-y-auto">
-          {filtered.length === 0 ? (
+        {/* RESULTADOS */}
+        <div className="px-6 pb-4 space-y-2 max-h-[320px] overflow-y-auto">
+          {cargando ? (
+            <p className="text-center text-gray-500 py-6">Buscando…</p>
+          ) : resultados.length === 0 ? (
             <p className="text-center text-gray-500 py-6">Sin resultados…</p>
           ) : (
-            filtered.map((persona) => {
-              const bloqueado = persona.asignado === true;
-
-              return (
-                <div
-                  key={persona.ci}
-                  onClick={() => !bloqueado && onAdd(persona)}
-                  className={`p-4 border rounded-lg transition ${
-                    bloqueado
-                      ? "bg-gray-200 opacity-60 cursor-not-allowed"
-                      : "bg-gray-50 hover:bg-red-50 cursor-pointer"
-                  }`}
-                >
-                  <p className="font-semibold">
-                    {persona.nombre} {persona.apellido}
-                  </p>
-                  <p className="text-sm text-gray-600">CI: {persona.ci}</p>
-
-                  {bloqueado && (
-                    <p className="text-xs text-red-600 mt-2">
-                      Ya asignado por <b>{persona.asignadoPorNombre}</b>{" "}
-                      ({persona.asignadoRol})
-                    </p>
-                  )}
-                </div>
-              );
-            })
+            resultados.map((p) => (
+              <div
+                key={p.ci}
+                onClick={() => onAdd(p)}
+                className="p-4 border rounded-lg bg-gray-50 hover:bg-red-50 cursor-pointer transition"
+              >
+                <p className="font-semibold text-gray-800">
+                  {p.nombre} {p.apellido}
+                </p>
+                <p className="text-sm text-gray-600">
+                  CI: {p.ci} • {p.localidad || "-"}
+                  {p.mesa ? ` • Mesa: ${p.mesa}` : ""}
+                  {p.seccional ? ` • Sec: ${p.seccional}` : ""}
+                </p>
+              </div>
+            ))
           )}
         </div>
 
+        {/* FOOTER */}
         <div className="p-6">
           <button
             onClick={onClose}
