@@ -3,31 +3,22 @@ import { Search, X } from "lucide-react";
 
 const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [page, setPage] = useState(1);
 
   if (!show) return null;
 
-  let filtered = [];
+  const term = searchTerm.toLowerCase();
 
-  if (searchTerm.trim()) {
-    const term = searchTerm.toLowerCase();
-
-    const exactCI = disponibles.filter((p) =>
-      (p.ci || "").toString().startsWith(searchTerm)
-    );
-
-    const nameMatches = disponibles.filter(
-      (p) =>
-        (p.nombre || "").toLowerCase().includes(term) ||
-        (p.apellido || "").toLowerCase().includes(term)
-    );
-
-    const combined = [...exactCI, ...nameMatches].filter(
-      (p, index, arr) => arr.findIndex((x) => x.ci === p.ci) === index
-    );
-
-    filtered = combined.slice(0, 5);
-  }
+  const filtered =
+    term.length === 0
+      ? []
+      : disponibles
+          .filter(
+            (p) =>
+              (p.ci || "").toString().startsWith(searchTerm) ||
+              (p.nombre || "").toLowerCase().includes(term) ||
+              (p.apellido || "").toLowerCase().includes(term)
+          )
+          .slice(0, 50);
 
   const titulo =
     tipo === "coordinador"
@@ -37,8 +28,8 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
       : "Agregar Votante";
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl overflow-hidden">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl flex flex-col">
         
         {/* Header */}
         <div className="p-6 border-b flex justify-between items-center bg-red-600 text-white">
@@ -56,10 +47,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
               type="text"
               value={searchTerm}
               placeholder="Buscar CI, nombre o apellido..."
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setPage(1);
-              }}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
             />
           </div>
@@ -67,33 +55,42 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
 
         {/* Results */}
         <div className="px-6 pb-4 space-y-2 max-h-[300px] overflow-y-auto">
-          {filtered.length === 0 ? (
-            <p className="text-center text-gray-500 py-6">Sin resultados…</p>
+          {term.length === 0 ? (
+            <p className="text-center text-gray-500 py-6">
+              Escriba para buscar...
+            </p>
+          ) : filtered.length === 0 ? (
+            <p className="text-center text-gray-500 py-6">
+              Sin resultados...
+            </p>
           ) : (
-            filtered.map((persona) => {
-              const bloqueado = persona.asignado === true;
+            filtered.map((p) => (
+              <div
+                key={p.ci}
+                onClick={() => !p.asignado && onAdd(p)}
+                className={`p-4 border rounded-lg transition ${
+                  p.asignado
+                    ? "bg-gray-200 opacity-60 cursor-not-allowed"
+                    : "bg-gray-50 hover:bg-red-50 cursor-pointer"
+                }`}
+              >
+                <p className="font-semibold">
+                  {p.nombre} {p.apellido}
+                </p>
+                <p className="text-sm text-gray-600">
+                  CI {p.ci} • {p.localidad || "-"}
+                  {p.seccional ? ` • Secc ${p.seccional}` : ""}
+                  {p.mesa ? ` • Mesa ${p.mesa}` : ""}
+                </p>
 
-              return (
-                <div
-                  key={persona.ci}
-                  onClick={() => !bloqueado && onAdd(persona)}
-                  className={`p-4 border rounded-lg transition ${
-                    bloqueado
-                      ? "bg-gray-200 opacity-60 cursor-not-allowed"
-                      : "bg-gray-50 hover:bg-red-50 cursor-pointer"
-                  }`}
-                >
-                  <p className="font-semibold">{persona.nombre} {persona.apellido}</p>
-                  <p className="text-sm text-gray-600">CI: {persona.ci}</p>
-
-                  {bloqueado && (
-                    <p className="text-xs text-red-600 mt-2">
-                      Ya asignado por <b>{persona.asignadoPorNombre}</b> ({persona.asignadoRol})
-                    </p>
-                  )}
-                </div>
-              );
-            })
+                {p.asignado && (
+                  <p className="text-xs text-red-600 mt-2">
+                    Asignado por <b>{p.asignadoPorNombre}</b>{" "}
+                    ({p.asignadoRol})
+                  </p>
+                )}
+              </div>
+            ))
           )}
         </div>
 
