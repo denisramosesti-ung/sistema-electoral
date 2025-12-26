@@ -1,38 +1,53 @@
-import React, { useState } from "react";
+// AddPersonModal.jsx – Buscador conectado a Supabase
+
+import React, { useEffect, useState } from "react";
 import { Search, X } from "lucide-react";
+import { supabase } from "./supabaseClient";
+import { debounce } from "lodash";
 
 const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [resultados, setResultados] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   if (!show) return null;
 
-  let filtered = [];
+  const buscarSupabase = debounce(async (term) => {
+    if (!term.trim()) {
+      setResultados([]);
+      return;
+    }
 
-  if (searchTerm.trim()) {
-    const term = searchTerm.toLowerCase();
+    setLoading(true);
 
-    filtered = disponibles.filter((p) => {
-      const ciTxt = (p.ci || "").toString().toLowerCase();
-      const name = (p.nombre || "").toLowerCase();
-      const lastname = (p.apellido || "").toLowerCase();
+    // Si es CI exacto (solo números)
+    if (/^\d+$/.test(term)) {
+      const { data } = await supabase
+        .from("padron")
+        .select("*")
+        .eq("ci", term)
+        .limit(1);
 
-      return (
-        ciTxt.includes(term) ||
-        name.includes(term) ||
-        lastname.includes(term)
-      );
-    });
+      setResultados(data || []);
+      setLoading(false);
+      return;
+    }
 
-    // Mostrar primero coincidencias exactas de CI
-    filtered.sort((a, b) => {
-      if (a.ci.toString() === searchTerm) return -1;
-      if (b.ci.toString() === searchTerm) return 1;
-      return 0;
-    });
+    // Búsqueda parcial por nombre o apellido
+    const { data, error } = await supabase
+      .from("padron")
+      .select("*")
+      .or(`nombre.ilike.%${term}%,apellido.ilike.%${term}%`)
+      .limit(50);
 
-    // Límite para no explotar la app
-    filtered = filtered.slice(0, 20);
-  }
+    if (!error) setResultados(data || []);
+    setLoading(false);
+  }, 350);
+
+  const handleChange = (value) => {
+    setSearchTerm(value);
+    buscarSupabase(value);
+  };
 
   const titulo =
     tipo === "coordinador"
@@ -44,7 +59,6 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl overflow-hidden">
-        
         {/* Header */}
         <div className="p-6 border-b flex justify-between items-center bg-red-600 text-white">
           <h3 className="text-xl font-bold">{titulo}</h3>
@@ -61,19 +75,25 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
               type="text"
               value={searchTerm}
               placeholder="Buscar CI, nombre o apellido..."
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleChange(e.target.value)}
               className="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
             />
           </div>
         </div>
 
         {/* Results */}
-        <div className="px-6 pb-4 space-y-2 max-h-[300px] overflow-y-auto">
-          {filtered.length === 0 ? (
+        <div className="px-6 pb-4 space-y-2 max-h-[350px] overflow-y-auto">
+          {loading ? (
+            <p className="text-center text-gray-500 py-6">Buscando...</p>
+          ) : searchTerm && resultados.length === 0 ? (
             <p className="text-center text-gray-500 py-6">Sin resultados…</p>
           ) : (
-            filtered.map((persona) => {
-              const bloqueado = persona.asignado === true;
+            resultados.map((persona) => {
+              const padronCheck = disponibles.find(
+                (p) => Number(p.ci) === Number(persona.ci)
+              );
+
+              const bloqueado = padronCheck?.asignado === true;
 
               return (
                 <div
@@ -88,11 +108,16 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
                   <p className="font-semibold">
                     {persona.nombre} {persona.apellido}
                   </p>
-                  <p className="text-sm text-gray-600">CI: {persona.ci}</p>
+                  <p className="text-sm text-gray-600">
+                    CI: {persona.ci}{" "}
+                    {persona.localidad ? `• ${persona.localidad}` : ""}
+                  </p>
 
                   {bloqueado && (
                     <p className="text-xs text-red-600 mt-2">
-                      Ya asignado por <b>{persona.asignadoPorNombre}</b> ({persona.asignadoRol})
+                      Ya asignado por <b>{padronCheck.asignadoPorNombre}</b>{" "}
+                      {padronCheck.asignadoRol &&
+                        `(${padronCheck.asignadoRol})`}
                     </p>
                   )}
                 </div>
