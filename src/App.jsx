@@ -357,65 +357,51 @@ const getPersonasDisponibles = () => {
 
 
   // ======================= BUSCADOR GLOBAL POR CI =======================
-  const buscarPorCI = (ci) => {
-    if (!ci) {
-      setSearchResult(null);
-      return;
-    }
+const buscarPorCI = (input) => {
+  if (!input?.trim()) {
+    setSearchResult(null);
+    return;
+  }
 
-    // Coordinador
+  const clean = input.replace(/\D/g, "");
+
+  // Búsqueda textual dentro del padrón
+  const personaPadron = padron.find((p) => {
+    const ciRaw = (p.ci || "").toString();
+    const ciClean = ciRaw.replace(/\D/g, "");
+    return ciRaw.includes(input) || ciClean.includes(clean);
+  });
+
+  if (personaPadron) {
+    const ci = personaPadron.ci;
+
     const coord = estructura.coordinadores.find((c) => c.ci == ci);
-    if (coord) {
-      setSearchResult({
-        tipo: "coordinador",
-        data: coord,
-      });
-      return;
-    }
+    if (coord)
+      return setSearchResult({ tipo: "coordinador", data: coord });
 
-    // Subcoordinador
     const sub = estructura.subcoordinadores.find((s) => s.ci == ci);
-    if (sub) {
-      setSearchResult({
-        tipo: "subcoordinador",
-        data: sub,
-      });
-      return;
-    }
+    if (sub)
+      return setSearchResult({ tipo: "subcoordinador", data: sub });
 
-    // Votante
     const vot = estructura.votantes.find((v) => v.ci == ci);
     if (vot) {
-      // Buscar quién es la persona que lo tiene asignado (sub o coord)
       const asignadoPor =
         estructura.subcoordinadores.find((s) => s.ci == vot.asignadoPor) ||
         estructura.coordinadores.find((c) => c.ci == vot.asignadoPor) ||
         null;
 
-      setSearchResult({
+      return setSearchResult({
         tipo: "votante",
         data: vot,
         asignadoPor,
       });
-      return;
     }
 
-    // En padrón pero sin asignar
-    const personaPadron = padron.find((p) => p.ci == ci);
-    if (personaPadron) {
-      setSearchResult({
-        tipo: "padron",
-        data: personaPadron,
-      });
-      return;
-    }
+    return setSearchResult({ tipo: "padron", data: personaPadron });
+  }
 
-    // Nadie lo tiene y no está en padrón
-    setSearchResult({
-      tipo: "noExiste",
-      data: { ci },
-    });
-  };
+  setSearchResult({ tipo: "noExiste", data: { ci: input } });
+};
 
   // ======================= MODAL TELÉFONO =======================
   const abrirTelefono = (tipo, persona) => {
