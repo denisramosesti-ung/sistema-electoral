@@ -66,6 +66,8 @@ const App = () => {
         return;
       }
       setPadron(data || []);
+      console.log("PADRON CARGADO:", data?.length, "registros");
+
     };
 
     cargarPadron();
@@ -1456,5 +1458,3 @@ const App = () => {
     </div>
   );
 };
-
-export default App;
