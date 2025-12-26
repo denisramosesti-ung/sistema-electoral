@@ -6,25 +6,33 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
 
   if (!show) return null;
 
-  const term = searchTerm.trim().toLowerCase();
+  let filtered = [];
 
-  const filtered =
-    term === ""
-      ? []
-      : disponibles
-          .filter(
-            (p) =>
-              p.ci.toString().includes(term) ||
-              p.nombre.toLowerCase().includes(term) ||
-              p.apellido.toLowerCase().includes(term)
-          )
-          .slice(0, 30);
+  if (searchTerm.trim()) {
+    const term = searchTerm.toLowerCase();
+
+    const exactCI = disponibles.filter((p) =>
+      (p.ci || "").toString().startsWith(searchTerm)
+    );
+
+    const nameMatches = disponibles.filter(
+      (p) =>
+        (p.nombre || "").toLowerCase().includes(term) ||
+        (p.apellido || "").toLowerCase().includes(term)
+    );
+
+    const combined = [...exactCI, ...nameMatches].filter(
+      (p, index, arr) => arr.findIndex((x) => x.ci === p.ci) === index
+    );
+
+    filtered = combined.slice(0, 200);
+  }
 
   const titulo =
     tipo === "coordinador"
       ? "Agregar Coordinador"
       : tipo === "subcoordinador"
-      ? "Agregar Subcoordinador"
+      ? "Agregar Sub-coordinador"
       : "Agregar Votante";
 
   return (
@@ -55,28 +63,33 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           {filtered.length === 0 ? (
             <p className="text-center text-gray-500 py-6">Sin resultados…</p>
           ) : (
-            filtered.map((p) => (
-              <div
-                key={p.ci}
-                onClick={() => !p.asignado && onAdd(p)}
-                className={`p-4 border rounded-lg transition ${
-                  p.asignado
-                    ? "bg-gray-200 opacity-60 cursor-not-allowed"
-                    : "bg-gray-50 hover:bg-red-50 cursor-pointer"
-                }`}
-              >
-                <p className="font-semibold">
-                  {p.nombre} {p.apellido}
-                </p>
-                <p className="text-sm text-gray-600">CI: {p.ci}</p>
-                {p.asignado && (
-                  <p className="text-xs text-red-600 mt-2">
-                    Ya asignado como {p.asignadoRol}
-                    {p.asignadoPorNombre && ` — ${p.asignadoPorNombre}`}
+            filtered.map((persona) => {
+              const bloqueado = persona.asignado === true;
+
+              return (
+                <div
+                  key={persona.ci}
+                  onClick={() => !bloqueado && onAdd(persona)}
+                  className={`p-4 border rounded-lg transition ${
+                    bloqueado
+                      ? "bg-gray-200 opacity-60 cursor-not-allowed"
+                      : "bg-gray-50 hover:bg-red-50 cursor-pointer"
+                  }`}
+                >
+                  <p className="font-semibold">
+                    {persona.nombre} {persona.apellido}
                   </p>
-                )}
-              </div>
-            ))
+                  <p className="text-sm text-gray-600">CI: {persona.ci}</p>
+
+                  {bloqueado && (
+                    <p className="text-xs text-red-600 mt-2">
+                      Ya asignado por <b>{persona.asignadoPorNombre}</b> (
+                      {persona.asignadoRol})
+                    </p>
+                  )}
+                </div>
+              );
+            })
           )}
         </div>
 
