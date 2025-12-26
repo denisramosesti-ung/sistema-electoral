@@ -402,9 +402,19 @@ const App = () => {
       return;
     }
 
-    // Nadie lo tiene
+    // En padrón pero sin asignar
+    const personaPadron = padron.find((p) => p.ci == ci);
+    if (personaPadron) {
+      setSearchResult({
+        tipo: "padron",
+        data: personaPadron,
+      });
+      return;
+    }
+
+    // Nadie lo tiene y no está en padrón
     setSearchResult({
-      tipo: "ninguno",
+      tipo: "noExiste",
       data: { ci },
     });
   };
@@ -744,7 +754,7 @@ const App = () => {
             v.apellido,
             v.localidad,
             v.mesa,
-            v.telefono || "_", 
+            v.telefono || "_",
           ]),
           theme: "grid",
           headStyles: { fillColor: [255, 80, 80] },
@@ -926,8 +936,12 @@ const App = () => {
             <p className="font-semibold mb-2">📋 Instrucciones:</p>
             <ol className="list-decimal ml-5 space-y-1">
               <li>Ingrese el código proporcionado por el Coordinador.</li>
-              <li>Ante dudas o consultas, comuniquese con el Admin del Sistema.</li>
-              <li>En caso de ser Subcoordinador cuide su clave de ingreso.</li>
+              <li>
+                Ante dudas o consultas, comuniquese con el Admin del Sistema.
+              </li>
+              <li>
+                En caso de ser Subcoordinador cuide su clave de ingreso.
+              </li>
             </ol>
           </div>
         </div>
@@ -1096,89 +1110,153 @@ const App = () => {
 
           {/* RESULTADOS DE BÚSQUEDA */}
           {searchResult && (
-  <div className="mt-4 p-4 border rounded bg-gray-50 text-sm">
+            <div className="mt-4 p-4 border rounded bg-gray-50 text-sm">
+              {/* === COORDINADOR === */}
+              {searchResult.tipo === "coordinador" && (
+                <>
+                  <p className="font-bold text-red-700 mb-1">
+                    Coordinador encontrado
+                  </p>
 
-    {/* === COORDINADOR === */}
-    {searchResult.tipo === "coordinador" && (
-      <>
-        <p className="font-bold text-red-700 mb-1">
-          Coordinador encontrado
-        </p>
+                  <p>
+                    <b>Nombre:</b> {searchResult.data.nombre}{" "}
+                    {searchResult.data.apellido}
+                  </p>
+                  <p>
+                    <b>CI:</b> {searchResult.data.ci}
+                  </p>
+                  <p>
+                    <b>Localidad:</b>{" "}
+                    {searchResult.data.localidad || "Sin datos"}
+                  </p>
+                  <p>
+                    <b>Mesa:</b> {searchResult.data.mesa || "-"}
+                  </p>
+                  <p>
+                    <b>Teléfono:</b> {searchResult.data.telefono || "-"}
+                  </p>
+                </>
+              )}
 
-        <p><b>Nombre:</b> {searchResult.data.nombre} {searchResult.data.apellido}</p>
-        <p><b>CI:</b> {searchResult.data.ci}</p>
-        <p><b>Localidad:</b> {searchResult.data.localidad || "Sin datos"}</p>
-        <p><b>Mesa:</b> {searchResult.data.mesa || "-"}</p>
-        <p><b>Teléfono:</b> {searchResult.data.telefono || "-"}</p>
-      </>
-    )}
+              {/* === SUBCOORDINADOR === */}
+              {searchResult.tipo === "subcoordinador" && (
+                <>
+                  <p className="font-bold text-red-700 mb-1">
+                    Subcoordinador encontrado
+                  </p>
 
-    {/* === SUBCOORDINADOR === */}
-    {searchResult.tipo === "subcoordinador" && (
-      <>
-        <p className="font-bold text-red-700 mb-1">
-          Subcoordinador encontrado
-        </p>
+                  <p>
+                    <b>Nombre:</b> {searchResult.data.nombre}{" "}
+                    {searchResult.data.apellido}
+                  </p>
+                  <p>
+                    <b>CI:</b> {searchResult.data.ci}
+                  </p>
+                  <p>
+                    <b>Localidad:</b>{" "}
+                    {searchResult.data.localidad || "Sin datos"}
+                  </p>
+                  <p>
+                    <b>Mesa:</b> {searchResult.data.mesa || "-"}
+                  </p>
+                  <p>
+                    <b>Teléfono:</b> {searchResult.data.telefono || "-"}
+                  </p>
 
-        <p><b>Nombre:</b> {searchResult.data.nombre} {searchResult.data.apellido}</p>
-        <p><b>CI:</b> {searchResult.data.ci}</p>
-        <p><b>Localidad:</b> {searchResult.data.localidad || "Sin datos"}</p>
-        <p><b>Mesa:</b> {searchResult.data.mesa || "-"}</p>
-        <p><b>Teléfono:</b> {searchResult.data.telefono || "-"}</p>
+                  <p className="mt-2">
+                    <b>Asignado por:</b>{" "}
+                    {searchResult.data.asignadoPorNombre || "Superadmin"}
+                  </p>
+                </>
+              )}
 
-        <p className="mt-2"><b>Asignado por:</b> {searchResult.data.asignadoPorNombre || "Superadmin"}</p>
-      </>
-    )}
+              {/* === VOTANTE === */}
+              {searchResult.tipo === "votante" && (
+                <>
+                  <p className="font-bold text-red-700 mb-1">
+                    Votante encontrado
+                  </p>
 
-    {/* === VOTANTE === */}
-    {searchResult.tipo === "votante" && (
-      <>
-        <p className="font-bold text-red-700 mb-1">
-          Votante encontrado
-        </p>
+                  <p>
+                    <b>Nombre:</b> {searchResult.data.nombre}{" "}
+                    {searchResult.data.apellido}
+                  </p>
+                  <p>
+                    <b>CI:</b> {searchResult.data.ci}
+                  </p>
+                  <p>
+                    <b>Localidad:</b>{" "}
+                    {searchResult.data.localidad || "Sin datos"}
+                  </p>
+                  <p>
+                    <b>Mesa:</b> {searchResult.data.mesa || "-"}
+                  </p>
+                  <p>
+                    <b>Teléfono:</b> {searchResult.data.telefono || "-"}
+                  </p>
 
-        <p><b>Nombre:</b> {searchResult.data.nombre} {searchResult.data.apellido}</p>
-        <p><b>CI:</b> {searchResult.data.ci}</p>
-        <p><b>Localidad:</b> {searchResult.data.localidad || "Sin datos"}</p>
-        <p><b>Mesa:</b> {searchResult.data.mesa || "-"}</p>
-        <p><b>Teléfono:</b> {searchResult.data.telefono || "-"}</p>
+                  <p className="mt-2">
+                    <b>Asignado por:</b>{" "}
+                    {searchResult.asignadoPor ? (
+                      <>
+                        {searchResult.asignadoPor.nombre}{" "}
+                        {searchResult.asignadoPor.apellido} —{" "}
+                        <b>
+                          {estructura.coordinadores.some(
+                            (c) => c.ci === searchResult.asignadoPor.ci
+                          )
+                            ? "Coordinador"
+                            : estructura.subcoordinadores.some(
+                                (s) => s.ci === searchResult.asignadoPor.ci
+                              )
+                            ? "Subcoordinador"
+                            : "Rol desconocido"}
+                        </b>
+                      </>
+                    ) : (
+                      "No encontrado"
+                    )}
+                  </p>
+                </>
+              )}
 
-        <p className="mt-2">
-  <b>Asignado por:</b>{" "}
-  {searchResult.asignadoPor ? (
-    <>
-      {searchResult.asignadoPor.nombre} {searchResult.asignadoPor.apellido} —{" "}
-      <b>
-        {
-          estructura.coordinadores.some(
-            (c) => c.ci === searchResult.asignadoPor.ci
-          )
-            ? "Coordinador"
-            : estructura.subcoordinadores.some(
-                (s) => s.ci === searchResult.asignadoPor.ci
-              )
-            ? "Subcoordinador"
-            : "Rol desconocido"
-        }
-      </b>
-    </>
-  ) : (
-    "No encontrado"
-  )}
-</p>
+              {/* === EN PADRÓN PERO NO ASIGNADO === */}
+              {searchResult.tipo === "padron" && (
+                <div className="text-gray-700">
+                  <p className="font-bold text-red-700 mb-1">
+                    Persona encontrada en padrón (no asignada)
+                  </p>
+                  <p>
+                    <b>Nombre:</b> {searchResult.data.nombre}{" "}
+                    {searchResult.data.apellido}
+                  </p>
+                  <p>
+                    <b>CI:</b> {searchResult.data.ci}
+                  </p>
+                  <p>
+                    <b>Localidad:</b>{" "}
+                    {searchResult.data.localidad ||
+                      searchResult.data.local ||
+                      "Sin datos"}
+                  </p>
+                  <p>
+                    <b>Mesa:</b> {searchResult.data.mesa || "-"}
+                  </p>
+                  <p className="mt-2">
+                    Esta persona está en el padrón y disponible para ser
+                    asignada como coordinador, subcoordinador o votante.
+                  </p>
+                </div>
+              )}
 
-      </>
-    )}
-
-    {/* === NADIE LO TIENE === */}
-    {searchResult.tipo === "ninguno" && (
-      <p className="text-gray-600">
-        Este CI <b>{searchResult.data.ci}</b> no está asignado a nadie.
-      </p>
-    )}
-  </div>
-)}
-
+              {/* === NO EXISTE NI EN PADRÓN === */}
+              {searchResult.tipo === "noExiste" && (
+                <p className="text-gray-600">
+                  Este CI <b>{searchResult.data.ci}</b> no pertenece al padrón.
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
