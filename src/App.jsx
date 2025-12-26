@@ -229,19 +229,39 @@ const App = () => {
     }
   }, []);
 
-  // ======================= CARGAR PADRÓN =======================
-  useEffect(() => {
-    const cargarPadron = async () => {
-      const { data, error } = await supabase.from("padron").select("*");
-      if (error) {
-        console.error("Error cargando padrón:", error);
-        return;
-      }
-      setPadron(data || []);
-    };
+  // ======================= CARGAR PADRÓN COMPLETO =======================
+const cargarPadronCompleto = async () => {
+  console.log("Solicitando conteo total del padrón...");
 
-    cargarPadron();
-  }, []);
+  const { count, error: countError } = await supabase
+    .from("padron")
+    .select("ci", { count: "exact", head: true });
+
+  if (countError) {
+    console.error("Error obteniendo conteo:", countError);
+    return;
+  }
+
+  console.log("TOTAL PERSONAS EN PADRÓN:", count);
+
+  const { data, error } = await supabase
+    .from("padron")
+    .select("*")
+    .range(0, count - 1); // ← AQUÍ CARGAMOS TODO EL PADRÓN SIN LÍMITES
+
+  if (error) {
+    console.error("Error cargando padrón:", error);
+    return;
+  }
+
+  console.log("PADRÓN CARGADO:", data.length);
+  setPadron(data);
+};
+
+useEffect(() => {
+  cargarPadronCompleto();
+}, []);
+
 
   // ======================= HELPERS =======================
   const generarCodigo = () =>
