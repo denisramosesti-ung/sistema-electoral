@@ -6,19 +6,32 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
 
   if (!show) return null;
 
-  const term = searchTerm.toLowerCase();
+  let filtered = [];
 
-  const filtered =
-    term.length === 0
-      ? []
-      : disponibles
-          .filter(
-            (p) =>
-              (p.ci || "").toString().startsWith(searchTerm) ||
-              (p.nombre || "").toLowerCase().includes(term) ||
-              (p.apellido || "").toLowerCase().includes(term)
-          )
-          .slice(0, 50);
+  if (searchTerm.trim()) {
+    const term = searchTerm.toLowerCase();
+    
+    const exactCI = disponibles.filter(
+      (p) => p.ci && p.ci.toString() === searchTerm
+    );
+
+    const partialCI = disponibles.filter(
+      (p) =>
+        p.ci &&
+        p.ci.toString().includes(searchTerm) &&
+        p.ci.toString() !== searchTerm
+    );
+
+    const nameMatches = disponibles.filter(
+      (p) =>
+        (p.nombre || "").toLowerCase().includes(term) ||
+        (p.apellido || "").toLowerCase().includes(term)
+    );
+
+    filtered = [...exactCI, ...partialCI, ...nameMatches]
+      .filter((p, idx, arr) => arr.findIndex((x) => x.ci === p.ci) === idx)
+      .slice(0, 50); // máx 50
+  }
 
   const titulo =
     tipo === "coordinador"
@@ -28,10 +41,9 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
       : "Agregar Votante";
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl flex flex-col">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl overflow-hidden">
         
-        {/* Header */}
         <div className="p-6 border-b flex justify-between items-center bg-red-600 text-white">
           <h3 className="text-xl font-bold">{titulo}</h3>
           <button onClick={onClose}>
@@ -39,7 +51,6 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           </button>
         </div>
 
-        {/* Search */}
         <div className="p-6">
           <div className="relative">
             <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
@@ -53,48 +64,40 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           </div>
         </div>
 
-        {/* Results */}
         <div className="px-6 pb-4 space-y-2 max-h-[300px] overflow-y-auto">
-          {term.length === 0 ? (
-            <p className="text-center text-gray-500 py-6">
-              Escriba para buscar...
-            </p>
-          ) : filtered.length === 0 ? (
-            <p className="text-center text-gray-500 py-6">
-              Sin resultados...
-            </p>
+          {filtered.length === 0 ? (
+            <p className="text-center text-gray-500 py-6">Sin resultados…</p>
           ) : (
-            filtered.map((p) => (
-              <div
-                key={p.ci}
-                onClick={() => !p.asignado && onAdd(p)}
-                className={`p-4 border rounded-lg transition ${
-                  p.asignado
-                    ? "bg-gray-200 opacity-60 cursor-not-allowed"
-                    : "bg-gray-50 hover:bg-red-50 cursor-pointer"
-                }`}
-              >
-                <p className="font-semibold">
-                  {p.nombre} {p.apellido}
-                </p>
-                <p className="text-sm text-gray-600">
-                  CI {p.ci} • {p.localidad || "-"}
-                  {p.seccional ? ` • Secc ${p.seccional}` : ""}
-                  {p.mesa ? ` • Mesa ${p.mesa}` : ""}
-                </p>
+            filtered.map((persona) => {
+              const bloqueado = persona.asignado === true;
 
-                {p.asignado && (
-                  <p className="text-xs text-red-600 mt-2">
-                    Asignado por <b>{p.asignadoPorNombre}</b>{" "}
-                    ({p.asignadoRol})
+              return (
+                <div
+                  key={persona.ci}
+                  onClick={() => !bloqueado && onAdd(persona)}
+                  className={`p-4 border rounded-lg transition ${
+                    bloqueado
+                      ? "bg-gray-200 opacity-60 cursor-not-allowed"
+                      : "bg-gray-50 hover:bg-red-50 cursor-pointer"
+                  }`}
+                >
+                  <p className="font-semibold">
+                    {persona.nombre} {persona.apellido}
                   </p>
-                )}
-              </div>
-            ))
+                  <p className="text-sm text-gray-600">CI: {persona.ci}</p>
+
+                  {bloqueado && (
+                    <p className="text-xs text-red-600 mt-2">
+                      Ya asignado por <b>{persona.asignadoPorNombre}</b>{" "}
+                      ({persona.asignadoRol})
+                    </p>
+                  )}
+                </div>
+              );
+            })
           )}
         </div>
 
-        {/* Footer */}
         <div className="p-6">
           <button
             onClick={onClose}

@@ -312,7 +312,7 @@ const App = () => {
   // PADRÓN DISPONIBLE
 const getPersonasDisponibles = (padronActual) => {
   if (!padronActual) return [];
-  return padronActual.map((p) => {
+  return padronActual.map((p) => {  
     const ciNum = Number(p.ci);
 
     const coordItem = estructura.coordinadores.find((c) => Number(c.ci) === ciNum);
@@ -501,94 +501,92 @@ const seccionalBase = persona.seccional || null;
 
 
     // ======================= COORDINADOR =======================
-    if (modalType === "coordinador") {
-      const { error } = await supabase.from("coordinadores").insert([
-  {
-    ci: persona.ci,
+if (modalType === "coordinador") {
+  const newCoord = {
+    ci: persona.ci.toString(),
     nombre: persona.nombre,
     apellido: persona.apellido,
-    localidad: localidadBase,
-    mesa: persona.mesa?.toString() || "",
-    seccional: seccionalBase,
-    login_code: codigo,
+    localidad: persona.localidad || null,
+    mesa: persona.mesa ? persona.mesa.toString() : null,
+    login_code: persona.ci.toString(),
     asignado_por_nombre: "Superadmin",
-  },
-]);
+    created_at: new Date().toISOString(),
+    telefono: null,
+  };
 
+  const { error } = await supabase.from("coordinadores").insert([newCoord]);
 
-      if (error) {
-        alert("Error al guardar coordinador en Supabase");
-        console.error(error);
-        return;
-      }
+  if (error) {
+    console.error(error);
+    alert("Error al guardar coordinador en Supabase");
+    return;
+  }
 
-      alert(
-        `Coordinador agregado.\nNombre: ${persona.nombre} ${persona.apellido}\nCódigo de acceso: ${codigo}`
-      );
-    }
+  alert(`Coordinador agregado exitosamente.`);
+}
+
 
     // ======================= SUBCOORDINADOR =======================
-    else if (modalType === "subcoordinador") {
-      if (!currentUser || currentUser.role !== "coordinador") {
-        alert("Solo un coordinador puede agregar subcoordinadores.");
-        return;
-      }
+else if (modalType === "subcoordinador") {
 
-      const { error } = await supabase.from("subcoordinadores").insert([
-  {
-    ci: persona.ci,
+  if (!currentUser || currentUser.role !== "coordinador") {
+    alert("Solo un coordinador puede agregar subcoordinadores.");
+    return;
+  }
+
+  const newSub = {
+    ci: persona.ci.toString(),
     nombre: persona.nombre,
     apellido: persona.apellido,
-    localidad: localidadBase,
-    mesa: persona.mesa?.toString() || "",
-    seccional: seccionalBase,
-    coordinador_ci: currentUser.ci,
-    login_code: codigo,
+    localidad: persona.localidad || null,
+    mesa: persona.mesa ? persona.mesa.toString() : null,
+    coordinador_ci: currentUser.ci.toString(),
+    login_code: persona.ci.toString(),
     asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-  },
-]);
+    created_at: new Date().toISOString(),
+  };
 
+  const { error } = await supabase.from("subcoordinadores").insert([newSub]);
 
-      if (error) {
-        alert("Error al guardar subcoordinador en Supabase");
-        console.error(error);
-        return;
-      }
+  if (error) {
+    console.error(error);
+    alert("Error al guardar subcoordinador en Supabase");
+    return;
+  }
 
-      alert(
-        `Sub-coordinador agregado.\nNombre: ${persona.nombre} ${persona.apellido}\nCódigo de acceso: ${codigo}`
-      );
-    }
+  alert(`Subcoordinador agregado exitosamente.`);
+}
+
 
     // ======================= VOTANTE =======================
-    else if (modalType === "votante") {
-      if (!currentUser) {
-        alert("Debe iniciar sesión para asignar votantes.");
-        return;
-      }
+else if (modalType === "votante") {
 
-      const { error } = await supabase.from("votantes").insert([
-  {
-    ci: persona.ci,
+  if (!currentUser) {
+    alert("Debe iniciar sesión para asignar votantes.");
+    return;
+  }
+
+  const newVot = {
+    ci: persona.ci.toString(),
     nombre: persona.nombre,
     apellido: persona.apellido,
-    localidad: localidadBase,
-    mesa: persona.mesa?.toString() || "",
-    seccional: seccionalBase,
-    asignado_por: currentUser.ci,
+    localidad: persona.localidad || null,
+    mesa: persona.mesa ? persona.mesa.toString() : null,
+    asignado_por: currentUser.ci.toString(),
     asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-  },
-]);
+    created_at: new Date().toISOString(),
+  };
 
+  const { error } = await supabase.from("votantes").insert([newVot]);
 
-      if (error) {
-        alert("Error al guardar votante en Supabase");
-        console.error(error);
-        return;
-      }
+  if (error) {
+    console.error(error);
+    alert("Error al guardar votante en Supabase");
+    return;
+  }
 
-      alert("Votante asignado correctamente.");
-    }
+  alert("Votante asignado correctamente.");
+}
 
     // Cerrar modal y actualizar
     setShowAddModal(false);
