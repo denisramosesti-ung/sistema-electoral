@@ -24,14 +24,13 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
     tipo === "coordinador"
       ? "Agregar Coordinador"
       : tipo === "subcoordinador"
-      ? "Agregar Sub-coordinador"
+      ? "Agregar Subcoordinador"
       : "Agregar Votante";
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl overflow-hidden">
 
-        {/* Header */}
         <div className="p-6 border-b flex justify-between items-center bg-red-600 text-white">
           <h3 className="text-xl font-bold">{titulo}</h3>
           <button onClick={onClose}>
@@ -39,7 +38,6 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           </button>
         </div>
 
-        {/* Search */}
         <div className="p-6">
           <div className="relative">
             <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
@@ -53,7 +51,6 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           </div>
         </div>
 
-        {/* Results */}
         <div className="px-6 pb-4 space-y-2 max-h-[300px] overflow-y-auto">
           {filtered.length === 0 ? (
             <p className="text-center text-gray-500 py-6">Sin resultados…</p>
@@ -83,7 +80,6 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           )}
         </div>
 
-        {/* Footer */}
         <div className="p-6">
           <button
             onClick={onClose}
@@ -92,6 +88,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
             Cerrar
           </button>
         </div>
+
       </div>
     </div>
   );
