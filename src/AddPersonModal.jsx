@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Search, X } from "lucide-react";
 
 const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
@@ -7,11 +7,16 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
 
   if (!show) return null;
 
-  let filtered = [];
-  if (searchTerm.trim()) {
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm]);
+
+  const filtered = useMemo(() => {
+    if (!searchTerm.trim()) return [];
+
     const term = searchTerm.toLowerCase();
 
-    filtered = disponibles
+    return disponibles
       .filter((p) => {
         const ciTxt = (p.ci || "").toString().toLowerCase();
         const name = (p.nombre || "").toLowerCase();
@@ -27,9 +32,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
         if (b.ci.toString() === searchTerm) return 1;
         return a.nombre.localeCompare(b.nombre);
       });
-
-    setPage(1);
-  }
+  }, [searchTerm, disponibles]);
 
   const titulo =
     tipo === "coordinador"
@@ -50,10 +53,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
         {/* HEADER */}
         <div className="p-4 border-b bg-red-600 text-white flex justify-between items-center">
           <h3 className="text-lg font-bold">{titulo}</h3>
-          <button
-            onClick={onClose}
-            className="hover:text-gray-200 transition"
-          >
+          <button onClick={onClose} className="hover:text-gray-200 transition">
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -78,7 +78,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           )}
         </div>
 
-        {/* LISTA DE RESULTADOS */}
+        {/* LISTA */}
         <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2">
           {!searchTerm ? (
             <p className="text-center text-gray-500 py-6">
@@ -147,7 +147,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           </div>
         )}
 
-        {/* BOTÓN CERRAR */}
+        {/* CERRAR */}
         <div className="p-4 border-t">
           <button
             onClick={onClose}
@@ -156,6 +156,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
             Cerrar
           </button>
         </div>
+
       </div>
     </div>
   );
