@@ -1,38 +1,46 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { Search, X } from "lucide-react";
 
-const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
+const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles = [] }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
 
+  // Cuando se abre el modal, reseteamos buscador y página
+  useEffect(() => {
+    if (show) {
+      setSearchTerm("");
+      setPage(1);
+    }
+  }, [show]);
+
+  // Si no debe mostrarse, no renderizamos nada
   if (!show) return null;
 
-  useEffect(() => {
-    setPage(1);
-  }, [searchTerm]);
+  const trimmed = searchTerm.trim().toLowerCase();
 
-  const filtered = useMemo(() => {
-    if (!searchTerm.trim()) return [];
-
-    const term = searchTerm.toLowerCase();
-
-    return disponibles
+  // NUNCA modificamos estado dentro del render
+  // Solo calculamos "filtered" a partir de props + estado
+  let filtered = [];
+  if (trimmed) {
+    filtered = (Array.isArray(disponibles) ? disponibles : [])
       .filter((p) => {
         const ciTxt = (p.ci || "").toString().toLowerCase();
         const name = (p.nombre || "").toLowerCase();
         const lastname = (p.apellido || "").toLowerCase();
         return (
-          ciTxt.includes(term) ||
-          name.includes(term) ||
-          lastname.includes(term)
+          ciTxt.includes(trimmed) ||
+          name.includes(trimmed) ||
+          lastname.includes(trimmed)
         );
       })
       .sort((a, b) => {
-        if (a.ci.toString() === searchTerm) return -1;
-        if (b.ci.toString() === searchTerm) return 1;
-        return a.nombre.localeCompare(b.nombre);
+        // CI exacto primero
+        if (a.ci && a.ci.toString() === searchTerm) return -1;
+        if (b.ci && b.ci.toString() === searchTerm) return 1;
+        // Luego por nombre
+        return (a.nombre || "").localeCompare(b.nombre || "");
       });
-  }, [searchTerm, disponibles]);
+  }
 
   const titulo =
     tipo === "coordinador"
@@ -42,18 +50,30 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
       : "Agregar Votante";
 
   const pageSize = 20;
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const startIdx = (page - 1) * pageSize;
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filtered.length / pageSize || 1)
+  );
+  const currentPage = Math.min(page, totalPages);
+  const startIdx = (currentPage - 1) * pageSize;
   const pageData = filtered.slice(startIdx, startIdx + pageSize);
+
+  const handleClickPersona = (persona) => {
+    const bloqueado = persona.asignado === true;
+    if (bloqueado) return;
+    onAdd(persona);
+  };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-3xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
-
         {/* HEADER */}
         <div className="p-4 border-b bg-red-600 text-white flex justify-between items-center">
           <h3 className="text-lg font-bold">{titulo}</h3>
-          <button onClick={onClose} className="hover:text-gray-200 transition">
+          <button
+            onClick={onClose}
+            className="hover:text-gray-200 transition"
+          >
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -66,7 +86,10 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
               type="text"
               value={searchTerm}
               placeholder="Buscar CI, nombre o apellido..."
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                // NO se llama setPage aquí salvo vía useEffect
+              }}
               className="w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
             />
           </div>
@@ -78,7 +101,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           )}
         </div>
 
-        {/* LISTA */}
+        {/* LISTA DE RESULTADOS */}
         <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2">
           {!searchTerm ? (
             <p className="text-center text-gray-500 py-6">
@@ -94,7 +117,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
               return (
                 <div
                   key={persona.ci}
-                  onClick={() => !bloqueado && onAdd(persona)}
+                  onClick={() => handleClickPersona(persona)}
                   className={`p-4 border rounded-lg transition ${
                     bloqueado
                       ? "bg-gray-200 opacity-60 cursor-not-allowed"
@@ -128,18 +151,20 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
         {filtered.length > pageSize && (
           <div className="flex justify-between items-center p-4 border-t bg-white">
             <button
-              disabled={page === 1}
-              onClick={() => setPage(page - 1)}
+              disabled={currentPage === 1}
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
               className="px-3 py-1 border rounded disabled:opacity-40"
             >
               ◀ Anterior
             </button>
             <span>
-              Página {page} de {totalPages}
+              Página {currentPage} de {totalPages}
             </span>
             <button
-              disabled={page === totalPages}
-              onClick={() => setPage(page + 1)}
+              disabled={currentPage === totalPages}
+              onClick={() =>
+                setPage((prev) => Math.min(totalPages, prev + 1))
+              }
               className="px-3 py-1 border rounded disabled:opacity-40"
             >
               Siguiente ▶
@@ -147,7 +172,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           </div>
         )}
 
-        {/* CERRAR */}
+        {/* BOTÓN CERRAR */}
         <div className="p-4 border-t">
           <button
             onClick={onClose}
@@ -156,7 +181,6 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
             Cerrar
           </button>
         </div>
-
       </div>
     </div>
   );

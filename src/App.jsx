@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import AddPersonModal from "./AddPersonModal.jsx";
+import AddPersonModal from "./AddPersonModal";
 
 // ======================= APLICACIÓN PRINCIPAL =======================
 const App = () => {
@@ -1435,7 +1435,7 @@ const handleAgregarPersona = async (persona) => {
       )}
 
       {/* MODAL AGREGAR PERSONA */}
-      <AddPersonModal
+<AddPersonModal
   show={showAddModal}
   onClose={() => setShowAddModal(false)}
   tipo={modalType}
