@@ -30,26 +30,27 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
 
   // FILTRADO + BÚSQUEDA AVANZADA
   const filtered = term
-    ? disponibles
-        .filter((p) => {
-          const ciStr = (p.ci ?? "").toString();
-          const fullName = `${p.nombre ?? ""} ${p.apellido ?? ""}`;
+  ? disponibles
+      .filter((p) => {
+        const fullName = `${(p.nombre ?? "").toLowerCase()} ${(p.apellido ?? "").toLowerCase()}`;
+        const ciTxt = (p.ci ?? "").toString().toLowerCase();
 
-          const fullNorm = normalize(fullName);
-          const words = normalize(term).split(" ").filter(Boolean);
+        const words = term.split(" ").filter(Boolean); // separa por espacios
 
-          if (ciStr === term) return true;
+        // Cada palabra debe existir en CI o en fullName
+        return words.every(
+          (w) => ciTxt.includes(w) || fullName.includes(w)
+        );
+      })
+      .sort((a, b) => {
+        const exactA = a.ci?.toString() === searchTerm;
+        const exactB = b.ci?.toString() === searchTerm;
+        if (exactA && !exactB) return -1;
+        if (!exactA && exactB) return 1;
+        return (a.nombre || "").localeCompare(b.nombre || "");
+      })
+  : [];
 
-          return words.every((w) => fullNorm.includes(w));
-        })
-        .sort((a, b) => {
-          const exactA = a.ci?.toString() === term;
-          const exactB = b.ci?.toString() === term;
-          if (exactA && !exactB) return -1;
-          if (!exactA && exactB) return 1;
-          return (a.nombre || "").localeCompare(b.nombre || "");
-        })
-    : [];
 
   const pageSize = 20;
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
