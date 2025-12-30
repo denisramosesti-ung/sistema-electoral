@@ -883,55 +883,6 @@ const handleAgregarPersona = async (persona) => {
         </button>
       </div>
         
-{/* RANKING DE CAPTACIÓN - SOLO SUPERADMIN */}
-{currentUser.role === "superadmin" && (() => {
-  const { ranking, total } = getRankingCaptacion();
-
-  return (
-    <div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
-      <h2 className="text-lg font-bold text-gray-800">
-        Ranking de Captación
-      </h2>
-
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-red-600 text-white">
-            <tr>
-              <th className="p-2 text-left">#</th>
-              <th className="p-2 text-left">Nombre</th>
-              <th className="p-2 text-left">Rol</th>
-              <th className="p-2 text-center">Votantes</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {ranking.map((item, idx) => (
-              <tr key={item.ci} className="border-b last:border-none">
-                <td className="p-2 font-semibold">{idx + 1}</td>
-                <td className="p-2">
-                  {item.nombre} {item.apellido}
-                </td>
-                <td className="p-2">{item.rol}</td>
-                <td className="p-2 text-center font-bold text-red-600">
-                  {item.total}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <p className="text-right text-gray-700 font-semibold text-sm">
-        Total en toda la red:{" "}
-        <span className="text-red-600 text-lg">
-          {total}
-        </span>
-      </p>
-    </div>
-  );
-})()}
-
-
       {/* BUSCADOR GLOBAL POR CI */}
       <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="bg_white p-4 rounded-lg shadow mb-4 bg-white">
