@@ -1174,25 +1174,26 @@ const generarPDF = () => {
                 </p>
               )}
               <p className="text-xs text-gray-500">
-  {coord.padron?.seccional && (
-    <>Seccional {coord.padron.seccional} • </>
+  {coord.seccional && (
+    <>Seccional {coord.seccional} • </>
   )}
-  {coord.padron?.local_votacion && (
-    <>{coord.padron.local_votacion} • </>
+  {coord.local_votacion && (
+    <>{coord.local_votacion} • </>
   )}
-  {coord.padron?.mesa && (
-    <>Mesa {coord.padron.mesa} • </>
+  {coord.mesa && (
+    <>Mesa {coord.mesa} • </>
   )}
-  {coord.padron?.orden && (
-    <>Orden {coord.padron.orden}</>
+  {coord.orden && (
+    <>Orden {coord.orden}</>
   )}
 </p>
 
-{coord.padron?.direccion && (
+{coord.direccion && (
   <p className="text-xs text-gray-500">
-    Domicilio: {coord.padron.direccion}
+    Domicilio: {coord.direccion}
   </p>
 )}
+
 
             </div>
           </div>
