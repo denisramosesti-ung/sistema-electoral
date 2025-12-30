@@ -906,146 +906,80 @@ const generarPDF = () => {
 />
 
 
-          {/* RESULTADOS DE BÚSQUEDA */}
-          {searchResult && (
-            <div className="mt-4 p-4 border rounded bg-gray-50 text-sm">
-              {/* === COORDINADOR === */}
-              {searchResult.tipo === "coordinador" && (
-                <>
-                  <p className="font-bold text-red-700 mb-1">
-                    Coordinador encontrado
-                  </p>
+{/* RESULTADOS DE BÚSQUEDA */}
+{searchResult && (
+  <div className="mt-4 p-4 border rounded bg-gray-50 text-sm">
 
-                  <p>
-                    <b>Nombre:</b> {searchResult.data.nombre}{" "}
-                    {searchResult.data.apellido}
-                  </p>
-                  <p>
-                    <b>CI:</b> {searchResult.data.ci}
-                  </p>
-                  <p>
-                    <b>Localidad:</b>{" "}
-                    {searchResult.data.localidad || "Sin datos"}
-                  </p>
-                  <p>
-                    <b>Mesa:</b> {searchResult.data.mesa || "-"}
-                  </p>
-                  <p>
-                    <b>Teléfono:</b> {searchResult.data.telefono || "-"}
-                  </p>
-                </>
-              )}
+    <p className="font-bold text-red-700 mb-2">
+      {searchResult.tipo === "coordinador"
+        ? "Coordinador encontrado"
+        : searchResult.tipo === "subcoordinador"
+        ? "Subcoordinador encontrado"
+        : searchResult.tipo === "votante"
+        ? "Votante encontrado"
+        : searchResult.tipo === "padron"
+        ? "Persona en padrón (no asignada)"
+        : "No existe en el padrón"}
+    </p>
 
-              {/* === SUBCOORDINADOR === */}
-              {searchResult.tipo === "subcoordinador" && (
-                <>
-                  <p className="font-bold text-red-700 mb-1">
-                    Subcoordinador encontrado
-                  </p>
+    {/* Datos generales */}
+    {searchResult.data && (
+      <>
+        <p><b>Nombre:</b> {searchResult.data.nombre} {searchResult.data.apellido}</p>
+        <p><b>CI:</b> {searchResult.data.ci}</p>
+        <p><b>Localidad:</b> {searchResult.data.localidad || "-"}</p>
+        <p><b>Mesa:</b> {searchResult.data.mesa || "-"}</p>
+        <p><b>Teléfono:</b> {searchResult.data.telefono || "-"}</p>
+      </>
+    )}
 
-                  <p>
-                    <b>Nombre:</b> {searchResult.data.nombre}{" "}
-                    {searchResult.data.apellido}
-                  </p>
-                  <p>
-                    <b>CI:</b> {searchResult.data.ci}
-                  </p>
-                  <p>
-                    <b>Localidad:</b>{" "}
-                    {searchResult.data.localidad || "Sin datos"}
-                  </p>
-                  <p>
-                    <b>Mesa:</b> {searchResult.data.mesa || "-"}
-                  </p>
-                  <p>
-                    <b>Teléfono:</b> {searchResult.data.telefono || "-"}
-                  </p>
+    {/* Asignado Por */}
+    {searchResult.tipo === "votante" && searchResult.asignadoPor && (
+      <p className="mt-2">
+        <b>Asignado por:</b> {searchResult.asignadoPor.nombre} {searchResult.asignadoPor.apellido}
+      </p>
+    )}
 
-                  <p className="mt-2">
-                    <b>Asignado por:</b>{" "}
-                    {searchResult.data.asignadoPorNombre || "Superadmin"}
-                  </p>
-                </>
-              )}
+    {/* Acciones */}
+    {(searchResult.tipo === "coordinador" ||
+      searchResult.tipo === "subcoordinador" ||
+      searchResult.tipo === "votante") && (
+      <div className="mt-4 flex gap-2 flex-wrap">
 
-              {/* === VOTANTE === */}
-              {searchResult.tipo === "votante" && (
-                <>
-                  <p className="font-bold text-red-700 mb-1">
-                    Votante encontrado
-                  </p>
+        {/* Editar teléfono */}
+        <button
+          onClick={() => abrirTelefono(searchResult.tipo, searchResult.data)}
+          className="px-3 py-1 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
+        >
+          Teléfono
+        </button>
 
-                  <p>
-                    <b>Nombre:</b> {searchResult.data.nombre}{" "}
-                    {searchResult.data.apellido}
-                  </p>
-                  <p>
-                    <b>CI:</b> {searchResult.data.ci}
-                  </p>
-                  <p>
-                    <b>Localidad:</b>{" "}
-                    {searchResult.data.localidad || "Sin datos"}
-                  </p>
-                  <p>
-                    <b>Mesa:</b> {searchResult.data.mesa || "-"}
-                  </p>
-                  <p>
-                    <b>Teléfono:</b> {searchResult.data.telefono || "-"}
-                  </p>
+        {/* Borrar con permisos */}
+        {(currentUser.role === "superadmin" ||
+          (searchResult.tipo === "votante" &&
+           searchResult.data.asignadoPor === currentUser.ci)) && (
+          <button
+            onClick={() =>
+              quitarPersona(
+                searchResult.data.ci,
+                searchResult.tipo === "votante"
+                  ? "votante"
+                  : searchResult.tipo === "subcoordinador"
+                  ? "subcoordinador"
+                  : "coordinador"
+              )
+            }
+            className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-1"
+          >
+            <Trash2 className="w-4 h-4"/>
+            Borrar
+          </button>
+        )}
 
-                  <p className="mt-2">
-                    <b>Asignado por:</b>{" "}
-                    {searchResult.asignadoPor ? (
-                      <>
-                        {searchResult.asignadoPor.nombre}{" "}
-                        {searchResult.asignadoPor.apellido} —{" "}
-                        <b>
-                          {estructura.coordinadores.some(
-                            (c) => c.ci === searchResult.asignadoPor.ci
-                          )
-                            ? "Coordinador"
-                            : estructura.subcoordinadores.some(
-                                (s) => s.ci === searchResult.asignadoPor.ci
-                              )
-                            ? "Subcoordinador"
-                            : "Rol desconocido"}
-                        </b>
-                      </>
-                    ) : (
-                      "No encontrado"
-                    )}
-                  </p>
-                </>
-              )}
-
-              {/* === EN PADRÓN PERO NO ASIGNADO === */}
-              {searchResult.tipo === "padron" && (
-                <div className="text-gray-700">
-                  <p className="font-bold text-red-700 mb-1">
-                    Persona encontrada en padrón (no asignada)
-                  </p>
-                  <p>
-                    <b>Nombre:</b> {searchResult.data.nombre}{" "}
-                    {searchResult.data.apellido}
-                  </p>
-                  <p>
-                    <b>CI:</b> {searchResult.data.ci}
-                  </p>
-                  <p>
-                    <b>Localidad:</b>{" "}
-                    {searchResult.data.localidad ||
-                      searchResult.data.local ||
-                      "Sin datos"}
-                  </p>
-                  <p>
-                    <b>Mesa:</b> {searchResult.data.mesa || "-"}
-                  </p>
-                  <p className="mt-2">
-                    Esta persona está en el padrón y disponible para ser
-                    asignada como coordinador, subcoordinador o votante.
-                  </p>
-                </div>
-              )}
+      </div>
+    )}
+  </div>
+)}
 
               {/* === NO EXISTE NI EN PADRÓN === */}
               {searchResult.tipo === "noExiste" && (
