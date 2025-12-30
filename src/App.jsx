@@ -443,17 +443,14 @@ const handleAgregarPersona = async (persona) => {
     estructura.votantes.filter((v) => v.asignadoPor === subcoordCI);
 
   // ======================= ESTADÍSTICAS =======================
-  if (currentUser?.role === "superadmin") {
-  const totalAsignados =
-    estructura.coordinadores.length +
-    estructura.subcoordinadores.length +
-    estructura.votantes.length;
-
-  return {
-    coordinadores: estructura.coordinadores.length,
-    subcoordinadores: estructura.subcoordinadores.length,
-    votantes: totalAsignados, // <<< Ahora incluye todos
-  };
+  const getEstadisticas = () => {
+    if (currentUser?.role === "superadmin") {
+      return {
+        coordinadores: estructura.coordinadores.length,
+        subcoordinadores: estructura.subcoordinadores.length,
+        votantes: estructura.votantes.length,
+      };
+    }
 
     if (currentUser?.role === "coordinador") {
       const misSubcoords = getMisSubcoordinadores();
@@ -758,7 +755,6 @@ const handleAgregarPersona = async (persona) => {
                 : "Sub-coordinador"}
             </p>
           </div>
-          
 
           <button
             onClick={handleLogout}
@@ -882,7 +878,7 @@ const handleAgregarPersona = async (persona) => {
           Descargar Reporte PDF
         </button>
       </div>
-        
+
       {/* BUSCADOR GLOBAL POR CI */}
       <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="bg_white p-4 rounded-lg shadow mb-4 bg-white">
@@ -1439,7 +1435,7 @@ const handleAgregarPersona = async (persona) => {
       )}
 
       {/* MODAL AGREGAR PERSONA */}
-<AddPersonModal
+      <AddPersonModal
   show={showAddModal}
   onClose={() => setShowAddModal(false)}
   tipo={modalType}
