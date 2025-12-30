@@ -479,124 +479,120 @@ const handleAgregarPersona = async (persona) => {
     return {};
   };
 
-  // ======================= REPORTE PDF =======================
-  const generarPDF = () => {
-    if (!currentUser) return;
-    const doc = new jsPDF({ orientation: "portrait" });
+  // ======================= REPORTE PDF COMPLETO =======================
+const generarPDF = () => {
+  if (!currentUser) return;
 
-    doc.setFontSize(16);
-    doc.text("Reporte de Estructura Electoral", 14, 20);
+  const doc = new jsPDF({ orientation: "portrait" });
 
-    doc.setFontSize(12);
-    doc.text(
-      `Generado por: ${currentUser.nombre} ${currentUser.apellido} (${currentUser.role})`,
-      14,
-      30
-    );
-    doc.text(`Fecha: ${new Date().toLocaleString()}`, 14, 38);
+  // Estilos
+  const colorRojo = [200, 0, 0];
+  doc.setFont("helvetica", "bold");
 
-    let y = 50;
+  // Encabezado
+  doc.setFontSize(18);
+  doc.setTextColor(...colorRojo);
+  doc.text("INFORME DE CAPTACIÓN ELECTORAL", 14, 18);
 
-    if (currentUser.role === "superadmin") {
-      doc.setFontSize(14);
-      doc.text("Listado de Coordinadores", 14, y);
-      y += 6;
+  doc.setFontSize(11);
+  doc.setTextColor(0, 0, 0);
+  doc.text(
+    `Generado por: ${currentUser.nombre} ${currentUser.apellido} — (${currentUser.role})`,
+    14,
+    28
+  );
+  doc.text(`Fecha y hora: ${new Date().toLocaleString()}`, 14, 34);
 
-      autoTable(doc, {
-        startY: y,
-        head: [["CI", "Nombre", "Apellido", "Código", "Telefono"]],
-        body: estructura.coordinadores.map((c) => [
-          c.ci,
-          c.nombre,
-          c.apellido,
-          c.loginCode || "-",
-          c.telefono || "-",
-        ]),
-        theme: "striped",
-        headStyles: { fillColor: [220, 0, 0] },
-      });
+  // Estadísticas Globales
+  const totalCoordinadores = estructura.coordinadores.length;
+  const totalSub = estructura.subcoordinadores.length;
+  const totalVotantes = estructura.votantes.length;
 
-      y = doc.lastAutoTable.finalY + 15;
-    }
+  autoTable(doc, {
+    startY: 42,
+    head: [["Indicador", "Cantidad"]],
+    body: [
+      ["Coordinadores", totalCoordinadores],
+      ["Subcoordinadores", totalSub],
+      ["Total de Votantes Captados", totalVotantes],
+    ],
+    theme: "grid",
+    headStyles: { fillColor: colorRojo },
+  });
 
-    if (currentUser.role === "coordinador") {
-      const subcoords = getMisSubcoordinadores();
+  let y = doc.lastAutoTable.finalY + 12;
 
-      subcoords.forEach((sub) => {
-        doc.setFontSize(14);
-        doc.text(`Subcoordinador: ${sub.nombre} ${sub.apellido}`, 14, y);
-        y += 5;
+  // Análisis Interpretativo Automático
+  const mensaje =
+    totalVotantes > 50
+      ? "El equipo demuestra un crecimiento sólido y una captación activa en terreno."
+      : totalVotantes > 0
+      ? "El proceso de captación está en marcha, pero requiere intensificar acciones en campo."
+      : "No se observan aún avances significativos en captación.";
 
-        const votantesSub = getVotantesDeSubcoord(sub.ci);
-        doc.setFontSize(12);
-        doc.text("Votantes asignados:", 14, y);
-        y += 4;
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "normal");
+  doc.text("Resumen Ejecutivo:", 14, y);
+  y += 6;
+  doc.text(mensaje, 14, y);
+  y += 12;
 
-        autoTable(doc, {
-          startY: y,
-          head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa", "Telefono"]],
-          body: votantesSub.map((v) => [
-            v.ci,
-            v.nombre,
-            v.apellido,
-            v.localidad,
-            v.mesa,
-            v.telefono || "_",
-          ]),
-          theme: "grid",
-          headStyles: { fillColor: [255, 80, 80] },
-        });
+  // Ranking de Captación
+  doc.setFont("helvetica", "bold");
+  doc.text("Ranking de Coordinadores y Subcoordinadores", 14, y);
+  y += 4;
 
-        y = doc.lastAutoTable.finalY + 12;
-      });
+  const ranking = [...estructura.coordinadores, ...estructura.subcoordinadores].map((p) => {
+    const directos = estructura.votantes.filter((v) => v.asignadoPor === p.ci).length;
+    return {
+      ci: p.ci,
+      nombre: `${p.nombre} ${p.apellido}`,
+      localidad: p.localidad || "-",
+      mesa: p.mesa || "-",
+      telefono: p.telefono || "-",
+      rol: estructura.coordinadores.some((c) => c.ci === p.ci)
+        ? "Coordinador"
+        : "Subcoordinador",
+      cantidad: directos,
+    };
+  });
 
-      const directos = getMisVotantes();
-      if (directos.length > 0) {
-        doc.setFontSize(14);
-        doc.text("Votantes directos del Coordinador:", 14, y);
-        y += 6;
+  const ordenado = ranking.sort((a, b) => b.cantidad - a.cantidad);
+  const totalGlobal = ordenado.reduce((acc, a) => acc + a.cantidad, 0);
 
-        autoTable(doc, {
-          startY: y,
-          head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa", "Telefono"]],
-          body: directos.map((v) => [
-            v.ci,
-            v.nombre,
-            v.apellido,
-            v.localidad,
-            v.mesa,
-            v.telefono || "_",
-          ]),
-          theme: "grid",
-          headStyles: { fillColor: [255, 80, 80] },
-        });
+  autoTable(doc, {
+    startY: y + 4,
+    head: [["#", "Nombre", "Localidad", "Mesa", "Teléfono", "Rol", "Votantes"]],
+    body: ordenado.map((p, i) => [
+      i + 1,
+      p.nombre,
+      p.localidad,
+      p.mesa,
+      p.telefono,
+      p.rol,
+      p.cantidad,
+    ]),
+    theme: "striped",
+    headStyles: { fillColor: colorRojo },
+    bodyStyles: { fontSize: 10 },
+  });
 
-        y = doc.lastAutoTable.finalY + 10;
-      }
-    }
+  y = doc.lastAutoTable.finalY + 10;
 
-    if (currentUser.role === "subcoordinador") {
-      doc.setFontSize(14);
-      doc.text("Mis votantes asignados:", 14, y);
+  // Pie final
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(10);
+  doc.text(`Total global de votantes: ${totalGlobal}`, 14, y);
+  y += 6;
+  doc.text(
+    "Generado automáticamente por el Sistema Electoral — Uso privado y estratégico",
+    14,
+    y
+  );
 
-      autoTable(doc, {
-        startY: y + 4,
-        head: [["CI", "Nombre", "Apellido", "Localidad", "Mesa", "Telefono"]],
-        body: getMisVotantes().map((v) => [
-          v.ci,
-          v.nombre,
-          v.apellido,
-          v.localidad,
-          v.mesa,
-          v.telefono || "_",
-        ]),
-        theme: "grid",
-        headStyles: { fillColor: [255, 80, 80] },
-      });
-    }
+  doc.save("informe_captacion.pdf");
+};
 
-    doc.save("reporte_estructura.pdf");
-  };
 
   // ======================= LOGIN =======================
   const handleLogin = async () => {
@@ -1050,6 +1046,105 @@ const handleAgregarPersona = async (persona) => {
           )}
         </div>
       </div>
+
+
+{/* RANKING DE CAPTACIÓN (SOLO SUPERADMIN) */}
+{currentUser.role === "superadmin" && (
+  <div className="max-w-7xl mx-auto px-4 mt-4 mb-4">
+    <div className="bg-white rounded-lg shadow p-6">
+      <h2 className="text-xl font-bold text-gray-800 mb-4">
+        Ranking de Captación
+      </h2>
+
+      {(() => {
+        const ranking = [...estructura.coordinadores, ...estructura.subcoordinadores].map((p) => {
+          const directos = estructura.votantes.filter((v) => v.asignadoPor === p.ci).length;
+          return {
+            ci: p.ci,
+            nombre: p.nombre,
+            apellido: p.apellido,
+            localidad: p.localidad || "-",
+            mesa: p.mesa || "-",
+            telefono: p.telefono || "-",
+            rol: estructura.coordinadores.some((c) => c.ci === p.ci)
+              ? "Coordinador"
+              : "Subcoordinador",
+            cantidad: directos,
+          };
+        });
+
+        const totalGlobal = ranking.reduce((acc, p) => acc + p.cantidad, 0);
+        const ordenado = ranking.sort((a, b) => b.cantidad - a.cantidad);
+
+        const getMedal = (index) => {
+          if (index === 0) return "text-yellow-600 font-bold"; // Oro
+          if (index === 1) return "text-gray-600 font-bold"; // Plata
+          if (index === 2) return "text-amber-700 font-bold"; // Bronce
+          return "";
+        };
+
+        return (
+          <>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm border rounded-lg">
+                <thead className="bg-red-600 text-white text-center">
+                  <tr>
+                    <th className="px-3 py-2">#</th>
+                    <th className="px-3 py-2 text-left">Nombre</th>
+                    <th className="px-3 py-2 text-left">Localidad</th>
+                    <th className="px-3 py-2 text-left">Mesa</th>
+                    <th className="px-3 py-2">Teléfono</th>
+                    <th className="px-3 py-2">Rol</th>
+                    <th className="px-3 py-2">Votantes</th>
+                    <th className="px-3 py-2">%</th>
+                  </tr>
+                </thead>
+
+                <tbody className="text-center">
+                  {ordenado.map((p, i) => (
+                    <tr
+                      key={p.ci}
+                      className={`border-b ${
+                        i < 3 ? "bg-red-50" : "hover:bg-gray-50"
+                      }`}
+                    >
+                      <td className={`px-3 py-2 ${getMedal(i)}`}>
+                        {i + 1}
+                      </td>
+                      <td className="px-3 py-2 text-left">
+                        {p.nombre} {p.apellido}
+                      </td>
+                      <td className="px-3 py-2 text-left">{p.localidad}</td>
+                      <td className="px-3 py-2 text-left">{p.mesa}</td>
+                      <td className="px-3 py-2">{p.telefono}</td>
+                      <td className="px-3 py-2 font-medium">{p.rol}</td>
+                      <td className="px-3 py-2 font-semibold text-red-700">
+                        {p.cantidad}
+                      </td>
+                      <td className="px-3 py-2">
+                        {totalGlobal > 0
+                          ? ((p.cantidad / totalGlobal) * 100).toFixed(1)
+                          : "0"}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* TOTAL GLOBAL */}
+            <div className="mt-4 text-right pr-1">
+              <p className="font-bold text-red-700 text-lg">
+                Total global de votantes: {totalGlobal}
+              </p>
+            </div>
+          </>
+        );
+      })()}
+    </div>
+  </div>
+)}
+
 
       {/* LISTAS */}
       <div className="max-w-7xl mx-auto px-4 mb-10">
