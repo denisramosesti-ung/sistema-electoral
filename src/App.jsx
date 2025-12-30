@@ -1166,147 +1166,188 @@ const generarPDF = () => {
 
           <div className="p-6">
             {/* SUPERADMIN */}
-            {currentUser.role === "superadmin" && (
-              <>
-                {estructura.coordinadores.map((coord) => (
-                  <div
-                    key={coord.ci}
-                    className="border rounded-lg mb-3 bg-red-50/40"
-                  >
-                    <div
-                      className="flex items-center justify-between p-4 cursor-pointer"
-                      onClick={() => toggleExpand(coord.ci)}
-                    >
-                      <div className="flex items-center gap-3 flex-1">
-                        {expandedCoords[coord.ci] ? (
-                          <ChevronDown className="w-5 h-5 text-red-600" />
-                        ) : (
-                          <ChevronRight className="w-5 h-5 text-red-600" />
-                        )}
+{currentUser.role === "superadmin" && (
+  <>
+    {estructura.coordinadores.map((coord) => (
+      <div
+        key={coord.ci}
+        className="border rounded-lg mb-3 bg-red-50/40"
+      >
+        <div
+          className="flex items-center justify-between p-4 cursor-pointer"
+          onClick={() => toggleExpand(coord.ci)}
+        >
+          <div className="flex items-center gap-3 flex-1">
+            {expandedCoords[coord.ci] ? (
+              <ChevronDown className="w-5 h-5 text-red-600" />
+            ) : (
+              <ChevronRight className="w-5 h-5 text-red-600" />
+            )}
 
-                        <div>
-                          <p className="font-semibold text-gray-800">
-                            {coord.nombre} {coord.apellido}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            CI: {coord.ci} — Coordinador
-                          </p>
-                          {coord.telefono && (
-                            <p className="text-xs text-gray-500">
-                              Tel: {coord.telefono}
-                            </p>
-                          )}
-                          {coord.loginCode && (
-                            <p className="text-xs text-gray-500">
-                              Código de acceso: {coord.loginCode}
-                            </p>
-                          )}
-                          {coord.localidad && coord.mesa && (
-                            <p className="text-xs text-gray-500">
-                              {coord.localidad} — Mesa {coord.mesa}
-                            </p>
-                          )}
+            <div>
+              <p className="font-semibold text-gray-800">
+                {coord.nombre} {coord.apellido}
+              </p>
+              <p className="text-sm text-gray-600">
+                CI: {coord.ci} — Coordinador
+              </p>
+              {coord.telefono && (
+                <p className="text-xs text-gray-500">
+                  Tel: {coord.telefono}
+                </p>
+              )}
+              {coord.loginCode && (
+                <p className="text-xs text-gray-500">
+                  Código de acceso: {coord.loginCode}
+                </p>
+              )}
+              {coord.localidad && coord.mesa && (
+                <p className="text-xs text-gray-500">
+                  {coord.localidad} — Mesa {coord.mesa}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col md:flex-row gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                abrirTelefono("coordinador", coord);
+              }}
+              className="px-3 py-2 border-2 border-green-600 text-green-700 rounded-lg text-xs md:text-sm hover:bg-green-50"
+            >
+              Teléfono
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                quitarPersona(coord.ci, "coordinador");
+              }}
+              className="flex items-center gap-1 bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 text-xs md:text-sm"
+            >
+              <Trash2 className="w-4 h-4" />
+              Borrar
+            </button>
+          </div>
+        </div>
+
+        {expandedCoords[coord.ci] && (
+          <div className="bg-white px-4 pb-4">
+            {/* SUBCOORDINADORES DEL COORDINADOR */}
+            {estructura.subcoordinadores
+              .filter((s) => s.coordinadorCI === coord.ci)
+              .map((sub) => (
+                <div
+                  key={sub.ci}
+                  className="border rounded p-3 mb-2 bg-red-50/40"
+                >
+                  <p className="font-semibold text-gray-800">
+                    {sub.nombre} {sub.apellido}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    CI: {sub.ci} — Sub-coordinador
+                  </p>
+                  {sub.telefono && (
+                    <p className="text-xs text-gray-500">
+                      Tel: {sub.telefono}
+                    </p>
+                  )}
+                  {sub.loginCode && (
+                    <p className="text-xs text-gray-500">
+                      Código de acceso: {sub.loginCode}
+                    </p>
+                  )}
+                  {sub.localidad && sub.mesa && (
+                    <p className="text-xs text-gray-500">
+                      {sub.localidad} — Mesa {sub.mesa}
+                    </p>
+                  )}
+
+                  <p className="text-sm font-semibold mt-2">
+                    Votantes
+                  </p>
+
+                  {/* VOTANTES DE ESE SUBCOORDINADOR */}
+                  {estructura.votantes
+                    .filter((v) => v.asignadoPor === sub.ci)
+                    .map((v) => (
+                      <div
+                        key={v.ci}
+                        className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
+                      >
+                        <span>
+                          {v.nombre} {v.apellido} — CI: {v.ci}
+                          {v.localidad ? ` — ${v.localidad}` : ""}
+                          {v.mesa ? ` — Mesa ${v.mesa}` : ""}
+                          {v.telefono ? ` — Tel: ${v.telefono}` : ""}
+                        </span>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => abrirTelefono("votante", v)}
+                            className="px-3 py-1 border-2 border-green-600 text-green-700 rounded-lg text-xs md:text-sm hover:bg-green-50"
+                          >
+                            Teléfono
+                          </button>
+                          <button
+                            onClick={() => quitarPersona(v.ci, "votante")}
+                            className="flex items-center gap-1 bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 text-xs md:text-sm"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Borrar
+                          </button>
                         </div>
                       </div>
+                    ))}
+                </div>
+              ))}
 
-                      <div className="flex flex-col md:flex-row gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            abrirTelefono("coordinador", coord);
-                          }}
-                          className="px-3 py-2 border-2 border-green-600 text-green-700 rounded-lg text-xs md:text-sm hover:bg-green-50"
-                        >
-                          Teléfono
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            quitarPersona(coord.ci, "coordinador");
-                          }}
-                          className="flex items-center gap-1 bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 text-xs md:text-sm"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          Borrar
-                        </button>
-                      </div>
-                    </div>
+            {/* VOTANTES DIRECTOS DEL COORDINADOR */}
+            {estructura.votantes
+              .filter((v) => v.asignadoPor === coord.ci)
+              .map((v) => (
+                <div
+                  key={v.ci}
+                  className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
+                >
+                  <span>
+                    {v.nombre} {v.apellido} — CI: {v.ci}
+                    {v.localidad ? ` — ${v.localidad}` : ""}
+                    {v.mesa ? ` — Mesa ${v.mesa}` : ""}
+                    {v.telefono ? ` — Tel: ${v.telefono}` : ""}
+                  </span>
 
-                    {expandedCoords[coord.ci] && (
-                      <div className="bg-white px-4 pb-4">
-                        {estructura.subcoordinadores
-                          .filter((s) => s.coordinadorCI === coord.ci)
-                          .map((sub) => (
-                            <div
-                              key={sub.ci}
-                              className="border rounded p-3 mb-2 bg-red-50/40"
-                            >
-                              <p className="font-semibold text-gray-800">
-                                {sub.nombre} {sub.apellido}
-                              </p>
-                              <p className="text-sm text-gray-600">
-                                CI: {sub.ci} — Sub-coordinador
-                              </p>
-                              {sub.telefono && (
-                                <p className="text-xs text-gray-500">
-                                  Tel: {sub.telefono}
-                                </p>
-                              )}
-                              {sub.loginCode && (
-                                <p className="text-xs text-gray-500">
-                                  Código de acceso: {sub.loginCode}
-                                </p>
-                              )}
-                              {sub.localidad && sub.mesa && (
-                                <p className="text-xs text-gray-500">
-                                  {sub.localidad} — Mesa {sub.mesa}
-                                </p>
-                              )}
-
-                              <p className="text-sm font-semibold mt-2">
-                                Votantes
-                              </p>
-                              {estructura.votantes
-                                .filter((v) => v.asignadoPor === sub.ci)
-                                .map((v) => (
-                                  <div
-                                    key={v.ci}
-                                    className="bg-white border p-2 mt-2 rounded text-sm"
-                                  >
-                                    {v.nombre} {v.apellido} — CI: {v.ci}
-                                    {v.localidad ? ` — ${v.localidad}` : ""}
-                                    {v.mesa ? ` — Mesa ${v.mesa}` : ""}
-                                    {v.telefono ? ` — Tel: ${v.telefono}` : ""}
-                                  </div>
-                                ))}
-                            </div>
-                          ))}
-
-                        {estructura.votantes
-                          .filter((v) => v.asignadoPor === coord.ci)
-                          .map((v) => (
-                            <div
-                              key={v.ci}
-                              className="bg-white border p-2 mt-2 rounded text-sm"
-                            >
-                              {v.nombre} {v.apellido} — CI: {v.ci}
-                              {v.localidad ? ` — ${v.localidad}` : ""}
-                              {v.mesa ? ` — Mesa ${v.mesa}` : ""}
-                              {v.telefono ? ` — Tel: ${v.telefono}` : ""}
-                            </div>
-                          ))}
-                      </div>
-                    )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => abrirTelefono("votante", v)}
+                      className="px-3 py-1 border-2 border-green-600 text-green-700 rounded-lg text-xs md:text-sm hover:bg-green-50"
+                    >
+                      Teléfono
+                    </button>
+                    <button
+                      onClick={() => quitarPersona(v.ci, "votante")}
+                      className="flex items-center gap-1 bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 text-xs md:text-sm"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Borrar
+                    </button>
                   </div>
-                ))}
+                </div>
+              ))}
+          </div>
+        )}
+      </div>
+    ))}
 
-                {estructura.coordinadores.length === 0 && (
-                  <p className="text-center text-gray-500 py-8">
-                    No hay coordinadores aún.
-                  </p>
-                )}
-              </>
-            )}
+    {estructura.coordinadores.length === 0 && (
+      <p className="text-center text-gray-500 py-8">
+        No hay coordinadores aún.
+      </p>
+    )}
+  </>
+)}
+
 
             {/* COORDINADOR */}
             {currentUser.role === "coordinador" && (
