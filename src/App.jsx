@@ -412,15 +412,26 @@ const handleAgregarPersona = async (persona) => {
       await supabase.from("votantes").delete().eq("asignado_por", ci);
       await supabase.from("subcoordinadores").delete().eq("ci", ci);
     } else if (tipo === "votante") {
-      // Solo eliminar la asignación hecha por el usuario logueado
-      await supabase
-        .from("votantes")
-        .delete()
-        .match({
-          ci: ci,
-          asignado_por: currentUser.ci,
-        });
-    }
+
+  // SUPERADMIN puede eliminar cualquier votante
+  if (currentUser.role === "superadmin") {
+    await supabase
+      .from("votantes")
+      .delete()
+      .eq("ci", ci);
+
+  } else {
+    // Coordinador o Subcoordinador solo eliminan los que agregaron
+    await supabase
+      .from("votantes")
+      .delete()
+      .match({
+        ci: ci,
+        asignado_por: currentUser.ci,
+      });
+  }
+}
+
 
     await recargarEstructura();
     alert("Persona removida correctamente.");
