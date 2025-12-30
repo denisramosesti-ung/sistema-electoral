@@ -741,44 +741,6 @@ const handleAgregarPersona = async (persona) => {
 
   // ======================= DASHBOARD =======================
   const stats = getEstadisticas();
-  // ======================= RANKING DE CAPTACIÓN (SUPERADMIN) =======================
-  const getRankingCaptacion = () => {
-  if (!estructura.votantes.length) return { ranking: [], total: 0 };
-
-  const conteo = {};
-
-  estructura.votantes.forEach((v) => {
-    const key = v.asignadoPor;
-    if (!conteo[key]) conteo[key] = 0;
-    conteo[key]++;
-  });
-
-  const ranking = Object.entries(conteo)
-    .map(([ci, total]) => {
-      const persona =
-        estructura.coordinadores.find((c) => c.ci === ci) ||
-        estructura.subcoordinadores.find((s) => s.ci === ci);
-
-      return {
-        ci,
-        nombre: persona?.nombre || "Desconocido",
-        apellido: persona?.apellido || "",
-        rol:
-          persona &&
-          estructura.coordinadores.some((c) => c.ci === ci)
-            ? "Coordinador"
-            : "Subcoordinador",
-        total,
-      };
-    })
-    .sort((a, b) => b.total - a.total);
-
-  return {
-    ranking,
-    total: estructura.votantes.length,
-  };
-};
-
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -807,7 +769,6 @@ const handleAgregarPersona = async (persona) => {
           </button>
         </div>
       </div>
-      
 
       {/* TARJETAS DE ESTADÍSTICAS */}
       <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -835,7 +796,6 @@ const handleAgregarPersona = async (persona) => {
             </div>
           </>
         )}
-        
 
         {currentUser.role === "coordinador" && (
           <>
@@ -922,7 +882,6 @@ const handleAgregarPersona = async (persona) => {
           Descargar Reporte PDF
         </button>
       </div>
-        
         
 {/* RANKING DE CAPTACIÓN - SOLO SUPERADMIN */}
 {currentUser.role === "superadmin" && (() => {
