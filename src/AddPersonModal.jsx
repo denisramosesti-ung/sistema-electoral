@@ -127,11 +127,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles = [] }) => {
                   <p className="font-semibold text-gray-800">
                     {persona.nombre} {persona.apellido}
                   </p>
-                  <p className="text-sm text-gray-600">
-                    CI: {persona.ci}
-                    {persona.localidad ? ` — ${persona.localidad}` : ""}
-                    {persona.mesa ? ` — Mesa ${persona.mesa}` : ""}
-                  </p>
+                  p className="text-sm text-gray-600"
 
                   {bloqueado && (
                     <p className="text-xs text-red-600 mt-2">

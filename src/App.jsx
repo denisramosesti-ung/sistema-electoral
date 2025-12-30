@@ -443,14 +443,17 @@ const handleAgregarPersona = async (persona) => {
     estructura.votantes.filter((v) => v.asignadoPor === subcoordCI);
 
   // ======================= ESTADÍSTICAS =======================
-  const getEstadisticas = () => {
-    if (currentUser?.role === "superadmin") {
-      return {
-        coordinadores: estructura.coordinadores.length,
-        subcoordinadores: estructura.subcoordinadores.length,
-        votantes: estructura.votantes.length,
-      };
-    }
+  if (currentUser?.role === "superadmin") {
+  const totalAsignados =
+    estructura.coordinadores.length +
+    estructura.subcoordinadores.length +
+    estructura.votantes.length;
+
+  return {
+    coordinadores: estructura.coordinadores.length,
+    subcoordinadores: estructura.subcoordinadores.length,
+    votantes: totalAsignados, // <<< Ahora incluye todos
+  };
 
     if (currentUser?.role === "coordinador") {
       const misSubcoords = getMisSubcoordinadores();
@@ -738,6 +741,44 @@ const handleAgregarPersona = async (persona) => {
 
   // ======================= DASHBOARD =======================
   const stats = getEstadisticas();
+  // ======================= RANKING DE CAPTACIÓN (SUPERADMIN) =======================
+  const getRankingCaptacion = () => {
+  if (!estructura.votantes.length) return { ranking: [], total: 0 };
+
+  const conteo = {};
+
+  estructura.votantes.forEach((v) => {
+    const key = v.asignadoPor;
+    if (!conteo[key]) conteo[key] = 0;
+    conteo[key]++;
+  });
+
+  const ranking = Object.entries(conteo)
+    .map(([ci, total]) => {
+      const persona =
+        estructura.coordinadores.find((c) => c.ci === ci) ||
+        estructura.subcoordinadores.find((s) => s.ci === ci);
+
+      return {
+        ci,
+        nombre: persona?.nombre || "Desconocido",
+        apellido: persona?.apellido || "",
+        rol:
+          persona &&
+          estructura.coordinadores.some((c) => c.ci === ci)
+            ? "Coordinador"
+            : "Subcoordinador",
+        total,
+      };
+    })
+    .sort((a, b) => b.total - a.total);
+
+  return {
+    ranking,
+    total: estructura.votantes.length,
+  };
+};
+
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -755,6 +796,7 @@ const handleAgregarPersona = async (persona) => {
                 : "Sub-coordinador"}
             </p>
           </div>
+          
 
           <button
             onClick={handleLogout}
@@ -765,6 +807,7 @@ const handleAgregarPersona = async (persona) => {
           </button>
         </div>
       </div>
+      
 
       {/* TARJETAS DE ESTADÍSTICAS */}
       <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -792,6 +835,7 @@ const handleAgregarPersona = async (persona) => {
             </div>
           </>
         )}
+        
 
         {currentUser.role === "coordinador" && (
           <>
@@ -878,6 +922,56 @@ const handleAgregarPersona = async (persona) => {
           Descargar Reporte PDF
         </button>
       </div>
+        
+        
+{/* RANKING DE CAPTACIÓN - SOLO SUPERADMIN */}
+{currentUser.role === "superadmin" && (() => {
+  const { ranking, total } = getRankingCaptacion();
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-6 space-y-4">
+      <h2 className="text-lg font-bold text-gray-800">
+        Ranking de Captación
+      </h2>
+
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-red-600 text-white">
+            <tr>
+              <th className="p-2 text-left">#</th>
+              <th className="p-2 text-left">Nombre</th>
+              <th className="p-2 text-left">Rol</th>
+              <th className="p-2 text-center">Votantes</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {ranking.map((item, idx) => (
+              <tr key={item.ci} className="border-b last:border-none">
+                <td className="p-2 font-semibold">{idx + 1}</td>
+                <td className="p-2">
+                  {item.nombre} {item.apellido}
+                </td>
+                <td className="p-2">{item.rol}</td>
+                <td className="p-2 text-center font-bold text-red-600">
+                  {item.total}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="text-right text-gray-700 font-semibold text-sm">
+        Total en toda la red:{" "}
+        <span className="text-red-600 text-lg">
+          {total}
+        </span>
+      </p>
+    </div>
+  );
+})()}
+
 
       {/* BUSCADOR GLOBAL POR CI */}
       <div className="max-w-7xl mx-auto px-4 py-4">
