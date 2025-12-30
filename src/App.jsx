@@ -112,17 +112,28 @@ const mapPadronFields = (padron) => ({
 // ======================= RECARGAR ESTRUCTURA =======================
 const recargarEstructura = async () => {
   try {
-    const { data: coords } = await supabase
+    const { data: coords, error: coordsErr } = await supabase
       .from("coordinadores")
       .select(`
         ci,
         login_code,
         asignado_por_nombre,
         telefono,
-        padron:padron!inner (*)
+        padron!inner (
+          ci,
+          nombre,
+          apellido,
+          seccional,
+          local_votacion,
+          mesa,
+          orden,
+          direccion
+        )
       `);
 
-    const { data: subs } = await supabase
+    if (coordsErr) console.error("Error coords:", coordsErr);
+
+    const { data: subs, error: subsErr } = await supabase
       .from("subcoordinadores")
       .select(`
         ci,
@@ -130,18 +141,40 @@ const recargarEstructura = async () => {
         login_code,
         asignado_por_nombre,
         telefono,
-        padron:padron!inner (*)
+        padron!inner (
+          ci,
+          nombre,
+          apellido,
+          seccional,
+          local_votacion,
+          mesa,
+          orden,
+          direccion
+        )
       `);
 
-    const { data: votos } = await supabase
+    if (subsErr) console.error("Error subs:", subsErr);
+
+    const { data: votos, error: votosErr } = await supabase
       .from("votantes")
       .select(`
         ci,
         asignado_por,
         asignado_por_nombre,
         telefono,
-        padron:padron!inner (*)
+        padron!inner (
+          ci,
+          nombre,
+          apellido,
+          seccional,
+          local_votacion,
+          mesa,
+          orden,
+          direccion
+        )
       `);
+
+    if (votosErr) console.error("Error votos:", votosErr);
 
     setEstructura({
       coordinadores:
@@ -150,7 +183,13 @@ const recargarEstructura = async () => {
           loginCode: x.login_code,
           asignadoPorNombre: x.asignado_por_nombre,
           telefono: x.telefono,
-          padron: x.padron, // Mantener objeto completo
+          nombre: x.padron?.nombre,
+          apellido: x.padron?.apellido,
+          seccional: x.padron?.seccional,
+          local_votacion: x.padron?.local_votacion,
+          mesa: x.padron?.mesa,
+          orden: x.padron?.orden,
+          direccion: x.padron?.direccion,
         })) || [],
 
       subcoordinadores:
@@ -160,7 +199,13 @@ const recargarEstructura = async () => {
           loginCode: x.login_code,
           asignadoPorNombre: x.asignado_por_nombre,
           telefono: x.telefono,
-          padron: x.padron,
+          nombre: x.padron?.nombre,
+          apellido: x.padron?.apellido,
+          seccional: x.padron?.seccional,
+          local_votacion: x.padron?.local_votacion,
+          mesa: x.padron?.mesa,
+          orden: x.padron?.orden,
+          direccion: x.padron?.direccion,
         })) || [],
 
       votantes:
@@ -169,16 +214,22 @@ const recargarEstructura = async () => {
           asignadoPor: x.asignado_por,
           asignadoPorNombre: x.asignado_por_nombre,
           telefono: x.telefono,
-          padron: x.padron,
+          nombre: x.padron?.nombre,
+          apellido: x.padron?.apellido,
+          seccional: x.padron?.seccional,
+          local_votacion: x.padron?.local_votacion,
+          mesa: x.padron?.mesa,
+          orden: x.padron?.orden,
+          direccion: x.padron?.direccion,
         })) || [],
     });
 
-    console.log("Estructura actualizada correctamente.");
-    
+    console.log("Estructura mapeada correctamente");
   } catch (err) {
-    console.error("Error al recargar estructura:", err);
+    console.error("Error al mapear estructura:", err);
   }
 };
+
 
   // ======================= PADRÓN DISPONIBLE =======================
 const getPersonasDisponibles = () => {
