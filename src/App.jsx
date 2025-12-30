@@ -133,32 +133,79 @@ useEffect(() => {
   });
 
   // ======================= RECARGAR ESTRUCTURA =======================
-  const recargarEstructura = async () => {
-    const { data: coords, error: errC } = await supabase
-      .from("coordinadores")
-      .select("*");
-    if (errC) console.error(errC);
+const recargarEstructura = async () => {
+  const { data: coords, error: errC } = await supabase
+    .from("coordinadores")
+    .select(`
+      ci,
+      login_code,
+      asignado_por_nombre,
+      telefono,
+      padron:padron!inner (
+        nombre,
+        apellido,
+        seccional,
+        local_votacion,
+        mesa,
+        orden,
+        direccion
+      )
+    `);
 
-    const { data: subs, error: errS } = await supabase
-      .from("subcoordinadores")
-      .select("*");
-    if (errS) console.error(errS);
+  const { data: subs, error: errS } = await supabase
+    .from("subcoordinadores")
+    .select(`
+      ci,
+      coordinador_ci,
+      login_code,
+      asignado_por_nombre,
+      telefono,
+      padron:padron!inner (
+        nombre,
+        apellido,
+        seccional,
+        local_votacion,
+        mesa,
+        orden,
+        direccion
+      )
+    `);
 
-    const { data: votos, error: errV } = await supabase
-      .from("votantes")
-      .select("*");
-    if (errV) console.error(errV);
+  const { data: votos, error: errV } = await supabase
+    .from("votantes")
+    .select(`
+      ci,
+      asignado_por,
+      asignado_por_nombre,
+      telefono,
+      padron:padron!inner (
+        nombre,
+        apellido,
+        seccional,
+        local_votacion,
+        mesa,
+        orden,
+        direccion
+      )
+    `);
 
-    setEstructura({
-      coordinadores: (coords || []).map(normalizarCoordinador),
-      subcoordinadores: (subs || []).map(normalizarSubcoordinador),
-      votantes: (votos || []).map(normalizarVotante),
-    });
-  };
+  if (errC) console.error(errC);
+  if (errS) console.error(errS);
+  if (errV) console.error(errV);
 
-  useEffect(() => {
-    recargarEstructura();
-  }, []);
+  setEstructura({
+    coordinadores: coords || [],
+    subcoordinadores: subs || [],
+    votantes: votos || [],
+  });
+
+  console.log("Estructura cargada con PADRON", {
+    coordinadores: coords?.length,
+    subcoordinadores: subs?.length,
+    votantes: votos?.length,
+  });
+};
+
 
   // ======================= PADRÓN DISPONIBLE =======================
 const getPersonasDisponibles = () => {
