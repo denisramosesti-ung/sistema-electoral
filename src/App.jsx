@@ -119,7 +119,7 @@ const recargarEstructura = async () => {
         login_code,
         asignado_por_nombre,
         telefono,
-        padron!inner (*)
+        padron:padron!inner (*)
       `);
 
     const { data: subs } = await supabase
@@ -130,7 +130,7 @@ const recargarEstructura = async () => {
         login_code,
         asignado_por_nombre,
         telefono,
-        padron!inner (*)
+        padron:padron!inner (*)
       `);
 
     const { data: votos } = await supabase
@@ -140,7 +140,7 @@ const recargarEstructura = async () => {
         asignado_por,
         asignado_por_nombre,
         telefono,
-        padron!inner (*)
+        padron:padron!inner (*)
       `);
 
     setEstructura({
@@ -150,8 +150,9 @@ const recargarEstructura = async () => {
           loginCode: x.login_code,
           asignadoPorNombre: x.asignado_por_nombre,
           telefono: x.telefono,
-          ...mapPadronFields(x.padron),
+          padron: x.padron, // Mantener objeto completo
         })) || [],
+
       subcoordinadores:
         subs?.map((x) => ({
           ci: x.ci,
@@ -159,21 +160,23 @@ const recargarEstructura = async () => {
           loginCode: x.login_code,
           asignadoPorNombre: x.asignado_por_nombre,
           telefono: x.telefono,
-          ...mapPadronFields(x.padron),
+          padron: x.padron,
         })) || [],
+
       votantes:
         votos?.map((x) => ({
           ci: x.ci,
           asignadoPor: x.asignado_por,
           asignadoPorNombre: x.asignado_por_nombre,
           telefono: x.telefono,
-          ...mapPadronFields(x.padron),
+          padron: x.padron,
         })) || [],
     });
 
-    console.log("Estructura mapeada correctamente");
+    console.log("Estructura actualizada correctamente.");
+    
   } catch (err) {
-    console.error("Error al mapear estructura:", err);
+    console.error("Error al recargar estructura:", err);
   }
 };
 
@@ -644,6 +647,7 @@ const generarPDF = () => {
       };
 
       setCurrentUser(superUser);
+      await recargarEstructura();
       localStorage.setItem("currentUser", JSON.stringify(superUser));
       setLoginPass("");
       return;
@@ -659,6 +663,7 @@ const generarPDF = () => {
       const c = normalizarCoordinador(coordRes.data[0]);
       const user = { ...c, role: "coordinador" };
       setCurrentUser(user);
+      await recargarEstructura();
       localStorage.setItem("currentUser", JSON.stringify(user));
       return;
     }
@@ -673,6 +678,7 @@ const generarPDF = () => {
       const s = normalizarSubcoordinador(subRes.data[0]);
       const user = { ...s, role: "subcoordinador" };
       setCurrentUser(user);
+      await recargarEstructura();
       localStorage.setItem("currentUser", JSON.stringify(user));
       return;
     }
