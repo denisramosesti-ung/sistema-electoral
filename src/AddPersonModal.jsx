@@ -6,7 +6,6 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
 
-  // Si el modal se cierra, reseteamos búsqueda y página
   useEffect(() => {
     if (!show) {
       setSearchTerm("");
@@ -14,31 +13,38 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
     }
   }, [show]);
 
-  // Cada vez que cambia el texto de búsqueda, volvemos a la página 1
   useEffect(() => {
     setPage(1);
   }, [searchTerm]);
 
   if (!show) return null;
 
-  const term = searchTerm.trim().toLowerCase();
+  const term = searchTerm.trim();
 
-  // FILTRADO + ORDEN
+  // Normalizador: elimina tildes y mayúsculas
+  const normalize = (text) =>
+    (text || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+  // FILTRADO + BÚSQUEDA AVANZADA
   const filtered = term
     ? disponibles
         .filter((p) => {
-          const ciTxt = (p.ci ?? "").toString().toLowerCase();
-          const name = (p.nombre ?? "").toLowerCase();
-          const lastname = (p.apellido ?? "").toLowerCase();
-          return (
-            ciTxt.includes(term) ||
-            name.includes(term) ||
-            lastname.includes(term)
-          );
+          const ciStr = (p.ci ?? "").toString();
+          const fullName = `${p.nombre ?? ""} ${p.apellido ?? ""}`;
+
+          const fullNorm = normalize(fullName);
+          const words = normalize(term).split(" ").filter(Boolean);
+
+          if (ciStr === term) return true;
+
+          return words.every((w) => fullNorm.includes(w));
         })
         .sort((a, b) => {
-          const exactA = a.ci?.toString() === searchTerm;
-          const exactB = b.ci?.toString() === searchTerm;
+          const exactA = a.ci?.toString() === term;
+          const exactB = b.ci?.toString() === term;
           if (exactA && !exactB) return -1;
           if (!exactA && exactB) return 1;
           return (a.nombre || "").localeCompare(b.nombre || "");
@@ -46,10 +52,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
     : [];
 
   const pageSize = 20;
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filtered.length / pageSize)
-  );
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const startIdx = (page - 1) * pageSize;
   const pageData = filtered.slice(startIdx, startIdx + pageSize);
 
@@ -63,13 +66,11 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-3xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
+        
         {/* HEADER */}
         <div className="p-4 border-b bg-red-600 text-white flex justify-between items-center">
           <h3 className="text-lg font-bold">{titulo}</h3>
-          <button
-            onClick={onClose}
-            className="hover:text-gray-200 transition"
-          >
+          <button onClick={onClose} className="hover:text-gray-200 transition">
             <X className="w-6 h-6" />
           </button>
         </div>
@@ -94,7 +95,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           )}
         </div>
 
-        {/* LISTA DE RESULTADOS */}
+        {/* LISTA */}
         <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2">
           {!searchTerm ? (
             <p className="text-center text-gray-500 py-6">
@@ -126,8 +127,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
                   <p className="text-sm text-gray-600">
                     CI: {persona.ci}
                     {persona.localidad && ` — ${persona.localidad}`}
-                    {persona.seccional &&
-                      ` — Seccional ${persona.seccional}`}
+                    {persona.seccional && ` — Seccional ${persona.seccional}`}
                     {persona.mesa && ` — Mesa ${persona.mesa}`}
                   </p>
 
@@ -136,8 +136,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
                       Ya asignado
                       {persona.asignadoPorNombre &&
                         ` por ${persona.asignadoPorNombre}`}
-                      {persona.asignadoRol &&
-                        ` (${persona.asignadoRol})`}
+                      {persona.asignadoRol && ` (${persona.asignadoRol})`}
                     </p>
                   )}
                 </div>
@@ -161,9 +160,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
             </span>
             <button
               disabled={page === totalPages}
-              onClick={() =>
-                setPage((p) => Math.min(totalPages, p + 1))
-              }
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               className="px-3 py-1 border rounded disabled:opacity-40"
             >
               Siguiente ▶
