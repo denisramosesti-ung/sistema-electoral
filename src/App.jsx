@@ -95,117 +95,87 @@ useEffect(() => {
 
 
   // ======================= HELPERS =======================
-  const generarCodigo = () =>
-    Math.random().toString(36).substring(2, 8).toUpperCase();
+const generarCodigo = () =>
+  Math.random().toString(36).substring(2, 8).toUpperCase();
 
-  const normalizarCoordinador = (row) => ({
-    ci: row.ci,
-    nombre: row.nombre,
-    apellido: row.apellido,
-    localidad: row.localidad,
-    mesa: row.mesa,
-    loginCode: row.login_code,
-    asignadoPorNombre: row.asignado_por_nombre,
-    telefono: row.telefono || null,
-  });
+// Normalizar datos provenientes del join
+const mapPadronFields = (padron) => ({
+  nombre: padron?.nombre || "-",
+  apellido: padron?.apellido || "-",
+  seccional: padron?.seccional || "-",
+  local_votacion: padron?.local_votacion || "-",
+  mesa: padron?.mesa || "-",
+  orden: padron?.orden || "-",
+  direccion: padron?.direccion || "-",
+});
 
-  const normalizarSubcoordinador = (row) => ({
-    ci: row.ci,
-    nombre: row.nombre,
-    apellido: row.apellido,
-    localidad: row.localidad,
-    mesa: row.mesa,
-    coordinadorCI: row.coordinador_ci,
-    loginCode: row.login_code,
-    asignadoPorNombre: row.asignado_por_nombre,
-    telefono: row.telefono || null,
-  });
-
-  const normalizarVotante = (row) => ({
-    ci: row.ci,
-    nombre: row.nombre,
-    apellido: row.apellido,
-    localidad: row.localidad,
-    mesa: row.mesa,
-    asignadoPor: row.asignado_por,
-    asignadoPorNombre: row.asignado_por_nombre,
-    telefono: row.telefono || null,
-  });
-
-  // ======================= RECARGAR ESTRUCTURA =======================
+// ======================= RECARGAR ESTRUCTURA =======================
 const recargarEstructura = async () => {
-  const { data: coords, error: errC } = await supabase
-    .from("coordinadores")
-    .select(`
-      ci,
-      login_code,
-      asignado_por_nombre,
-      telefono,
-      padron:padron!inner (
-        nombre,
-        apellido,
-        seccional,
-        local_votacion,
-        mesa,
-        orden,
-        direccion
-      )
-    `);
+  try {
+    const { data: coords } = await supabase
+      .from("coordinadores")
+      .select(`
+        ci,
+        login_code,
+        asignado_por_nombre,
+        telefono,
+        padron!inner (*)
+      `);
 
-  const { data: subs, error: errS } = await supabase
-    .from("subcoordinadores")
-    .select(`
-      ci,
-      coordinador_ci,
-      login_code,
-      asignado_por_nombre,
-      telefono,
-      padron:padron!inner (
-        nombre,
-        apellido,
-        seccional,
-        local_votacion,
-        mesa,
-        orden,
-        direccion
-      )
-    `);
+    const { data: subs } = await supabase
+      .from("subcoordinadores")
+      .select(`
+        ci,
+        coordinador_ci,
+        login_code,
+        asignado_por_nombre,
+        telefono,
+        padron!inner (*)
+      `);
 
-  const { data: votos, error: errV } = await supabase
-    .from("votantes")
-    .select(`
-      ci,
-      asignado_por,
-      asignado_por_nombre,
-      telefono,
-      padron:padron!inner (
-        nombre,
-        apellido,
-        seccional,
-        local_votacion,
-        mesa,
-        orden,
-        direccion
-      )
-    `);
+    const { data: votos } = await supabase
+      .from("votantes")
+      .select(`
+        ci,
+        asignado_por,
+        asignado_por_nombre,
+        telefono,
+        padron!inner (*)
+      `);
 
-  if (errC) console.error(errC);
-  if (errS) console.error(errS);
-  if (errV) console.error(errV);
+    setEstructura({
+      coordinadores:
+        coords?.map((x) => ({
+          ci: x.ci,
+          loginCode: x.login_code,
+          asignadoPorNombre: x.asignado_por_nombre,
+          telefono: x.telefono,
+          ...mapPadronFields(x.padron),
+        })) || [],
+      subcoordinadores:
+        subs?.map((x) => ({
+          ci: x.ci,
+          coordinadorCI: x.coordinador_ci,
+          loginCode: x.login_code,
+          asignadoPorNombre: x.asignado_por_nombre,
+          telefono: x.telefono,
+          ...mapPadronFields(x.padron),
+        })) || [],
+      votantes:
+        votos?.map((x) => ({
+          ci: x.ci,
+          asignadoPor: x.asignado_por,
+          asignadoPorNombre: x.asignado_por_nombre,
+          telefono: x.telefono,
+          ...mapPadronFields(x.padron),
+        })) || [],
+    });
 
-  setEstructura({
-    coordinadores: coords || [],
-    subcoordinadores: subs || [],
-    votantes: votos || [],
-  });
-
-  console.log("Estructura cargada con PADRON", {
-    coordinadores: coords?.length,
-    subcoordinadores: subs?.length,
-    votantes: votos?.length,
-  });
+    console.log("Estructura mapeada correctamente");
+  } catch (err) {
+    console.error("Error al mapear estructura:", err);
+  }
 };
-
 
   // ======================= PADRÓN DISPONIBLE =======================
 const getPersonasDisponibles = () => {
@@ -970,15 +940,35 @@ const generarPDF = () => {
     </p>
 
     {/* Datos generales */}
-    {searchResult.data && (
-      <>
-        <p><b>Nombre:</b> {searchResult.data.nombre} {searchResult.data.apellido}</p>
-        <p><b>CI:</b> {searchResult.data.ci}</p>
-        <p><b>Localidad:</b> {searchResult.data.localidad || "-"}</p>
-        <p><b>Mesa:</b> {searchResult.data.mesa || "-"}</p>
-        <p><b>Teléfono:</b> {searchResult.data.telefono || "-"}</p>
-      </>
+{searchResult.data && (
+  <>
+    <p><b>Nombre:</b> {searchResult.data.nombre} {searchResult.data.apellido}</p>
+
+    {searchResult.data.seccional && (
+      <p><b>Seccional:</b> {searchResult.data.seccional}</p>
     )}
+
+    {searchResult.data.local_votacion && (
+      <p><b>Local de Votación:</b> {searchResult.data.local_votacion}</p>
+    )}
+
+    {searchResult.data.mesa && (
+      <p><b>Mesa:</b> {searchResult.data.mesa}</p>
+    )}
+
+    {searchResult.data.orden && (
+      <p><b>Orden:</b> {searchResult.data.orden}</p>
+    )}
+
+    {searchResult.data.direccion && (
+      <p><b>Dirección domicilio:</b> {searchResult.data.direccion}</p>
+    )}
+
+    <p><b>CI:</b> {searchResult.data.ci}</p>
+    <p><b>Teléfono:</b> {searchResult.data.telefono || "-"}</p>
+  </>
+)}
+
 
     {/* Asignado Por */}
     {searchResult.tipo === "votante" && searchResult.asignadoPor && (
@@ -1183,11 +1173,27 @@ const generarPDF = () => {
                   Código de acceso: {coord.loginCode}
                 </p>
               )}
-              {coord.localidad && coord.mesa && (
-                <p className="text-xs text-gray-500">
-                  {coord.localidad} — Mesa {coord.mesa}
-                </p>
-              )}
+              <p className="text-xs text-gray-500">
+  {coord.padron?.seccional && (
+    <>Seccional {coord.padron.seccional} • </>
+  )}
+  {coord.padron?.local_votacion && (
+    <>{coord.padron.local_votacion} • </>
+  )}
+  {coord.padron?.mesa && (
+    <>Mesa {coord.padron.mesa} • </>
+  )}
+  {coord.padron?.orden && (
+    <>Orden {coord.padron.orden}</>
+  )}
+</p>
+
+{coord.padron?.direccion && (
+  <p className="text-xs text-gray-500">
+    Domicilio: {coord.padron.direccion}
+  </p>
+)}
+
             </div>
           </div>
 
@@ -1240,11 +1246,27 @@ const generarPDF = () => {
                       Código de acceso: {sub.loginCode}
                     </p>
                   )}
-                  {sub.localidad && sub.mesa && (
-                    <p className="text-xs text-gray-500">
-                      {sub.localidad} — Mesa {sub.mesa}
-                    </p>
-                  )}
+                  <p className="text-xs text-gray-500">
+  {sub.padron?.seccional && (
+    <>Seccional {sub.padron.seccional} • </>
+  )}
+  {sub.padron?.local_votacion && (
+    <>{sub.padron.local_votacion} • </>
+  )}
+  {sub.padron?.mesa && (
+    <>Mesa {sub.padron.mesa} • </>
+  )}
+  {sub.padron?.orden && (
+    <>Orden {sub.padron.orden}</>
+  )}
+</p>
+
+{sub.padron?.direccion && (
+  <p className="text-xs text-gray-500">
+    Domicilio: {sub.padron.direccion}
+  </p>
+)}
+
 
                   <p className="text-sm font-semibold mt-2">
                     Votantes
@@ -1260,8 +1282,12 @@ const generarPDF = () => {
                       >
                         <span>
                           {v.nombre} {v.apellido} — CI: {v.ci}
-                          {v.localidad ? ` — ${v.localidad}` : ""}
-                          {v.mesa ? ` — Mesa ${v.mesa}` : ""}
+                          {v.padron?.seccional ? ` — Seccional ${v.padron.seccional}` : ""}
+                          {v.padron?.local_votacion ? ` — ${v.padron.local_votacion}` : ""}
+                          {v.padron?.mesa ? ` — Mesa ${v.padron.mesa}` : ""}
+                          {v.padron?.orden ? ` — Orden ${v.padron.orden}` : ""}
+                          {v.padron?.direccion ? ` — ${v.padron.direccion}` : ""}
+
                           {v.telefono ? ` — Tel: ${v.telefono}` : ""}
                         </span>
 
