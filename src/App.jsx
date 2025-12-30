@@ -375,7 +375,7 @@ const buscarPorCI = (input) => {
     await recargarEstructura();
   };
 
-  // ======================= AGREGAR PERSONA =======================
+// ======================= AGREGAR PERSONA =======================
 const handleAgregarPersona = async (persona) => {
   if (!modalType) {
     alert("Seleccione un tipo de asignación.");
@@ -384,15 +384,7 @@ const handleAgregarPersona = async (persona) => {
 
   const ciStr = persona.ci.toString();
 
-  const yaEsCoord = estructura.coordinadores.some((c) => c.ci === ciStr);
-  const yaEsSub = estructura.subcoordinadores.some((s) => s.ci === ciStr);
-  const yaEsVot = estructura.votantes.some((v) => v.ci === ciStr);
-
-  if (yaEsCoord || yaEsSub || yaEsVot) {
-    alert("Esta persona ya fue asignada.");
-    return;
-  }
-
+  // Determinar tabla destino
   let tabla = "";
   let data = {};
 
@@ -400,10 +392,6 @@ const handleAgregarPersona = async (persona) => {
     tabla = "coordinadores";
     data = {
       ci: ciStr,
-      nombre: persona.nombre,
-      apellido: persona.apellido,
-      localidad: persona.localidad || null,
-      mesa: persona.mesa ? persona.mesa.toString() : null,
       login_code: ciStr,
       asignado_por_nombre: "Superadmin",
       telefono: null,
@@ -414,10 +402,6 @@ const handleAgregarPersona = async (persona) => {
     tabla = "subcoordinadores";
     data = {
       ci: ciStr,
-      nombre: persona.nombre,
-      apellido: persona.apellido,
-      localidad: persona.localidad || null,
-      mesa: persona.mesa ? persona.mesa.toString() : null,
       coordinador_ci: currentUser.ci.toString(),
       login_code: ciStr,
       asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
@@ -429,10 +413,6 @@ const handleAgregarPersona = async (persona) => {
     tabla = "votantes";
     data = {
       ci: ciStr,
-      nombre: persona.nombre,
-      apellido: persona.apellido,
-      localidad: persona.localidad || null,
-      mesa: persona.mesa ? persona.mesa.toString() : null,
       asignado_por: currentUser.ci.toString(),
       asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
       telefono: null,
