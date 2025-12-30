@@ -981,17 +981,18 @@ const generarPDF = () => {
   </div>
 )}
 
-              {/* === NO EXISTE NI EN PADRÓN === */}
-              {searchResult.tipo === "noExiste" && (
-                <p className="text-gray-600">
-                  Este CI <b>{searchResult.data.ci}</b> no pertenece al padrón.
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+{/* === NO EXISTE NI EN PADRÓN === */}
+{searchResult && searchResult.tipo === "noExiste" && (
+  <p className="text-gray-600">
+    Este CI <b>{searchResult.data.ci}</b> no pertenece al padrón.
+  </p>
+)}
 
+    </div> {/* Cierra el contenedor del resultado */}
+     {/* Cierra searchResult */}
+</div> {/* Cierra contenedor del buscador */}
+
+  
 
 {/* RANKING DE CAPTACIÓN (SOLO SUPERADMIN) */}
 {currentUser.role === "superadmin" && (
