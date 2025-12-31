@@ -684,7 +684,7 @@ const handleLogin = async () => {
     return;
   }
 
-  // =============== LOGIN COORDINADOR ===============
+  // =============== LOGIN COORDINADOR =============== 
   const { data: coord, error: coordErr } = await supabase
     .from("coordinadores")
     .select("ci, login_code, asignado_por_nombre, telefono")
@@ -726,7 +726,7 @@ const handleLogin = async () => {
     return;
   }
 
-  // =============== LOGIN SUBCOORDINADOR ===============
+  // =============== LOGIN SUBCOORDINADOR =============== 
   const { data: sub, error: subErr } = await supabase
     .from("subcoordinadores")
     .select("ci, login_code, asignado_por_nombre, telefono")
@@ -768,9 +768,20 @@ const handleLogin = async () => {
     return;
   }
 
-  // Si no es superadmin, ni coordinador, ni subcoordinador
   alert("Usuario no encontrado. Verifique el código.");
 };
+
+// ======================= LOGOUT =======================
+const handleLogout = () => {
+  setCurrentUser(null);
+  setLoginID("");
+  setLoginPass("");
+  setExpandedCoords({});
+  setSearchCI("");
+  setSearchResult(null);
+  localStorage.removeItem("currentUser");
+};
+
 
   // ======================= LOGIN SCREEN =======================
   if (!currentUser) {
