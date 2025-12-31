@@ -656,14 +656,14 @@ const generarPDF = () => {
 };
 
 
-  // ======================= LOGIN =======================
+ // ======================= LOGIN =======================
 const handleLogin = async () => {
   if (!loginID.trim()) {
     alert("Ingrese su Código de acceso.");
     return;
   }
 
-  // ========= SUPERADMIN =========
+  // SUPERADMIN
   if (loginID === "4630621") {
     if (loginPass !== "12345") {
       alert("Contraseña incorrecta para el Super Administrador.");
@@ -678,47 +678,43 @@ const handleLogin = async () => {
     };
 
     setCurrentUser(superUser);
-    localStorage.setItem("currentUser", JSON.stringify(superUser));
     await recargarEstructura();
+    localStorage.setItem("currentUser", JSON.stringify(superUser));
     setLoginPass("");
     return;
   }
 
-  // ========= LOGIN COORDINADOR =========
-  const { data: coord, error: coordError } = await supabase
+  // =============== LOGIN COORDINADOR ===============
+  const { data: coord, error: coordErr } = await supabase
     .from("coordinadores")
-    .select(`
-      ci,
-      login_code,
-      asignado_por_nombre,
-      telefono,
-      padron (
-        nombre,
-        apellido,
-        seccional,
-        local_votacion,
-        mesa,
-        orden,
-        direccion
-      )
-    `)
+    .select("ci, login_code, asignado_por_nombre, telefono")
     .eq("login_code", loginID.trim())
     .maybeSingle();
 
-  if (coordError) {
-    console.error("Error login coordinador:", coordError);
+  if (coordErr) {
+    console.error("Error buscando coordinador:", coordErr);
   }
 
   if (coord) {
+    const { data: pad, error: padErr } = await supabase
+      .from("padron")
+      .select("*")
+      .eq("ci", coord.ci)
+      .maybeSingle();
+
+    if (padErr) {
+      console.error("Error cargando datos de padrón (coord):", padErr);
+    }
+
     const user = {
       ci: coord.ci,
-      nombre: coord.padron?.nombre || "(Sin nombre)",
-      apellido: coord.padron?.apellido || "",
-      seccional: coord.padron?.seccional,
-      local_votacion: coord.padron?.local_votacion,
-      mesa: coord.padron?.mesa,
-      orden: coord.padron?.orden,
-      direccion: coord.padron?.direccion,
+      nombre: pad?.nombre || "(Sin nombre)",
+      apellido: pad?.apellido || "",
+      seccional: pad?.seccional,
+      local_votacion: pad?.local_votacion,
+      mesa: pad?.mesa,
+      orden: pad?.orden,
+      direccion: pad?.direccion,
       telefono: coord.telefono || null,
       role: "coordinador",
     };
@@ -726,44 +722,41 @@ const handleLogin = async () => {
     setCurrentUser(user);
     localStorage.setItem("currentUser", JSON.stringify(user));
     await recargarEstructura();
+    setLoginPass("");
     return;
   }
 
-  // ========= LOGIN SUBCOORDINADOR =========
-  const { data: sub, error: subError } = await supabase
+  // =============== LOGIN SUBCOORDINADOR ===============
+  const { data: sub, error: subErr } = await supabase
     .from("subcoordinadores")
-    .select(`
-      ci,
-      login_code,
-      asignado_por_nombre,
-      telefono,
-      padron (
-        nombre,
-        apellido,
-        seccional,
-        local_votacion,
-        mesa,
-        orden,
-        direccion
-      )
-    `)
+    .select("ci, login_code, asignado_por_nombre, telefono")
     .eq("login_code", loginID.trim())
     .maybeSingle();
 
-  if (subError) {
-    console.error("Error login subcoordinador:", subError);
+  if (subErr) {
+    console.error("Error buscando subcoordinador:", subErr);
   }
 
   if (sub) {
+    const { data: pad, error: padErr } = await supabase
+      .from("padron")
+      .select("*")
+      .eq("ci", sub.ci)
+      .maybeSingle();
+
+    if (padErr) {
+      console.error("Error cargando datos de padrón (sub):", padErr);
+    }
+
     const user = {
       ci: sub.ci,
-      nombre: sub.padron?.nombre || "(Sin nombre)",
-      apellido: sub.padron?.apellido || "",
-      seccional: sub.padron?.seccional,
-      local_votacion: sub.padron?.local_votacion,
-      mesa: sub.padron?.mesa,
-      orden: sub.padron?.orden,
-      direccion: sub.padron?.direccion,
+      nombre: pad?.nombre || "(Sin nombre)",
+      apellido: pad?.apellido || "",
+      seccional: pad?.seccional,
+      local_votacion: pad?.local_votacion,
+      mesa: pad?.mesa,
+      orden: pad?.orden,
+      direccion: pad?.direccion,
       telefono: sub.telefono || null,
       role: "subcoordinador",
     };
@@ -771,10 +764,11 @@ const handleLogin = async () => {
     setCurrentUser(user);
     localStorage.setItem("currentUser", JSON.stringify(user));
     await recargarEstructura();
+    setLoginPass("");
     return;
   }
 
-  // ========= SI NO SE ENCONTRÓ NADA =========
+  // Si no es superadmin, ni coordinador, ni subcoordinador
   alert("Usuario no encontrado. Verifique el código.");
 };
 
@@ -1304,6 +1298,8 @@ const handleLogin = async () => {
 
         {expandedCoords[coord.ci] && (
           <div className="bg-white px-4 pb-4">
+
+
             {/* SUBCOORDINADORES DEL COORDINADOR */}
             {estructura.subcoordinadores
               .filter((s) => s.coordinadorCI === coord.ci)
@@ -1329,25 +1325,18 @@ const handleLogin = async () => {
                     </p>
                   )}
                   <p className="text-xs text-gray-500">
-  {sub.padron?.seccional && (
-    <>Seccional {sub.padron.seccional} • </>
-  )}
-  {sub.padron?.local_votacion && (
-    <>{sub.padron.local_votacion} • </>
-  )}
-  {sub.padron?.mesa && (
-    <>Mesa {sub.padron.mesa} • </>
-  )}
-  {sub.padron?.orden && (
-    <>Orden {sub.padron.orden}</>
-  )}
+  {sub.seccional && <>Seccional {sub.seccional} • </>}
+  {sub.local_votacion && <>{sub.local_votacion} • </>}
+  {sub.mesa && <>Mesa {sub.mesa} • </>}
+  {sub.orden && <>Orden {sub.orden}</>}
 </p>
 
-{sub.padron?.direccion && (
+{sub.direccion && (
   <p className="text-xs text-gray-500">
-    Domicilio: {sub.padron.direccion}
+    Domicilio: {sub.direccion}
   </p>
 )}
+
 
 
                   <p className="text-sm font-semibold mt-2">
