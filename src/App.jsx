@@ -663,7 +663,7 @@ const handleLogin = async () => {
     return;
   }
 
-  // SUPERADMIN
+  // ========= SUPERADMIN =========
   if (loginID === "4630621") {
     if (loginPass !== "12345") {
       alert("Contraseña incorrecta para el Super Administrador.");
@@ -685,29 +685,41 @@ const handleLogin = async () => {
   }
 
   // ========= LOGIN COORDINADOR =========
-  const { data: coordData } = await supabase
+  const { data: coord, error: coordError } = await supabase
     .from("coordinadores")
-    .select("ci, login_code, asignado_por_nombre, telefono")
+    .select(`
+      ci,
+      login_code,
+      asignado_por_nombre,
+      telefono,
+      padron (
+        nombre,
+        apellido,
+        seccional,
+        local_votacion,
+        mesa,
+        orden,
+        direccion
+      )
+    `)
     .eq("login_code", loginID.trim())
-    .maybeSingle();  
+    .maybeSingle();
 
-  if (coordData) {
-    const { data: pad } = await supabase
-      .from("padron")
-      .select("*")
-      .eq("ci", coordData.ci)
-      .maybeSingle();
+  if (coordError) {
+    console.error("Error login coordinador:", coordError);
+  }
 
+  if (coord) {
     const user = {
-      ci: coordData.ci,
-      nombre: pad?.nombre || "(Sin nombre)",
-      apellido: pad?.apellido || "",
-      seccional: pad?.seccional,
-      local_votacion: pad?.local_votacion,
-      mesa: pad?.mesa,
-      orden: pad?.orden,
-      direccion: pad?.direccion,
-      telefono: coordData.telefono || null,
+      ci: coord.ci,
+      nombre: coord.padron?.nombre || "(Sin nombre)",
+      apellido: coord.padron?.apellido || "",
+      seccional: coord.padron?.seccional,
+      local_votacion: coord.padron?.local_votacion,
+      mesa: coord.padron?.mesa,
+      orden: coord.padron?.orden,
+      direccion: coord.padron?.direccion,
+      telefono: coord.telefono || null,
       role: "coordinador",
     };
 
@@ -718,29 +730,41 @@ const handleLogin = async () => {
   }
 
   // ========= LOGIN SUBCOORDINADOR =========
-  const { data: subData } = await supabase
+  const { data: sub, error: subError } = await supabase
     .from("subcoordinadores")
-    .select("ci, login_code, asignado_por_nombre, telefono")
+    .select(`
+      ci,
+      login_code,
+      asignado_por_nombre,
+      telefono,
+      padron (
+        nombre,
+        apellido,
+        seccional,
+        local_votacion,
+        mesa,
+        orden,
+        direccion
+      )
+    `)
     .eq("login_code", loginID.trim())
     .maybeSingle();
 
-  if (subData) {
-    const { data: pad } = await supabase
-      .from("padron")
-      .select("*")
-      .eq("ci", subData.ci)
-      .maybeSingle();
+  if (subError) {
+    console.error("Error login subcoordinador:", subError);
+  }
 
+  if (sub) {
     const user = {
-      ci: subData.ci,
-      nombre: pad?.nombre || "(Sin nombre)",
-      apellido: pad?.apellido || "",
-      seccional: pad?.seccional,
-      local_votacion: pad?.local_votacion,
-      mesa: pad?.mesa,
-      orden: pad?.orden,
-      direccion: pad?.direccion,
-      telefono: subData.telefono || null,
+      ci: sub.ci,
+      nombre: sub.padron?.nombre || "(Sin nombre)",
+      apellido: sub.padron?.apellido || "",
+      seccional: sub.padron?.seccional,
+      local_votacion: sub.padron?.local_votacion,
+      mesa: sub.padron?.mesa,
+      orden: sub.padron?.orden,
+      direccion: sub.padron?.direccion,
+      telefono: sub.telefono || null,
       role: "subcoordinador",
     };
 
@@ -750,10 +774,9 @@ const handleLogin = async () => {
     return;
   }
 
-  // SI NINGUNO COINCIDIÓ
+  // ========= SI NO SE ENCONTRÓ NADA =========
   alert("Usuario no encontrado. Verifique el código.");
 };
-
 
   // ======================= LOGIN SCREEN =======================
   if (!currentUser) {
