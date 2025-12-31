@@ -657,112 +657,103 @@ const generarPDF = () => {
 
 
   // ======================= LOGIN =======================
-  const handleLogin = async () => {
-    if (!loginID.trim()) {
-      alert("Ingrese su Código de acceso.");
+const handleLogin = async () => {
+  if (!loginID.trim()) {
+    alert("Ingrese su Código de acceso.");
+    return;
+  }
+
+  // SUPERADMIN
+  if (loginID === "4630621") {
+    if (loginPass !== "12345") {
+      alert("Contraseña incorrecta para el Super Administrador.");
       return;
     }
 
-    // SUPERADMIN
-    if (loginID === "4630621") {
-      if (loginPass !== "12345") {
-        alert("Contraseña incorrecta para el Super Administrador.");
-        return;
-      }
+    const superUser = {
+      ci: "4630621",
+      nombre: "Denis",
+      apellido: "Ramos",
+      role: "superadmin",
+    };
 
-      const superUser = {
-        ci: "4630621",
-        nombre: "Denis",
-        apellido: "Ramos",
-        role: "superadmin",
-      };
-
-      setCurrentUser(superUser);
-      await recargarEstructura();
-      localStorage.setItem("currentUser", JSON.stringify(superUser));
-      setLoginPass("");
-      return;
-    }
-
-// COORDINADOR
-const coordRes = await supabase
-  .from("coordinadores")
-  .select(`
-    ci,
-    login_code,
-    asignado_por_nombre,
-    telefono,
-    padron!inner (
-      ci,
-      nombre,
-      apellido,
-      seccional,
-      local_votacion,
-      mesa,
-      orden,
-      direccion
-    )
-  `)
-  .eq("login_code", loginID.trim())
-  .maybeSingle();
-
-if (coordRes) {
-  const pad = coordRes.padron || {};
-
-  const user = {
-    ci: coordRes.ci,
-    nombre: pad.nombre || "(Sin nombre)",
-    apellido: pad.apellido || "",
-    seccional: pad.seccional || "-",
-    local_votacion: pad.local_votacion || "-",
-    mesa: pad.mesa || "-",
-    orden: pad.orden || "-",
-    direccion: pad.direccion || "-",
-    telefono: coordRes.telefono || "-",
-    role: "coordinador",
-  };
-
-  setCurrentUser(user);
-  localStorage.setItem("currentUser", JSON.stringify(user));
-  await recargarEstructura();
-  return;
-}
-
-
-    // SUBCOORDINADOR
-    const subRes = await supabase
-      .from("subcoordinadores")
-      .select("*")
-      .eq("login_code", loginID.trim());
-
-    if (subRes.data && subRes.data.length > 0) {
-      const s = normalizarSubcoordinador(subRes.data[0]);
-      const user = { ...s, role: "subcoordinador" };
-      setCurrentUser(user);
-      await recargarEstructura();
-      localStorage.setItem("currentUser", JSON.stringify(user));
-      return;
-    }
-
-    alert("Usuario no encontrado. Verifique el código.");
-  };
-
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setLoginID("");
+    setCurrentUser(superUser);
+    localStorage.setItem("currentUser", JSON.stringify(superUser));
+    await recargarEstructura();
     setLoginPass("");
-    setExpandedCoords({});
-    setSearchCI("");
-    setSearchResult(null);
-    localStorage.removeItem("currentUser");
-  };
+    return;
+  }
 
-  const toggleExpand = (ci) => {
-    setExpandedCoords((prev) => ({
-      ...prev,
-      [ci]: !prev[ci],
-    }));
-  };
+  // ========= LOGIN COORDINADOR =========
+  const { data: coordData } = await supabase
+    .from("coordinadores")
+    .select("ci, login_code, asignado_por_nombre, telefono")
+    .eq("login_code", loginID.trim())
+    .maybeSingle();  
+
+  if (coordData) {
+    const { data: pad } = await supabase
+      .from("padron")
+      .select("*")
+      .eq("ci", coordData.ci)
+      .maybeSingle();
+
+    const user = {
+      ci: coordData.ci,
+      nombre: pad?.nombre || "(Sin nombre)",
+      apellido: pad?.apellido || "",
+      seccional: pad?.seccional,
+      local_votacion: pad?.local_votacion,
+      mesa: pad?.mesa,
+      orden: pad?.orden,
+      direccion: pad?.direccion,
+      telefono: coordData.telefono || null,
+      role: "coordinador",
+    };
+
+    setCurrentUser(user);
+    localStorage.setItem("currentUser", JSON.stringify(user));
+    await recargarEstructura();
+    return;
+  }
+
+  // ========= LOGIN SUBCOORDINADOR =========
+  const { data: subData } = await supabase
+    .from("subcoordinadores")
+    .select("ci, login_code, asignado_por_nombre, telefono")
+    .eq("login_code", loginID.trim())
+    .maybeSingle();
+
+  if (subData) {
+    const { data: pad } = await supabase
+      .from("padron")
+      .select("*")
+      .eq("ci", subData.ci)
+      .maybeSingle();
+
+    const user = {
+      ci: subData.ci,
+      nombre: pad?.nombre || "(Sin nombre)",
+      apellido: pad?.apellido || "",
+      seccional: pad?.seccional,
+      local_votacion: pad?.local_votacion,
+      mesa: pad?.mesa,
+      orden: pad?.orden,
+      direccion: pad?.direccion,
+      telefono: subData.telefono || null,
+      role: "subcoordinador",
+    };
+
+    setCurrentUser(user);
+    localStorage.setItem("currentUser", JSON.stringify(user));
+    await recargarEstructura();
+    return;
+  }
+
+  // SI NINGUNO COINCIDIÓ
+  alert("Usuario no encontrado. Verifique el código.");
+};
+
 
   // ======================= LOGIN SCREEN =======================
   if (!currentUser) {
