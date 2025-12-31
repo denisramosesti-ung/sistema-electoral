@@ -685,19 +685,47 @@ const generarPDF = () => {
     }
 
     // COORDINADOR
-    const coordRes = await supabase
-      .from("coordinadores")
-      .select("*")
-      .eq("login_code", loginID.trim());
+const coordRes = await supabase
+  .from("coordinadores")
+  .select(`
+    ci,
+    login_code,
+    asignado_por_nombre,
+    telefono,
+    padron!inner (
+      ci,
+      nombre,
+      apellido,
+      seccional,
+      local_votacion,
+      mesa,
+      orden,
+      direccion
+    )
+  `)
+  .eq("login_code", loginID.trim())
+  .maybeSingle();
 
-    if (coordRes.data && coordRes.data.length > 0) {
-      const c = normalizarCoordinador(coordRes.data[0]);
-      const user = { ...c, role: "coordinador" };
-      setCurrentUser(user);
-      await recargarEstructura();
-      localStorage.setItem("currentUser", JSON.stringify(user));
-      return;
-    }
+if (coordRes && coordRes.padron) {
+  const user = {
+    ci: coordRes.ci,
+    nombre: coordRes.padron.nombre,
+    apellido: coordRes.padron.apellido,
+    seccional: coordRes.padron.seccional,
+    local_votacion: coordRes.padron.local_votacion,
+    mesa: coordRes.padron.mesa,
+    orden: coordRes.padron.orden,
+    direccion: coordRes.padron.direccion,
+    telefono: coordRes.telefono,
+    role: "coordinador",
+  };
+
+  setCurrentUser(user);
+  await recargarEstructura();
+  localStorage.setItem("currentUser", JSON.stringify(user));
+  return;
+}
+
 
     // SUBCOORDINADOR
     const subRes = await supabase
