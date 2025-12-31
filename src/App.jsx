@@ -176,55 +176,56 @@ const recargarEstructura = async () => {
 
     if (votosErr) console.error("Error votos:", votosErr);
 
-    setEstructura({
-      coordinadores:
-        coords?.map((x) => ({
-          ci: x.ci,
-          loginCode: x.login_code,
-          asignadoPorNombre: x.asignado_por_nombre,
-          telefono: x.telefono,
-          nombre: x.padron?.nombre,
-          apellido: x.padron?.apellido,
-          seccional: x.padron?.seccional,
-          local_votacion: x.padron?.local_votacion,
-          mesa: x.padron?.mesa,
-          orden: x.padron?.orden,
-          direccion: x.padron?.direccion,
-        })) || [],
+   setEstructura({
+  coordinadores:
+    coords?.map((x) => ({
+      ci: Number(x.ci),
+      loginCode: x.login_code,
+      asignadoPorNombre: x.asignado_por_nombre,
+      telefono: x.telefono,
+      nombre: x.padron?.nombre,
+      apellido: x.padron?.apellido,
+      seccional: x.padron?.seccional,
+      local_votacion: x.padron?.local_votacion,
+      mesa: x.padron?.mesa,
+      orden: x.padron?.orden,
+      direccion: x.padron?.direccion,
+    })) || [],
 
-      subcoordinadores:
-        subs?.map((x) => ({
-          ci: x.ci,
-          coordinadorCI: x.coordinador_ci,
-          loginCode: x.login_code,
-          asignadoPorNombre: x.asignado_por_nombre,
-          telefono: x.telefono,
-          nombre: x.padron?.nombre,
-          apellido: x.padron?.apellido,
-          seccional: x.padron?.seccional,
-          local_votacion: x.padron?.local_votacion,
-          mesa: x.padron?.mesa,
-          orden: x.padron?.orden,
-          direccion: x.padron?.direccion,
-        })) || [],
+  subcoordinadores:
+    subs?.map((x) => ({
+      ci: Number(x.ci),
+      coordinadorCI: Number(x.coordinador_ci),
+      loginCode: x.login_code,
+      asignadoPorNombre: x.asignado_por_nombre,
+      telefono: x.telefono,
+      nombre: x.padron?.nombre,
+      apellido: x.padron?.apellido,
+      seccional: x.padron?.seccional,
+      local_votacion: x.padron?.local_votacion,
+      mesa: x.padron?.mesa,
+      orden: x.padron?.orden,
+      direccion: x.padron?.direccion,
+    })) || [],
 
-      votantes:
-        votos?.map((x) => ({
-          ci: x.ci,
-          asignadoPor: x.asignado_por,
-          asignadoPorNombre: x.asignado_por_nombre,
-          telefono: x.telefono,
-          nombre: x.padron?.nombre,
-          apellido: x.padron?.apellido,
-          seccional: x.padron?.seccional,
-          local_votacion: x.padron?.local_votacion,
-          mesa: x.padron?.mesa,
-          orden: x.padron?.orden,
-          direccion: x.padron?.direccion,
-        })) || [],
-    });
+  votantes:
+    votos?.map((x) => ({
+      ci: Number(x.ci),
+      asignadoPor: Number(x.asignado_por),
+      asignadoPorNombre: x.asignado_por_nombre,
+      telefono: x.telefono,
+      nombre: x.padron?.nombre,
+      apellido: x.padron?.apellido,
+      seccional: x.padron?.seccional,
+      local_votacion: x.padron?.local_votacion,
+      mesa: x.padron?.mesa,
+      orden: x.padron?.orden,
+      direccion: x.padron?.direccion,
+    })) || [],
+});
 
-    console.log("Estructura mapeada correctamente");
+console.log("Estructura mapeada correctamente");
+
   } catch (err) {
     console.error("Error al mapear estructura:", err);
   }
