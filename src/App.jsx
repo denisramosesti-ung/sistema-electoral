@@ -684,7 +684,7 @@ const generarPDF = () => {
       return;
     }
 
-    // COORDINADOR
+// COORDINADOR
 const coordRes = await supabase
   .from("coordinadores")
   .select(`
@@ -706,23 +706,25 @@ const coordRes = await supabase
   .eq("login_code", loginID.trim())
   .maybeSingle();
 
-if (coordRes && coordRes.padron) {
+if (coordRes) {
+  const pad = coordRes.padron || {};
+
   const user = {
     ci: coordRes.ci,
-    nombre: coordRes.padron.nombre,
-    apellido: coordRes.padron.apellido,
-    seccional: coordRes.padron.seccional,
-    local_votacion: coordRes.padron.local_votacion,
-    mesa: coordRes.padron.mesa,
-    orden: coordRes.padron.orden,
-    direccion: coordRes.padron.direccion,
-    telefono: coordRes.telefono,
+    nombre: pad.nombre || "(Sin nombre)",
+    apellido: pad.apellido || "",
+    seccional: pad.seccional || "-",
+    local_votacion: pad.local_votacion || "-",
+    mesa: pad.mesa || "-",
+    orden: pad.orden || "-",
+    direccion: pad.direccion || "-",
+    telefono: coordRes.telefono || "-",
     role: "coordinador",
   };
 
   setCurrentUser(user);
-  await recargarEstructura();
   localStorage.setItem("currentUser", JSON.stringify(user));
+  await recargarEstructura();
   return;
 }
 
