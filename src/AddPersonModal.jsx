@@ -112,6 +112,14 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           ) : (
             pageData.map((persona) => {
               const bloqueado = persona.asignado === true;
+              const labelRol = persona.asignadoRol
+                ? ` (${persona.asignadoRol})`
+                : "";
+              const asignador =
+                persona.asignadoPorNombre ||
+                (persona.asignadoRol === "Coordinador"
+                  ? "Superadmin"
+                  : "Asignado");
 
               return (
                 <div
@@ -137,10 +145,8 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
 
                   {bloqueado && (
                     <p className="text-xs text-red-600 mt-2">
-                      Ya asignado
-                      {persona.asignadoPorNombre &&
-                        ` por ${persona.asignadoPorNombre}`}
-                      {persona.asignadoRol && ` (${persona.asignadoRol})`}
+                      Ya asignado por {asignador}
+                      {labelRol}
                     </p>
                   )}
                 </div>
