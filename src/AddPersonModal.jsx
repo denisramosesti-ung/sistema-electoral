@@ -116,10 +116,13 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
                 ? ` (${persona.asignadoRol})`
                 : "";
               const asignador =
+                persona.asignadoPorNombreResolved ||
                 persona.asignadoPorNombre ||
                 (persona.asignadoRol === "Coordinador"
                   ? "Superadmin"
                   : "Asignado");
+              const asignadorRol =
+                persona.asignadoPorRolResolved || persona.asignadoRol || "";
 
               return (
                 <div
@@ -146,7 +149,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
                   {bloqueado && (
                     <p className="text-xs text-red-600 mt-2">
                       Ya asignado por {asignador}
-                      {labelRol}
+                      {asignadorRol ? ` (${asignadorRol})` : labelRol}
                     </p>
                   )}
                 </div>

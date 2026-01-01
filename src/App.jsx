@@ -260,36 +260,69 @@ const getPersonasDisponibles = () => {
   return padron.map((p) => {
     const ciNumber = normalizeCI(p.ci);
     const personaBase = { ...p, ci: ciNumber };
+    let asignadoPorNombreResolved = null;
+    let asignadoPorRolResolved = null;
 
     const coordItem = estructura.coordinadores.find((c) => c.ci === ciNumber);
     if (coordItem) {
+      asignadoPorNombreResolved =
+        coordItem.asignado_por_nombre || "Superadmin";
+      asignadoPorRolResolved = "Superadmin";
       return {
         ...personaBase,
         asignado: true,
         asignadoRol: "Coordinador",
         asignadoPorNombre: coordItem.asignado_por_nombre || "Superadmin",
+        asignadoPorNombreResolved,
+        asignadoPorRolResolved,
       };
     }
 
     const subItem = estructura.subcoordinadores.find((s) => s.ci === ciNumber);
     if (subItem) {
+      const coordAsignador = estructura.coordinadores.find(
+        (c) => c.ci === subItem.coordinadorCI
+      );
+      asignadoPorNombreResolved =
+        coordAsignador?.nombre && coordAsignador?.apellido
+          ? `${coordAsignador.nombre} ${coordAsignador.apellido}`
+          : subItem.asignado_por_nombre || "Asignado por coordinador";
+      asignadoPorRolResolved = coordAsignador ? "Coordinador" : "Coordinador";
       return {
         ...personaBase,
         asignado: true,
         asignadoRol: "Subcoordinador",
         asignadoPorNombre:
           subItem.asignado_por_nombre || "Asignado por coordinador",
+        asignadoPorNombreResolved,
+        asignadoPorRolResolved,
       };
     }
 
     const votItem = estructura.votantes.find((v) => v.ci === ciNumber);
     if (votItem) {
+      const asignador =
+        estructura.subcoordinadores.find(
+          (s) => s.ci === votItem.asignadoPor
+        ) ||
+        estructura.coordinadores.find((c) => c.ci === votItem.asignadoPor) ||
+        null;
+      asignadoPorNombreResolved =
+        asignador && asignador.nombre && asignador.apellido
+          ? `${asignador.nombre} ${asignador.apellido}`
+          : votItem.asignado_por_nombre || "Asignado";
+      asignadoPorRolResolved = asignador
+        ? estructura.coordinadores.some((c) => c.ci === asignador.ci)
+          ? "Coordinador"
+          : "Subcoordinador"
+        : null;
       return {
         ...personaBase,
         asignado: true,
         asignadoRol: "Votante",
-        asignadoPorNombre:
-          votItem.asignado_por_nombre || "Asignado",
+        asignadoPorNombre: votItem.asignado_por_nombre || "Asignado",
+        asignadoPorNombreResolved,
+        asignadoPorRolResolved,
       };
     }
 
