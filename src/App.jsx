@@ -709,39 +709,87 @@ const generarPDF = () => {
   );
   doc.text(`Fecha y hora: ${new Date().toLocaleString()}`, 14, 34);
 
-  // Estadísticas Globales
-  const totalCoordinadores = estructura.coordinadores.length;
-  const totalSub = estructura.subcoordinadores.length;
-  const totalVotantes = estructura.votantes.length;
+  let y = 42;
 
-  autoTable(doc, {
-    startY: 42,
-    head: [["Indicador", "Cantidad"]],
-    body: [
-      ["Coordinadores", totalCoordinadores],
-      ["Subcoordinadores", totalSub],
-      ["Total de Votantes Captados", totalVotantes],
-    ],
-    theme: "grid",
-    headStyles: { fillColor: colorRojo },
-  });
+  const resolvePadron = (ci) => padron.find((x) => normalizeCI(x.ci) === normalizeCI(ci));
+  const resolveSeccional = (persona) => {
+    const padronEntry = resolvePadron(persona.ci);
+    return persona.seccional || padronEntry?.seccional || "-";
+  };
 
-  let y = doc.lastAutoTable.finalY + 12;
+  if (currentUser.role === "superadmin") {
+    const totalCoordinadores = estructura.coordinadores.length;
+    const totalSub = estructura.subcoordinadores.length;
+    const totalVotantes = estructura.votantes.length;
 
-  // Análisis Interpretativo Automático
-  const mensaje =
-    totalVotantes > 50
-      ? "El equipo demuestra un crecimiento sólido y una captación activa en terreno."
-      : totalVotantes > 0
-      ? "El proceso de captación está en marcha, pero requiere intensificar acciones en campo."
-      : "No se observan aún avances significativos en captación.";
+    autoTable(doc, {
+      startY: y,
+      head: [["Indicador", "Cantidad"]],
+      body: [
+        ["Coordinadores", totalCoordinadores],
+        ["Subcoordinadores", totalSub],
+        ["Total de Votantes Captados", totalVotantes],
+      ],
+      theme: "grid",
+      headStyles: { fillColor: colorRojo },
+    });
 
-  doc.setFontSize(12);
-  doc.setFont("helvetica", "normal");
-  doc.text("Resumen Ejecutivo:", 14, y);
-  y += 6;
-  doc.text(mensaje, 14, y);
-  y += 12;
+    y = doc.lastAutoTable.finalY + 12;
+
+    const mensaje =
+      totalVotantes > 50
+        ? "El equipo demuestra un crecimiento sólido y una captación activa en terreno."
+        : totalVotantes > 0
+        ? "El proceso de captación está en marcha, pero requiere intensificar acciones en campo."
+        : "No se observan aún avances significativos en captación.";
+
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    doc.text("Resumen Ejecutivo:", 14, y);
+    y += 6;
+    doc.text(mensaje, 14, y);
+    y += 12;
+
+    // Ranking global
+    doc.setFont("helvetica", "bold");
+    doc.text("Ranking de Coordinadores y Subcoordinadores", 14, y);
+    y += 4;
+
+    const ranking = [...estructura.coordinadores, ...estructura.subcoordinadores].map((p) => {
+      const directos = estructura.votantes.filter((v) => v.asignadoPor === p.ci).length;
+      return {
+        ci: p.ci,
+        nombre: `${p.nombre} ${p.apellido}`,
+        seccional: resolveSeccional(p),
+        telefono: p.telefono || "-",
+        rol: estructura.coordinadores.some((c) => c.ci === p.ci)
+          ? "Coordinador"
+          : "Subcoordinador",
+        cantidad: directos,
+      };
+    });
+
+    const ordenado = ranking.sort((a, b) => b.cantidad - a.cantidad);
+    const totalGlobal = ordenado.reduce((acc, a) => acc + a.cantidad, 0);
+
+    autoTable(doc, {
+      startY: y + 4,
+      head: [["#", "Nombre", "Rol", "Seccional", "Teléfono", "Votantes", "%"]],
+      body: ordenado.map((p, i) => [
+        i + 1,
+        p.nombre,
+        p.rol,
+        p.seccional,
+        p.telefono,
+        p.cantidad,
+        totalGlobal > 0 ? ((p.cantidad / totalGlobal) * 100).toFixed(1) : "0",
+      ]),
+      theme: "striped",
+      headStyles: { fillColor: colorRojo },
+      bodyStyles: { fontSize: 10 },
+    });
+
+    y = doc.lastAutoTable.finalY + 10;
 
   const resolvePadron = (ci) => padron.find((x) => normalizeCI(x.ci) === normalizeCI(ci));
   const resolveSeccional = (persona) => {
@@ -817,12 +865,35 @@ const generarPDF = () => {
         )
       : 0);
 
+  doc.setFont("helvetica", "bold");
+  doc.text("Mi Estructura", 14, y);
+  y += 6;
+
+  // Estadísticas básicas (solo estructura propia)
+
+  // ========== COORDINADOR / SUBCOORDINADOR ==========
+  const isCoord = currentUser.role === "coordinador";
+  const misSubcoords = isCoord ? getMisSubcoordinadores() : [];
+  const misVotantes = getMisVotantes();
+  const totalVotos =
+    misVotantes.length +
+    (isCoord
+      ? misSubcoords.reduce(
+          (acc, s) => acc + estructura.votantes.filter((v) => v.asignadoPor === s.ci).length,
+          0
+        )
+      : 0);
+
   // Estadísticas básicas
   autoTable(doc, {
     startY: y,
     head: [["Indicador", "Cantidad"]],
     body: [
       isCoord ? ["Subcoordinadores", misSubcoords.length] : null,
+      isCoord ? ["Votantes directos", misVotantes.length] : null,
+      isCoord ? ["Votantes de subcoordinadores", totalVotos - misVotantes.length] : null,
+      !isCoord ? ["Votantes", misVotantes.length] : null,
+      ["Total de votantes", totalVotos],
       ["Votantes", totalVotos],
     ].filter(Boolean),
     theme: "grid",
