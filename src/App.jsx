@@ -745,24 +745,64 @@ const generarPDF = () => {
 
   // Ranking de Captación
   doc.setFont("helvetica", "bold");
-      doc.text("Ranking de Coordinadores y Subcoordinadores", 14, y);
-      y += 4;
+  doc.text("Ranking de Coordinadores y Subcoordinadores", 14, y);
+  y += 4;
 
-      const ranking = [...estructura.coordinadores, ...estructura.subcoordinadores].map((p) => {
-        const directos = estructura.votantes.filter((v) => v.asignadoPor === p.ci).length;
-        const padronEntry = padron.find((x) => normalizeCI(x.ci) === p.ci);
-        const seccionalResolved = p.seccional || padronEntry?.seccional || "-";
-        return {
-          ci: p.ci,
-          nombre: `${p.nombre} ${p.apellido}`,
-          seccional: seccionalResolved,
-          telefono: p.telefono || "-",
-          rol: estructura.coordinadores.some((c) => c.ci === p.ci)
-            ? "Coordinador"
-            : "Subcoordinador",
-          cantidad: directos,
-        };
-      });
+  const resolveSeccional = (persona) => {
+    const padronEntry = padron.find((x) => normalizeCI(x.ci) === persona.ci);
+    return persona.seccional || padronEntry?.seccional || "-";
+  };
+
+  let ranking = [];
+
+  if (currentUser.role === "superadmin") {
+    ranking = [...estructura.coordinadores, ...estructura.subcoordinadores].map((p) => {
+      const directos = estructura.votantes.filter((v) => v.asignadoPor === p.ci).length;
+      return {
+        ci: p.ci,
+        nombre: `${p.nombre} ${p.apellido}`,
+        seccional: resolveSeccional(p),
+        telefono: p.telefono || "-",
+        rol: estructura.coordinadores.some((c) => c.ci === p.ci)
+          ? "Coordinador"
+          : "Subcoordinador",
+        cantidad: directos,
+      };
+    });
+  } else if (currentUser.role === "coordinador") {
+    const misSubs = getMisSubcoordinadores();
+    const misVotantes = getMisVotantes();
+    ranking = [
+      {
+        ci: currentUser.ci,
+        nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+        seccional: currentUser.seccional || "-",
+        telefono: currentUser.telefono || "-",
+        rol: "Coordinador",
+        cantidad: misVotantes.length,
+      },
+      ...misSubs.map((p) => ({
+        ci: p.ci,
+        nombre: `${p.nombre} ${p.apellido}`,
+        seccional: resolveSeccional(p),
+        telefono: p.telefono || "-",
+        rol: "Subcoordinador",
+        cantidad: estructura.votantes.filter((v) => v.asignadoPor === p.ci).length,
+      })),
+    ];
+  } else if (currentUser.role === "subcoordinador") {
+    const misVotantes = getMisVotantes();
+    ranking = [
+      {
+        ci: currentUser.ci,
+        nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+        seccional: currentUser.seccional || "-",
+        telefono: currentUser.telefono || "-",
+        rol: "Subcoordinador",
+        cantidad: misVotantes.length,
+      },
+    ];
+  }
 
   const ordenado = ranking.sort((a, b) => b.cantidad - a.cantidad);
   const totalGlobal = ordenado.reduce((acc, a) => acc + a.cantidad, 0);
