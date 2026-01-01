@@ -743,20 +743,19 @@ const generarPDF = () => {
   doc.text(mensaje, 14, y);
   y += 12;
 
-  // Ranking de Captación
-  doc.setFont("helvetica", "bold");
-  doc.text("Ranking de Coordinadores y Subcoordinadores", 14, y);
-  y += 4;
-
+  const resolvePadron = (ci) => padron.find((x) => normalizeCI(x.ci) === normalizeCI(ci));
   const resolveSeccional = (persona) => {
-    const padronEntry = padron.find((x) => normalizeCI(x.ci) === persona.ci);
+    const padronEntry = resolvePadron(persona.ci);
     return persona.seccional || padronEntry?.seccional || "-";
   };
 
-  let ranking = [];
-
   if (currentUser.role === "superadmin") {
-    ranking = [...estructura.coordinadores, ...estructura.subcoordinadores].map((p) => {
+    // Ranking global
+    doc.setFont("helvetica", "bold");
+    doc.text("Ranking de Coordinadores y Subcoordinadores", 14, y);
+    y += 4;
+
+    const ranking = [...estructura.coordinadores, ...estructura.subcoordinadores].map((p) => {
       const directos = estructura.votantes.filter((v) => v.asignadoPor === p.ci).length;
       return {
         ci: p.ci,
@@ -769,67 +768,170 @@ const generarPDF = () => {
         cantidad: directos,
       };
     });
-  } else if (currentUser.role === "coordinador") {
-    const misSubs = getMisSubcoordinadores();
-    const misVotantes = getMisVotantes();
-    ranking = [
-      {
-        ci: currentUser.ci,
-        nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-        seccional: currentUser.seccional || "-",
-        telefono: currentUser.telefono || "-",
-        rol: "Coordinador",
-        cantidad: misVotantes.length,
-      },
-      ...misSubs.map((p) => ({
-        ci: p.ci,
-        nombre: `${p.nombre} ${p.apellido}`,
-        seccional: resolveSeccional(p),
-        telefono: p.telefono || "-",
-        rol: "Subcoordinador",
-        cantidad: estructura.votantes.filter((v) => v.asignadoPor === p.ci).length,
-      })),
-    ];
-  } else if (currentUser.role === "subcoordinador") {
-    const misVotantes = getMisVotantes();
-    ranking = [
-      {
-        ci: currentUser.ci,
-        nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-        seccional: currentUser.seccional || "-",
-        telefono: currentUser.telefono || "-",
-        rol: "Subcoordinador",
-        cantidad: misVotantes.length,
-      },
-    ];
+
+    const ordenado = ranking.sort((a, b) => b.cantidad - a.cantidad);
+    const totalGlobal = ordenado.reduce((acc, a) => acc + a.cantidad, 0);
+
+    autoTable(doc, {
+      startY: y + 4,
+      head: [["#", "Nombre", "Rol", "Seccional", "Teléfono", "Votantes", "%"]],
+      body: ordenado.map((p, i) => [
+        i + 1,
+        p.nombre,
+        p.rol,
+        p.seccional,
+        p.telefono,
+        p.cantidad,
+        totalGlobal > 0 ? ((p.cantidad / totalGlobal) * 100).toFixed(1) : "0",
+      ]),
+      theme: "striped",
+      headStyles: { fillColor: colorRojo },
+      bodyStyles: { fontSize: 10 },
+    });
+
+    y = doc.lastAutoTable.finalY + 10;
+
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(10);
+    doc.text(`Total global de votantes: ${totalGlobal}`, 14, y);
+    y += 6;
+    doc.text(
+      "Generado automáticamente por el Sistema Electoral — Uso privado y estratégico",
+      14,
+      y
+    );
+    doc.save("informe_captacion.pdf");
+    return;
   }
 
-  const ordenado = ranking.sort((a, b) => b.cantidad - a.cantidad);
-  const totalGlobal = ordenado.reduce((acc, a) => acc + a.cantidad, 0);
+  // ========== COORDINADOR / SUBCOORDINADOR ==========
+  const isCoord = currentUser.role === "coordinador";
+  const misSubcoords = isCoord ? getMisSubcoordinadores() : [];
+  const misVotantes = getMisVotantes();
+  const totalVotos =
+    misVotantes.length +
+    (isCoord
+      ? misSubcoords.reduce(
+          (acc, s) => acc + estructura.votantes.filter((v) => v.asignadoPor === s.ci).length,
+          0
+        )
+      : 0);
 
-autoTable(doc, {
-  startY: y + 4,
-  head: [["#", "Nombre", "Rol", "Seccional", "Teléfono", "Votantes", "%"]],
-  body: ordenado.map((p, i) => [
-    i + 1,
-    p.nombre,
-    p.rol,
-    p.seccional,
-    p.telefono,
-    p.cantidad,
-    totalGlobal > 0 ? ((p.cantidad / totalGlobal) * 100).toFixed(1) : "0",
-  ]),
-  theme: "striped",
-  headStyles: { fillColor: colorRojo },
-  bodyStyles: { fontSize: 10 },
-});
+  // Estadísticas básicas
+  autoTable(doc, {
+    startY: y,
+    head: [["Indicador", "Cantidad"]],
+    body: [
+      isCoord ? ["Subcoordinadores", misSubcoords.length] : null,
+      ["Votantes", totalVotos],
+    ].filter(Boolean),
+    theme: "grid",
+    headStyles: { fillColor: colorRojo },
+  });
 
   y = doc.lastAutoTable.finalY + 10;
+
+  const personaToRow = (p) => {
+    const padronEntry = resolvePadron(p.ci);
+    return [
+      p.ci,
+      `${p.nombre} ${p.apellido}`,
+      resolveSeccional(p),
+      padronEntry?.local_votacion || p.local_votacion || "-",
+      padronEntry?.mesa || p.mesa || "-",
+      padronEntry?.orden || p.orden || "-",
+      padronEntry?.direccion || p.direccion || "-",
+      p.telefono || "-",
+    ];
+  };
+
+  if (isCoord) {
+    // Subcoordinadores
+    if (misSubcoords.length > 0) {
+      doc.setFont("helvetica", "bold");
+      doc.text("Subcoordinadores", 14, y);
+      y += 4;
+
+      autoTable(doc, {
+        startY: y,
+        head: [
+          ["CI", "Nombre", "Seccional", "Local votación", "Mesa", "Orden", "Dirección", "Teléfono"],
+        ],
+        body: misSubcoords.map((p) => personaToRow(p)),
+        theme: "striped",
+        headStyles: { fillColor: colorRojo },
+        bodyStyles: { fontSize: 9 },
+      });
+      y = doc.lastAutoTable.finalY + 6;
+
+      // Votantes por subcoordinador
+      misSubcoords.forEach((sub) => {
+        const votantesSub = estructura.votantes.filter((v) => v.asignadoPor === sub.ci);
+        if (votantesSub.length === 0) return;
+
+        doc.setFont("helvetica", "bold");
+        doc.text(
+          `Votantes de ${sub.nombre} ${sub.apellido} (CI ${sub.ci})`,
+          14,
+          y
+        );
+        y += 4;
+
+        autoTable(doc, {
+          startY: y,
+          head: [
+            ["CI", "Nombre", "Seccional", "Local votación", "Mesa", "Orden", "Dirección", "Teléfono"],
+          ],
+          body: votantesSub.map((v) => personaToRow(v)),
+          theme: "striped",
+          headStyles: { fillColor: colorRojo },
+          bodyStyles: { fontSize: 9 },
+        });
+        y = doc.lastAutoTable.finalY + 6;
+      });
+    }
+
+    // Votantes directos del coordinador
+    if (misVotantes.length > 0) {
+      doc.setFont("helvetica", "bold");
+      doc.text("Votantes directos del coordinador", 14, y);
+      y += 4;
+
+      autoTable(doc, {
+        startY: y,
+        head: [
+          ["CI", "Nombre", "Seccional", "Local votación", "Mesa", "Orden", "Dirección", "Teléfono"],
+        ],
+        body: misVotantes.map((v) => personaToRow(v)),
+        theme: "striped",
+        headStyles: { fillColor: colorRojo },
+        bodyStyles: { fontSize: 9 },
+      });
+      y = doc.lastAutoTable.finalY + 6;
+    }
+  } else {
+    // Subcoordinador: solo sus votantes
+    doc.setFont("helvetica", "bold");
+    doc.text("Mis votantes", 14, y);
+    y += 4;
+
+    autoTable(doc, {
+      startY: y,
+      head: [
+        ["CI", "Nombre", "Seccional", "Local votación", "Mesa", "Orden", "Dirección", "Teléfono"],
+      ],
+      body: misVotantes.map((v) => personaToRow(v)),
+      theme: "striped",
+      headStyles: { fillColor: colorRojo },
+      bodyStyles: { fontSize: 9 },
+    });
+    y = doc.lastAutoTable.finalY + 6;
+  }
 
   // Pie final
   doc.setFont("helvetica", "italic");
   doc.setFontSize(10);
-  doc.text(`Total global de votantes: ${totalGlobal}`, 14, y);
+  doc.text(`Total de votantes: ${totalVotos}`, 14, y);
   y += 6;
   doc.text(
     "Generado automáticamente por el Sistema Electoral — Uso privado y estratégico",
