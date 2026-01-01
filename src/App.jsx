@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronRight,
   Copy,
+  Phone,
   Trash2,
 } from "lucide-react";
 import jsPDF from "jspdf";
@@ -388,12 +389,12 @@ const DatosPersona = ({ persona, rol, loginCode }) => {
   const apellido = (persona.apellido || "").toUpperCase();
 
   return (
-    <div className="space-y-0.5 text-xs md:text-sm text-gray-700">
+    <div className="space-y-1 text-xs md:text-sm text-gray-700 w-full">
       <p className="font-semibold text-gray-800 text-sm md:text-base">
         {nombre} {apellido}
       </p>
       <p className="text-xs md:text-sm text-gray-700">
-        CI: {persona.ci}
+        <span className="font-semibold">CI:</span> {persona.ci}
         {rol ? ` — ${rol}` : ""}
       </p>
       {loginCode && (
@@ -410,27 +411,34 @@ const DatosPersona = ({ persona, rol, loginCode }) => {
       )}
       {persona.seccional && (
         <p className="text-xs md:text-sm text-gray-700">
-          Seccional: {persona.seccional}
+          <span className="font-semibold">Seccional:</span> {persona.seccional}
         </p>
       )}
       {persona.local_votacion && (
         <p className="text-xs md:text-sm text-gray-700">
-          Colegio: {persona.local_votacion}
+          <span className="font-semibold">Local de Votación:</span>{" "}
+          {persona.local_votacion}
         </p>
       )}
       {persona.mesa && (
         <p className="text-xs md:text-sm text-gray-700">
-          Mesa: {persona.mesa}
+          <span className="font-semibold">Mesa:</span> {persona.mesa}
         </p>
       )}
       {persona.orden && (
         <p className="text-xs md:text-sm text-gray-700">
-          Orden: {persona.orden}
+          <span className="font-semibold">Orden:</span> {persona.orden}
         </p>
       )}
       {persona.direccion && (
         <p className="text-xs md:text-sm text-gray-700">
-          Domicilio: {persona.direccion}
+          <span className="font-semibold">Dirección domicilio:</span>{" "}
+          {persona.direccion}
+        </p>
+      )}
+      {persona.telefono && (
+        <p className="text-xs md:text-sm text-gray-700">
+          <span className="font-semibold">Teléfono:</span> {persona.telefono}
         </p>
       )}
     </div>
@@ -556,7 +564,13 @@ const handleAgregarPersona = async (persona) => {
 
     if (!window.confirm(mensajes[tipo])) return;
 
+    const isSuper = currentUser.role === "superadmin";
+
     if (tipo === "coordinador") {
+      if (!isSuper) {
+        alert("Solo el superadmin puede eliminar coordinadores.");
+        return;
+      }
       const { data: subs } = await supabase
         .from("subcoordinadores")
         .select("ci")
@@ -572,28 +586,46 @@ const handleAgregarPersona = async (persona) => {
       await supabase.from("subcoordinadores").delete().eq("coordinador_ci", ci);
       await supabase.from("coordinadores").delete().eq("ci", ci);
     } else if (tipo === "subcoordinador") {
+      if (!isSuper) {
+        const ownsSub =
+          currentUser.role === "coordinador" &&
+          estructura.subcoordinadores.some(
+            (s) => s.ci === ci && s.coordinadorCI === currentUser.ci
+          );
+        if (!ownsSub) {
+          alert("Solo el superadmin puede eliminar este subcoordinador.");
+          return;
+        }
+      }
       await supabase.from("votantes").delete().eq("asignado_por", ci);
       await supabase.from("subcoordinadores").delete().eq("ci", ci);
     } else if (tipo === "votante") {
 
-  // SUPERADMIN puede eliminar cualquier votante
-  if (currentUser.role === "superadmin") {
-    await supabase
-      .from("votantes")
-      .delete()
-      .eq("ci", ci);
+      // SUPERADMIN puede eliminar cualquier votante
+      if (isSuper) {
+        await supabase.from("votantes").delete().eq("ci", ci);
+      } else {
+        // Coordinador o Subcoordinador solo eliminan los que agregaron
+        const { data: voterOwner } = await supabase
+          .from("votantes")
+          .select("asignado_por")
+          .eq("ci", ci)
+          .maybeSingle();
 
-  } else {
-    // Coordinador o Subcoordinador solo eliminan los que agregaron
-    await supabase
-      .from("votantes")
-      .delete()
-      .match({
-        ci: ci,
-        asignado_por: currentUser.ci,
-      });
-  }
-}
+        if (voterOwner?.asignado_por != currentUser.ci) {
+          alert("Solo puedes eliminar tus propios votantes.");
+          return;
+        }
+
+        await supabase
+          .from("votantes")
+          .delete()
+          .match({
+            ci: ci,
+            asignado_por: currentUser.ci,
+          });
+      }
+    }
 
 
     await recargarEstructura();
@@ -1360,23 +1392,24 @@ const handleLogout = () => {
 
           <div className="flex flex-col md:flex-row gap-2">
             <button
+              aria-label="Teléfono"
               onClick={(e) => {
                 e.stopPropagation();
                 abrirTelefono("coordinador", coord);
               }}
-              className="px-3 py-2 border-2 border-green-600 text-green-700 rounded-lg text-xs md:text-sm hover:bg-green-50"
+              className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
             >
-              Teléfono
+              <Phone className="w-5 h-5" />
             </button>
             <button
+              aria-label="Borrar"
               onClick={(e) => {
                 e.stopPropagation();
                 quitarPersona(coord.ci, "coordinador");
               }}
-              className="flex items-center gap-1 bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 text-xs md:text-sm"
+              className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
             >
-              <Trash2 className="w-4 h-4" />
-              Borrar
+              <Trash2 className="w-5 h-5" />
             </button>
           </div>
         </div>
@@ -1412,22 +1445,23 @@ const handleLogout = () => {
                       >
                         <DatosPersona persona={v} rol="Votante" />
 
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => abrirTelefono("votante", v)}
-                            className="px-3 py-1 border-2 border-green-600 text-green-700 rounded-lg text-xs md:text-sm hover:bg-green-50"
-                          >
-                            Teléfono
-                          </button>
-                          <button
-                            onClick={() => quitarPersona(v.ci, "votante")}
-                            className="flex items-center gap-1 bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 text-xs md:text-sm"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            Borrar
-                          </button>
-                        </div>
+                      <div className="flex gap-2">
+                        <button
+                          aria-label="Teléfono"
+                          onClick={() => abrirTelefono("votante", v)}
+                          className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
+                        >
+                          <Phone className="w-5 h-5" />
+                        </button>
+                        <button
+                          aria-label="Borrar"
+                          onClick={() => quitarPersona(v.ci, "votante")}
+                          className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
                       </div>
+                    </div>
                     ))}
                 </div>
               ))}
@@ -1442,22 +1476,23 @@ const handleLogout = () => {
                 >
                   <DatosPersona persona={v} rol="Votante" />
 
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => abrirTelefono("votante", v)}
-                      className="px-3 py-1 border-2 border-green-600 text-green-700 rounded-lg text-xs md:text-sm hover:bg-green-50"
-                    >
-                      Teléfono
-                    </button>
-                    <button
-                      onClick={() => quitarPersona(v.ci, "votante")}
-                      className="flex items-center gap-1 bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 text-xs md:text-sm"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Borrar
-                    </button>
-                  </div>
-                </div>
+                      <div className="flex gap-2">
+                        <button
+                          aria-label="Teléfono"
+                          onClick={() => abrirTelefono("votante", v)}
+                          className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
+                        >
+                          <Phone className="w-5 h-5" />
+                        </button>
+                        <button
+                          aria-label="Borrar"
+                          onClick={() => quitarPersona(v.ci, "votante")}
+                          className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
               ))}
           </div>
         )}
@@ -1527,26 +1562,27 @@ const handleLogout = () => {
                         <p className="text-sm font-semibold mt-2">Votantes</p>
                         {getVotantesDeSubcoord(sub.ci).map((v) => (
                           <div
-                            key={v.ci}
-                            className="bg-white border p-3 mt-2 rounded flex justify-between items-start gap-3"
-                          >
-                            <DatosPersona persona={v} rol="Votante" />
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => abrirTelefono("votante", v)}
-                                className="px-3 py-1 border-2 border-green-600 text-green-700 rounded-lg text-xs md:text-sm hover:bg-green-50"
-                              >
-                                Teléfono
-                              </button>
-                              <button
-                                onClick={() => quitarPersona(v.ci, "votante")}
-                                className="flex items-center gap-1 bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 text-xs md:text-sm"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                                Borrar
-                              </button>
-                            </div>
-                          </div>
+                      key={v.ci}
+                      className="bg-white border p-3 mt-2 rounded flex justify-between items-start gap-3 w-full"
+                    >
+                      <DatosPersona persona={v} rol="Votante" />
+                      <div className="flex gap-2">
+                        <button
+                          aria-label="Teléfono"
+                          onClick={() => abrirTelefono("votante", v)}
+                          className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
+                        >
+                          <Phone className="w-5 h-5" />
+                        </button>
+                        <button
+                          aria-label="Borrar"
+                          onClick={() => quitarPersona(v.ci, "votante")}
+                          className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
                         ))}
 
                         {getVotantesDeSubcoord(sub.ci).length === 0 && (
@@ -1568,22 +1604,23 @@ const handleLogout = () => {
                     {getMisVotantes().map((v) => (
                       <div
                         key={v.ci}
-                        className="bg-white border p-3 mt-2 rounded flex justify-between items-start gap-3"
+                        className="bg-white border p-3 mt-2 rounded flex justify-between items-start gap-3 w-full"
                       >
                         <DatosPersona persona={v} rol="Votante" />
                         <div className="flex gap-2">
                           <button
+                            aria-label="Teléfono"
                             onClick={() => abrirTelefono("votante", v)}
-                            className="px-3 py-1 border-2 border-green-600 text-green-700 rounded-lg text-xs md:text-sm hover:bg-green-50"
+                            className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
                           >
-                            Teléfono
+                            <Phone className="w-5 h-5" />
                           </button>
                           <button
+                            aria-label="Borrar"
                             onClick={() => quitarPersona(v.ci, "votante")}
-                            className="flex items-center gap-1 bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 text-xs md:text-sm"
+                            className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700 text-xs md:text-sm"
                           >
-                            <Trash2 className="w-4 h-4" />
-                            Borrar
+                            <Trash2 className="w-5 h-5" />
                           </button>
                         </div>
                       </div>
@@ -1599,22 +1636,23 @@ const handleLogout = () => {
                 {getMisVotantes().map((v) => (
                   <div
                     key={v.ci}
-                    className="bg-white border p-3 mt-2 rounded flex justify-between items-start gap-3"
+                    className="bg-white border p-3 mt-2 rounded flex justify-between items-start gap-3 w-full"
                   >
                     <DatosPersona persona={v} rol="Votante" />
                     <div className="flex gap-2">
                       <button
+                        aria-label="Teléfono"
                         onClick={() => abrirTelefono("votante", v)}
-                        className="px-3 py-1 border-2 border-green-600 text-green-700 rounded-lg text-xs md:text-sm hover:bg-green-50"
+                        className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
                       >
-                        Teléfono
+                        <Phone className="w-5 h-5" />
                       </button>
                       <button
+                        aria-label="Borrar"
                         onClick={() => quitarPersona(v.ci, "votante")}
-                        className="flex items-center gap-1 bg-red-600 text-white px-3 py-1 rounded-lg hover:bg-red-700 text-xs md:text-sm"
+                        className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
                       >
-                        <Trash2 className="w-4 h-4" />
-                        Borrar
+                        <Trash2 className="w-5 h-5" />
                       </button>
                     </div>
                   </div>
