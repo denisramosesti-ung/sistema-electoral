@@ -30,26 +30,29 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
 
   // FILTRADO + BÚSQUEDA AVANZADA
   const filtered = term
-  ? disponibles
-      .filter((p) => {
-        const fullName = `${(p.nombre ?? "").toLowerCase()} ${(p.apellido ?? "").toLowerCase()}`;
-        const ciTxt = (p.ci ?? "").toString().toLowerCase();
+    ? disponibles
+        .filter((p) => {
+          const fullName = `${p.nombre ?? ""} ${p.apellido ?? ""}`;
+          const fullNameNorm = normalize(fullName);
+          const ciTxt = (p.ci ?? "").toString().toLowerCase();
 
-        const words = term.split(" ").filter(Boolean); // separa por espacios
+          const words = normalize(term)
+            .split(" ")
+            .filter(Boolean); // separa por espacios
 
-        // Cada palabra debe existir en CI o en fullName
-        return words.every(
-          (w) => ciTxt.includes(w) || fullName.includes(w)
-        );
-      })
-      .sort((a, b) => {
-        const exactA = a.ci?.toString() === searchTerm;
-        const exactB = b.ci?.toString() === searchTerm;
-        if (exactA && !exactB) return -1;
-        if (!exactA && exactB) return 1;
-        return (a.nombre || "").localeCompare(b.nombre || "");
-      })
-  : [];
+          // Cada palabra debe existir en CI o en fullName (insensible a tildes)
+          return words.every(
+            (w) => ciTxt.includes(w) || fullNameNorm.includes(w)
+          );
+        })
+        .sort((a, b) => {
+          const exactA = a.ci?.toString() === searchTerm;
+          const exactB = b.ci?.toString() === searchTerm;
+          if (exactA && !exactB) return -1;
+          if (!exactA && exactB) return 1;
+          return (a.nombre || "").localeCompare(b.nombre || "");
+        })
+    : [];
 
 
   const pageSize = 20;
@@ -109,6 +112,17 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
           ) : (
             pageData.map((persona) => {
               const bloqueado = persona.asignado === true;
+              const labelRol = persona.asignadoRol
+                ? ` (${persona.asignadoRol})`
+                : "";
+              const asignador =
+                persona.asignadoPorNombreResolved ||
+                persona.asignadoPorNombre ||
+                (persona.asignadoRol === "Coordinador"
+                  ? "Superadmin"
+                  : "Asignado");
+              const asignadorRol =
+                persona.asignadoPorRolResolved || persona.asignadoRol || "";
 
               return (
                 <div
@@ -134,10 +148,8 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
 
                   {bloqueado && (
                     <p className="text-xs text-red-600 mt-2">
-                      Ya asignado
-                      {persona.asignadoPorNombre &&
-                        ` por ${persona.asignadoPorNombre}`}
-                      {persona.asignadoRol && ` (${persona.asignadoRol})`}
+                      Ya asignado por {asignador}
+                      {asignadorRol ? ` (${asignadorRol})` : labelRol}
                     </p>
                   )}
                 </div>
