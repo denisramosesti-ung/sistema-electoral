@@ -139,12 +139,17 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
                     {(persona.apellido || "").toUpperCase()}
                   </p>
 
-                  <p className="text-sm text-gray-600">
-                    CI: {persona.ci}
-                    {persona.localidad && ` — ${persona.localidad}`}
-                    {persona.seccional && ` — Seccional ${persona.seccional}`}
-                    {persona.mesa && ` — Mesa ${persona.mesa}`}
-                  </p>
+                  <div className="text-sm text-gray-600 space-y-0.5">
+                    <p>CI: {persona.ci}</p>
+                    {persona.seccional && (
+                      <p>Seccional: {persona.seccional}</p>
+                    )}
+                    {persona.local_votacion && (
+                      <p>Local de votación: {persona.local_votacion}</p>
+                    )}
+                    {persona.mesa && <p>Mesa: {persona.mesa}</p>}
+                    {persona.orden && <p>Orden: {persona.orden}</p>}
+                  </div>
 
                   {bloqueado && (
                     <p className="text-xs text-red-600 mt-2">
