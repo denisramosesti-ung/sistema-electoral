@@ -303,21 +303,31 @@ const App = () => {
       };
     }
 
-    if (modalType === "votante") {
+   if (modalType === "votante") {
   tabla = "votantes";
 
-  const isCoord = currentUser.role === "coordinador";
-  
+  let coordinadorAsignado;
+
+  if (currentUser.role === "coordinador") {
+    coordinadorAsignado = currentUser.ci;
+  } else if (currentUser.role === "subcoordinador") {
+    const sub = estructura.subcoordinadores.find(
+      (s) => normalizeCI(s.ci) === currentUser.ci
+    );
+    coordinadorAsignado = sub?.coordinador_ci;
+  }
+
+  if (!coordinadorAsignado) {
+    return alert("No se pudo determinar el coordinador asignado.");
+  }
+
   data = {
     ci: ciStr,
     asignado_por: currentUser.ci,
     asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-    coordinador_ci: isCoord
-      ? currentUser.ci
-      : estructura.subcoordinadores.find(s => normalizeCI(s.ci) === currentUser.ci)?.coordinador_ci
+    coordinador_ci: coordinadorAsignado,
   };
 }
-
 
     const { error } = await supabase.from(tabla).insert([data]);
     if (error) return alert("Ya está asignado o error en Supabase.");
