@@ -1,16 +1,14 @@
 // App.jsx – Versión Supabase + padrón remoto (COMPLETA, CON LOGIN PERSISTENTE, BUSCADOR CI Y TELÉFONO)
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 import {
-  Search,
   Users,
   UserPlus,
   LogOut,
   BarChart3,
   ChevronDown,
   ChevronRight,
-  X,
   Trash2,
 } from "lucide-react";
 import jsPDF from "jspdf";
@@ -45,6 +43,8 @@ const App = () => {
   const [phoneTarget, setPhoneTarget] = useState(null); // {tipo, ci, nombre, apellido}
   const [phoneValue, setPhoneValue] = useState("+595");
 
+  const normalizeCI = (value) => Number(value) || 0;
+
   // ======================= CARGAR SESIÓN DESDE LOCALSTORAGE =======================
   useEffect(() => {
     const saved = localStorage.getItem("currentUser");
@@ -59,6 +59,13 @@ const App = () => {
       }
     }
   }, []);
+
+  // Cargar estructura cuando haya sesión persistida
+  useEffect(() => {
+    if (currentUser) {
+      recargarEstructura();
+    }
+  }, [currentUser]);
 
   // ======================= CARGAR PADRÓN COMPLETO =======================
 const cargarPadronCompleto = async () => {
@@ -95,19 +102,13 @@ useEffect(() => {
 
 
   // ======================= HELPERS =======================
-const generarCodigo = () =>
-  Math.random().toString(36).substring(2, 8).toUpperCase();
-
-// Normalizar datos provenientes del join
-const mapPadronFields = (padron) => ({
-  nombre: padron?.nombre || "-",
-  apellido: padron?.apellido || "-",
-  seccional: padron?.seccional || "-",
-  local_votacion: padron?.local_votacion || "-",
-  mesa: padron?.mesa || "-",
-  orden: padron?.orden || "-",
-  direccion: padron?.direccion || "-",
-});
+const toggleExpand = (ci) => {
+  const key = normalizeCI(ci);
+  setExpandedCoords((prev) => ({
+    ...prev,
+    [key]: !prev[key],
+  }));
+};
 
 // ======================= RECARGAR ESTRUCTURA =======================
 const recargarEstructura = async () => {
@@ -179,7 +180,7 @@ const recargarEstructura = async () => {
    setEstructura({
   coordinadores:
     coords?.map((x) => ({
-      ci: Number(x.ci),
+      ci: normalizeCI(x.ci),
       loginCode: x.login_code,
       asignadoPorNombre: x.asignado_por_nombre,
       telefono: x.telefono,
@@ -194,8 +195,8 @@ const recargarEstructura = async () => {
 
   subcoordinadores:
     subs?.map((x) => ({
-      ci: Number(x.ci),
-      coordinadorCI: Number(x.coordinador_ci),
+      ci: normalizeCI(x.ci),
+      coordinadorCI: normalizeCI(x.coordinador_ci),
       loginCode: x.login_code,
       asignadoPorNombre: x.asignado_por_nombre,
       telefono: x.telefono,
@@ -210,8 +211,8 @@ const recargarEstructura = async () => {
 
   votantes:
     votos?.map((x) => ({
-      ci: Number(x.ci),
-      asignadoPor: Number(x.asignado_por),
+      ci: normalizeCI(x.ci),
+      asignadoPor: normalizeCI(x.asignado_por),
       asignadoPorNombre: x.asignado_por_nombre,
       telefono: x.telefono,
       nombre: x.padron?.nombre,
@@ -235,22 +236,23 @@ console.log("Estructura mapeada correctamente");
   // ======================= PADRÓN DISPONIBLE =======================
 const getPersonasDisponibles = () => {
   return padron.map((p) => {
-    const ciStr = p.ci.toString();
+    const ciNumber = normalizeCI(p.ci);
+    const personaBase = { ...p, ci: ciNumber };
 
-    const coordItem = estructura.coordinadores.find((c) => c.ci === ciStr);
+    const coordItem = estructura.coordinadores.find((c) => c.ci === ciNumber);
     if (coordItem) {
       return {
-        ...p,
+        ...personaBase,
         asignado: true,
         asignadoRol: "Coordinador",
         asignadoPorNombre: coordItem.asignado_por_nombre || "Superadmin",
       };
     }
 
-    const subItem = estructura.subcoordinadores.find((s) => s.ci === ciStr);
+    const subItem = estructura.subcoordinadores.find((s) => s.ci === ciNumber);
     if (subItem) {
       return {
-        ...p,
+        ...personaBase,
         asignado: true,
         asignadoRol: "Subcoordinador",
         asignadoPorNombre:
@@ -258,10 +260,10 @@ const getPersonasDisponibles = () => {
       };
     }
 
-    const votItem = estructura.votantes.find((v) => v.ci === ciStr);
+    const votItem = estructura.votantes.find((v) => v.ci === ciNumber);
     if (votItem) {
       return {
-        ...p,
+        ...personaBase,
         asignado: true,
         asignadoRol: "Votante",
         asignadoPorNombre:
@@ -270,7 +272,7 @@ const getPersonasDisponibles = () => {
     }
 
     return {
-      ...p,
+      ...personaBase,
       asignado: false,
       asignadoRol: null,
       asignadoPorNombre: null,
@@ -296,21 +298,21 @@ const buscarPorCI = (input) => {
   });
 
   if (personaPadron) {
-    const ci = personaPadron.ci;
+    const ci = normalizeCI(personaPadron.ci);
 
-    const coord = estructura.coordinadores.find((c) => c.ci == ci);
+    const coord = estructura.coordinadores.find((c) => c.ci === ci);
     if (coord)
       return setSearchResult({ tipo: "coordinador", data: coord });
 
-    const sub = estructura.subcoordinadores.find((s) => s.ci == ci);
+    const sub = estructura.subcoordinadores.find((s) => s.ci === ci);
     if (sub)
       return setSearchResult({ tipo: "subcoordinador", data: sub });
 
-    const vot = estructura.votantes.find((v) => v.ci == ci);
+    const vot = estructura.votantes.find((v) => v.ci === ci);
     if (vot) {
       const asignadoPor =
-        estructura.subcoordinadores.find((s) => s.ci == vot.asignadoPor) ||
-        estructura.coordinadores.find((c) => c.ci == vot.asignadoPor) ||
+        estructura.subcoordinadores.find((s) => s.ci === vot.asignadoPor) ||
+        estructura.coordinadores.find((c) => c.ci === vot.asignadoPor) ||
         null;
 
       return setSearchResult({
@@ -320,7 +322,7 @@ const buscarPorCI = (input) => {
       });
     }
 
-    return setSearchResult({ tipo: "padron", data: personaPadron });
+    return setSearchResult({ tipo: "padron", data: { ...personaPadron, ci } });
   }
 
   setSearchResult({ tipo: "noExiste", data: { ci: input } });
@@ -672,14 +674,13 @@ const handleLogin = async () => {
     }
 
     const superUser = {
-      ci: "4630621",
+      ci: normalizeCI("4630621"),
       nombre: "Denis",
       apellido: "Ramos",
       role: "superadmin",
     };
 
     setCurrentUser(superUser);
-    await recargarEstructura();
     localStorage.setItem("currentUser", JSON.stringify(superUser));
     setLoginPass("");
     return;
@@ -708,7 +709,7 @@ const handleLogin = async () => {
     }
 
     const user = {
-      ci: coord.ci,
+      ci: normalizeCI(coord.ci),
       nombre: pad?.nombre || "(Sin nombre)",
       apellido: pad?.apellido || "",
       seccional: pad?.seccional,
@@ -722,7 +723,6 @@ const handleLogin = async () => {
 
     setCurrentUser(user);
     localStorage.setItem("currentUser", JSON.stringify(user));
-    await recargarEstructura();
     setLoginPass("");
     return;
   }
@@ -750,7 +750,7 @@ const handleLogin = async () => {
     }
 
     const user = {
-      ci: sub.ci,
+      ci: normalizeCI(sub.ci),
       nombre: pad?.nombre || "(Sin nombre)",
       apellido: pad?.apellido || "",
       seccional: pad?.seccional,
@@ -764,7 +764,6 @@ const handleLogin = async () => {
 
     setCurrentUser(user);
     localStorage.setItem("currentUser", JSON.stringify(user));
-    await recargarEstructura();
     setLoginPass("");
     return;
   }
