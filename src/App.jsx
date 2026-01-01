@@ -304,13 +304,20 @@ const App = () => {
     }
 
     if (modalType === "votante") {
-      tabla = "votantes";
-      data = {
-        ci: ciStr,
-        asignado_por: currentUser.ci,
-        asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-      };
-    }
+  tabla = "votantes";
+
+  const isCoord = currentUser.role === "coordinador";
+  
+  data = {
+    ci: ciStr,
+    asignado_por: currentUser.ci,
+    asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+    coordinador_ci: isCoord
+      ? currentUser.ci
+      : estructura.subcoordinadores.find(s => normalizeCI(s.ci) === currentUser.ci)?.coordinador_ci
+  };
+}
+
 
     const { error } = await supabase.from(tabla).insert([data]);
     if (error) return alert("Ya está asignado o error en Supabase.");
