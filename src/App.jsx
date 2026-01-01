@@ -1299,11 +1299,9 @@ const handleLogout = () => {
                 <thead className="bg-red-600 text-white text-center">
                   <tr>
                     <th className="px-3 py-2">#</th>
-                    <th className="px-3 py-2 text-left">Nombre</th>
-                    <th className="px-3 py-2 text-left">Localidad</th>
-                    <th className="px-3 py-2 text-left">Mesa</th>
+                    <th className="px-3 py-2 text-left">Nombre / Rol</th>
+                    <th className="px-3 py-2 text-left">Seccional</th>
                     <th className="px-3 py-2">Teléfono</th>
-                    <th className="px-3 py-2">Rol</th>
                     <th className="px-3 py-2">Votantes</th>
                     <th className="px-3 py-2">%</th>
                   </tr>
@@ -1321,12 +1319,15 @@ const handleLogout = () => {
                         {i + 1}
                       </td>
                       <td className="px-3 py-2 text-left">
-                        {p.nombre} {p.apellido}
+                        <div className="font-semibold text-gray-800">
+                          {p.nombre} {p.apellido}
+                        </div>
+                        <div className="text-xs text-gray-600">{p.rol}</div>
                       </td>
-                      <td className="px-3 py-2 text-left">{p.localidad}</td>
-                      <td className="px-3 py-2 text-left">{p.mesa}</td>
+                      <td className="px-3 py-2 text-left">
+                        {p.seccional || "-"}
+                      </td>
                       <td className="px-3 py-2">{p.telefono}</td>
-                      <td className="px-3 py-2 font-medium">{p.rol}</td>
                       <td className="px-3 py-2 font-semibold text-red-700">
                         {p.cantidad}
                       </td>
