@@ -791,6 +791,54 @@ const generarPDF = () => {
 
     y = doc.lastAutoTable.finalY + 10;
 
+  const resolvePadron = (ci) => padron.find((x) => normalizeCI(x.ci) === normalizeCI(ci));
+  const resolveSeccional = (persona) => {
+    const padronEntry = resolvePadron(persona.ci);
+    return persona.seccional || padronEntry?.seccional || "-";
+  };
+
+  if (currentUser.role === "superadmin") {
+    // Ranking global
+    doc.setFont("helvetica", "bold");
+    doc.text("Ranking de Coordinadores y Subcoordinadores", 14, y);
+    y += 4;
+
+    const ranking = [...estructura.coordinadores, ...estructura.subcoordinadores].map((p) => {
+      const directos = estructura.votantes.filter((v) => v.asignadoPor === p.ci).length;
+      return {
+        ci: p.ci,
+        nombre: `${p.nombre} ${p.apellido}`,
+        seccional: resolveSeccional(p),
+        telefono: p.telefono || "-",
+        rol: estructura.coordinadores.some((c) => c.ci === p.ci)
+          ? "Coordinador"
+          : "Subcoordinador",
+        cantidad: directos,
+      };
+    });
+
+    const ordenado = ranking.sort((a, b) => b.cantidad - a.cantidad);
+    const totalGlobal = ordenado.reduce((acc, a) => acc + a.cantidad, 0);
+
+    autoTable(doc, {
+      startY: y + 4,
+      head: [["#", "Nombre", "Rol", "Seccional", "Teléfono", "Votantes", "%"]],
+      body: ordenado.map((p, i) => [
+        i + 1,
+        p.nombre,
+        p.rol,
+        p.seccional,
+        p.telefono,
+        p.cantidad,
+        totalGlobal > 0 ? ((p.cantidad / totalGlobal) * 100).toFixed(1) : "0",
+      ]),
+      theme: "striped",
+      headStyles: { fillColor: colorRojo },
+      bodyStyles: { fontSize: 10 },
+    });
+
+    y = doc.lastAutoTable.finalY + 10;
+
     doc.setFont("helvetica", "italic");
     doc.setFontSize(10);
     doc.text(`Total global de votantes: ${totalGlobal}`, 14, y);
@@ -822,6 +870,21 @@ const generarPDF = () => {
   y += 6;
 
   // Estadísticas básicas (solo estructura propia)
+
+  // ========== COORDINADOR / SUBCOORDINADOR ==========
+  const isCoord = currentUser.role === "coordinador";
+  const misSubcoords = isCoord ? getMisSubcoordinadores() : [];
+  const misVotantes = getMisVotantes();
+  const totalVotos =
+    misVotantes.length +
+    (isCoord
+      ? misSubcoords.reduce(
+          (acc, s) => acc + estructura.votantes.filter((v) => v.asignadoPor === s.ci).length,
+          0
+        )
+      : 0);
+
+  // Estadísticas básicas
   autoTable(doc, {
     startY: y,
     head: [["Indicador", "Cantidad"]],
@@ -831,6 +894,7 @@ const generarPDF = () => {
       isCoord ? ["Votantes de subcoordinadores", totalVotos - misVotantes.length] : null,
       !isCoord ? ["Votantes", misVotantes.length] : null,
       ["Total de votantes", totalVotos],
+      ["Votantes", totalVotos],
     ].filter(Boolean),
     theme: "grid",
     headStyles: { fillColor: colorRojo },
