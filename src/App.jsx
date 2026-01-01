@@ -753,8 +753,7 @@ const generarPDF = () => {
     return {
       ci: p.ci,
       nombre: `${p.nombre} ${p.apellido}`,
-      localidad: p.localidad || "-",
-      mesa: p.mesa || "-",
+      seccional: p.seccional || "-",
       telefono: p.telefono || "-",
       rol: estructura.coordinadores.some((c) => c.ci === p.ci)
         ? "Coordinador"
@@ -766,22 +765,22 @@ const generarPDF = () => {
   const ordenado = ranking.sort((a, b) => b.cantidad - a.cantidad);
   const totalGlobal = ordenado.reduce((acc, a) => acc + a.cantidad, 0);
 
-  autoTable(doc, {
-    startY: y + 4,
-    head: [["#", "Nombre", "Localidad", "Mesa", "Teléfono", "Rol", "Votantes"]],
-    body: ordenado.map((p, i) => [
-      i + 1,
-      p.nombre,
-      p.localidad,
-      p.mesa,
-      p.telefono,
-      p.rol,
-      p.cantidad,
-    ]),
-    theme: "striped",
-    headStyles: { fillColor: colorRojo },
-    bodyStyles: { fontSize: 10 },
-  });
+autoTable(doc, {
+  startY: y + 4,
+  head: [["#", "Nombre", "Rol", "Seccional", "Teléfono", "Votantes", "%"]],
+  body: ordenado.map((p, i) => [
+    i + 1,
+    p.nombre,
+    p.rol,
+    p.seccional,
+    p.telefono,
+    p.cantidad,
+    totalGlobal > 0 ? ((p.cantidad / totalGlobal) * 100).toFixed(1) : "0",
+  ]),
+  theme: "striped",
+  headStyles: { fillColor: colorRojo },
+  bodyStyles: { fontSize: 10 },
+});
 
   y = doc.lastAutoTable.finalY + 10;
 
