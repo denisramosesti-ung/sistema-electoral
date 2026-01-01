@@ -330,7 +330,12 @@ const App = () => {
 }
 
     const { error } = await supabase.from(tabla).insert([data]);
-    if (error) return alert("Ya está asignado o error en Supabase.");
+    if (error) {
+  console.error("Supabase error:", error);
+  alert(error.message || "Error desconocido");
+  return;
+}
+
 
     alert("Agregado correctamente.");
     setShowAddModal(false);
