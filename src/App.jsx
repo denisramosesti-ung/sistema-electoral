@@ -1424,32 +1424,39 @@ const handleLogout = () => {
               .map((sub) => (
                 <div
                   key={sub.ci}
-                  className="border rounded p-3 mb-2 bg-red-50/40"
+                  className="border rounded p-3 mb-2 bg-red-50/40 flex flex-col gap-3"
                 >
-                  <DatosPersona
-                    persona={sub}
-                    rol="Sub-coordinador"
-                    loginCode={sub.loginCode}
-                  />
-                  <div className="flex justify-end gap-2 mt-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <DatosPersona
+                      persona={sub}
+                      rol="Sub-coordinador"
+                      loginCode={sub.loginCode}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        aria-label="Teléfono"
+                        onClick={() => abrirTelefono("subcoordinador", sub)}
+                        className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
+                      >
+                        <Phone className="w-5 h-5" />
+                      </button>
+                      <button
+                        aria-label="Borrar"
+                        onClick={() => quitarPersona(sub.ci, "subcoordinador")}
+                        className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div>
                     <button
-                      aria-label="Teléfono"
-                      onClick={() => abrirTelefono("subcoordinador", sub)}
-                      className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
+                      className="text-sm font-semibold mt-2"
+                      disabled
                     >
-                      <Phone className="w-5 h-5" />
-                    </button>
-                    <button
-                      aria-label="Borrar"
-                      onClick={() => quitarPersona(sub.ci, "subcoordinador")}
-                      className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                    >
-                      <Trash2 className="w-5 h-5" />
+                      Votantes
                     </button>
                   </div>
-                  <p className="text-sm font-semibold mt-2">
-                    Votantes
-                  </p>
 
                   {/* VOTANTES DE ESE SUBCOORDINADOR */}
                   {estructura.votantes
