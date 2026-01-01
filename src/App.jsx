@@ -648,6 +648,26 @@ const handleAgregarPersona = async (persona) => {
   const getVotantesDeSubcoord = (subcoordCI) =>
     estructura.votantes.filter((v) => v.asignadoPor === subcoordCI);
 
+  const getEstructuraPropia = () => {
+    const isCoord = currentUser?.role === "coordinador";
+    const misSubcoords = isCoord ? getMisSubcoordinadores() : [];
+    const misVotantes = getMisVotantes();
+    const votantesIndirectos = isCoord
+      ? misSubcoords.reduce(
+          (acc, s) => acc + estructura.votantes.filter((v) => v.asignadoPor === s.ci).length,
+          0
+        )
+      : 0;
+
+    return {
+      isCoord,
+      misSubcoords,
+      misVotantes,
+      votantesIndirectos,
+      totalVotos: misVotantes.length + votantesIndirectos,
+    };
+  };
+
   // ======================= ESTADÍSTICAS =======================
   const getEstadisticas = () => {
     if (currentUser?.role === "superadmin") {
@@ -658,28 +678,20 @@ const handleAgregarPersona = async (persona) => {
       };
     }
 
-    if (currentUser?.role === "coordinador") {
-      const misSubcoords = getMisSubcoordinadores();
-      const directos = getMisVotantes();
-      let indirectos = 0;
+    const { isCoord, misSubcoords, misVotantes, votantesIndirectos, totalVotos } =
+      getEstructuraPropia();
 
-      misSubcoords.forEach((s) => {
-        indirectos += getVotantesDeSubcoord(s.ci).length;
-      });
-
+    if (isCoord) {
       return {
         subcoordinadores: misSubcoords.length,
-        votantesDirectos: directos.length,
-        votantesIndirectos: indirectos,
-        total: directos.length + indirectos,
+        votantesDirectos: misVotantes.length,
+        votantesIndirectos,
+        total: totalVotos,
       };
     }
 
     if (currentUser?.role === "subcoordinador") {
-      const directos = getMisVotantes();
-      return {
-        votantes: directos.length,
-      };
+      return { votantes: misVotantes.length };
     }
 
     return {};
@@ -716,6 +728,24 @@ const generarPDF = () => {
     const padronEntry = resolvePadron(persona.ci);
     return persona.seccional || padronEntry?.seccional || "-";
   };
+
+  if (currentUser.role === "superadmin") {
+    const totalCoordinadores = estructura.coordinadores.length;
+    const totalSub = estructura.subcoordinadores.length;
+    const totalVotantes = estructura.votantes.length;
+
+    autoTable(doc, {
+      startY: y,
+      head: [["Indicador", "Cantidad"]],
+      body: [
+        ["Coordinadores", totalCoordinadores],
+        ["Subcoordinadores", totalSub],
+        ["Total de Votantes Captados", totalVotantes],
+      ],
+      theme: "grid",
+      headStyles: { fillColor: colorRojo },
+    });
+
 
   if (currentUser.role === "superadmin") {
     const totalCoordinadores = estructura.coordinadores.length;
@@ -791,6 +821,27 @@ const generarPDF = () => {
 
     y = doc.lastAutoTable.finalY + 10;
 
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(10);
+    doc.text(`Total global de votantes: ${totalGlobal}`, 14, y);
+    y += 6;
+    doc.text(
+      "Generado automáticamente por el Sistema Electoral — Uso privado y estratégico",
+      14,
+      y
+    );
+    doc.save("informe_captacion.pdf");
+    return;
+  }
+
+  // ========== COORDINADOR / SUBCOORDINADOR ==========
+  const { isCoord, misSubcoords, misVotantes, totalVotos } = getEstructuraPropia();
+
+  doc.setFont("helvetica", "bold");
+  doc.text("Mi Estructura", 14, y);
+  y += 6;
+
+  // Estadísticas básicas (solo estructura propia)
   const resolvePadron = (ci) => padron.find((x) => normalizeCI(x.ci) === normalizeCI(ci));
   const resolveSeccional = (persona) => {
     const padronEntry = resolvePadron(persona.ci);
