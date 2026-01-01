@@ -9,6 +9,7 @@ import {
   BarChart3,
   ChevronDown,
   ChevronRight,
+  Copy,
   Trash2,
 } from "lucide-react";
 import jsPDF from "jspdf";
@@ -354,47 +355,48 @@ const DatosPersona = ({ persona, rol, loginCode }) => {
   const apellido = (persona.apellido || "").toUpperCase();
 
   return (
-    <div className="space-y-1 text-sm md:text-base text-gray-700">
-      <p className="font-semibold text-gray-800 text-base md:text-lg">
+    <div className="space-y-0.5 text-xs md:text-sm text-gray-700">
+      <p className="font-semibold text-gray-800 text-sm md:text-base">
         {nombre} {apellido}
       </p>
-      <p className="text-sm md:text-base text-gray-700">
+      <p className="text-xs md:text-sm text-gray-700">
         CI: {persona.ci}
         {rol ? ` — ${rol}` : ""}
       </p>
       {loginCode && (
-        <div className="flex flex-wrap items-center gap-3 text-sm md:text-base text-gray-700">
+        <div className="flex flex-wrap items-center gap-2 text-xs md:text-sm text-gray-700">
           <span>Código de acceso: {loginCode}</span>
           <button
             onClick={() => copyToClipboard(loginCode)}
-            className="px-3 py-1 text-sm md:text-base border border-red-600 text-red-700 rounded-lg hover:bg-red-50"
+            className="p-1.5 border border-red-600 text-red-700 rounded-lg hover:bg-red-50"
+            title="Copiar código"
           >
-            Copiar código
+            <Copy className="w-4 h-4" />
           </button>
         </div>
       )}
       {persona.seccional && (
-        <p className="text-sm md:text-base text-gray-700">
+        <p className="text-xs md:text-sm text-gray-700">
           Seccional: {persona.seccional}
         </p>
       )}
       {persona.local_votacion && (
-        <p className="text-sm md:text-base text-gray-700">
+        <p className="text-xs md:text-sm text-gray-700">
           Colegio: {persona.local_votacion}
         </p>
       )}
       {persona.mesa && (
-        <p className="text-sm md:text-base text-gray-700">
+        <p className="text-xs md:text-sm text-gray-700">
           Mesa: {persona.mesa}
         </p>
       )}
       {persona.orden && (
-        <p className="text-sm md:text-base text-gray-700">
+        <p className="text-xs md:text-sm text-gray-700">
           Orden: {persona.orden}
         </p>
       )}
       {persona.direccion && (
-        <p className="text-sm md:text-base text-gray-700">
+        <p className="text-xs md:text-sm text-gray-700">
           Domicilio: {persona.direccion}
         </p>
       )}
