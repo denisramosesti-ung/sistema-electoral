@@ -1431,6 +1431,22 @@ const handleLogout = () => {
                     rol="Sub-coordinador"
                     loginCode={sub.loginCode}
                   />
+                  <div className="flex justify-end gap-2 mt-2">
+                    <button
+                      aria-label="Teléfono"
+                      onClick={() => abrirTelefono("subcoordinador", sub)}
+                      className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
+                    >
+                      <Phone className="w-5 h-5" />
+                    </button>
+                    <button
+                      aria-label="Borrar"
+                      onClick={() => quitarPersona(sub.ci, "subcoordinador")}
+                      className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
                   <p className="text-sm font-semibold mt-2">
                     Votantes
                   </p>
@@ -1536,23 +1552,24 @@ const handleLogout = () => {
 
                       <div className="flex flex-col md:flex-row gap-2">
                         <button
+                          aria-label="Teléfono"
                           onClick={(e) => {
                             e.stopPropagation();
                             abrirTelefono("subcoordinador", sub);
                           }}
-                          className="px-3 py-2 border-2 border-green-600 text-green-700 rounded-lg text-xs md:text-sm hover:bg-green-50"
+                          className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
                         >
-                          Teléfono
+                          <Phone className="w-5 h-5" />
                         </button>
                         <button
+                          aria-label="Borrar"
                           onClick={(e) => {
                             e.stopPropagation();
                             quitarPersona(sub.ci, "subcoordinador");
                           }}
-                          className="flex items-center gap-1 bg-red-600 text-white px-3 py-2 rounded-lg hover:bg-red-700 text-xs md:text-sm"
+                          className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
                         >
-                          <Trash2 className="w-4 h-4" />
-                          Borrar
+                          <Trash2 className="w-5 h-5" />
                         </button>
                       </div>
                     </div>
