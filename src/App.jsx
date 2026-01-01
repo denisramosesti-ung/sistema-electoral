@@ -745,22 +745,23 @@ const generarPDF = () => {
 
   // Ranking de Captación
   doc.setFont("helvetica", "bold");
-  doc.text("Ranking de Coordinadores y Subcoordinadores", 14, y);
-  y += 4;
+      doc.text("Ranking de Coordinadores y Subcoordinadores", 14, y);
+      y += 4;
 
-  const ranking = [...estructura.coordinadores, ...estructura.subcoordinadores].map((p) => {
-    const directos = estructura.votantes.filter((v) => v.asignadoPor === p.ci).length;
-    return {
-      ci: p.ci,
-      nombre: `${p.nombre} ${p.apellido}`,
-      seccional: p.seccional || "-",
-      telefono: p.telefono || "-",
-      rol: estructura.coordinadores.some((c) => c.ci === p.ci)
-        ? "Coordinador"
-        : "Subcoordinador",
-      cantidad: directos,
-    };
-  });
+      const ranking = [...estructura.coordinadores, ...estructura.subcoordinadores].map((p) => {
+        const directos = estructura.votantes.filter((v) => v.asignadoPor === p.ci).length;
+        const padronEntry = padron.find((x) => normalizeCI(x.ci) === p.ci);
+        return {
+          ci: p.ci,
+          nombre: `${p.nombre} ${p.apellido}`,
+          seccional: p.seccional ?? padronEntry?.seccional ?? "-",
+          telefono: p.telefono || "-",
+          rol: estructura.coordinadores.some((c) => c.ci === p.ci)
+            ? "Coordinador"
+            : "Subcoordinador",
+          cantidad: directos,
+        };
+      });
 
   const ordenado = ranking.sort((a, b) => b.cantidad - a.cantidad);
   const totalGlobal = ordenado.reduce((acc, a) => acc + a.cantidad, 0);
@@ -1268,12 +1269,12 @@ const handleLogout = () => {
       {(() => {
         const ranking = [...estructura.coordinadores, ...estructura.subcoordinadores].map((p) => {
           const directos = estructura.votantes.filter((v) => v.asignadoPor === p.ci).length;
+          const padronEntry = padron.find((x) => normalizeCI(x.ci) === p.ci);
           return {
             ci: p.ci,
             nombre: p.nombre,
             apellido: p.apellido,
-            localidad: p.localidad || "-",
-            mesa: p.mesa || "-",
+            seccional: p.seccional ?? padronEntry?.seccional ?? "-",
             telefono: p.telefono || "-",
             rol: estructura.coordinadores.some((c) => c.ci === p.ci)
               ? "Coordinador"
