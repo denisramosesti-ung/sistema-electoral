@@ -392,18 +392,30 @@ const App = () => {
       </div>
     );
   };
-  // ======================= DISPONIBLES (PADRÓN NO ASIGNADO) =======================
-  const getPersonasDisponibles = () => {
-    const usados = new Set([
-      ...estructura.coordinadores.map((c) => normalizeCI(c.ci)),
-      ...estructura.subcoordinadores.map((s) => normalizeCI(s.ci)),
-      ...estructura.votantes.map((v) => normalizeCI(v.ci)),
-    ]);
+  // ======================= DISPONIBLES (PADRÓN + ROL REAL) =======================
+const getPersonasDisponibles = () => {
+  return padron.map((p) => {
+    const ci = normalizeCI(p.ci);
 
-    return padron
-      .map((p) => ({ ...p, ci: normalizeCI(p.ci) }))
-      .filter((p) => !usados.has(p.ci));
-  };
+    const coord = estructura.coordinadores.find((c) => normalizeCI(c.ci) === ci);
+    const sub = estructura.subcoordinadores.find((s) => normalizeCI(s.ci) === ci);
+    const vot = estructura.votantes.find((v) => normalizeCI(v.ci) === ci);
+
+    let rol = null;
+    if (coord) rol = "coordinador";
+    else if (sub) rol = "subcoordinador";
+    else if (vot) rol = "votante";
+
+    return {
+      ...p,
+      ci,
+      asignado: rol !== null,
+      asignadoRol: rol,
+      asignadoPorNombre: sub?.asignado_por_nombre || vot?.asignado_por_nombre || "",
+    };
+  });
+};
+
 
   // ======================= ESTRUCTURA PROPIA PARA ESTADÍSTICAS/PDF =======================
   const getEstructuraPropia = () => {
