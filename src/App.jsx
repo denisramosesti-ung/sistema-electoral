@@ -1,16 +1,14 @@
 // App.jsx – Versión Supabase + padrón remoto (COMPLETA, CON LOGIN PERSISTENTE, BUSCADOR CI Y TELÉFONO)
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 import {
-  Search,
   Users,
   UserPlus,
   LogOut,
   BarChart3,
   ChevronDown,
   ChevronRight,
-  X,
   Trash2,
 } from "lucide-react";
 import jsPDF from "jspdf";
@@ -45,6 +43,29 @@ const App = () => {
   const [phoneTarget, setPhoneTarget] = useState(null); // {tipo, ci, nombre, apellido}
   const [phoneValue, setPhoneValue] = useState("+595");
 
+  const normalizeCI = (value) => Number(value) || 0;
+
+  const copyToClipboard = async (text) => {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      alert("Código copiado al portapapeles");
+    } catch (err) {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+        alert("Código copiado al portapapeles");
+      } catch (e) {
+        console.error("No se pudo copiar", err || e);
+        alert("No se pudo copiar el código.");
+      }
+    }
+  };
+
   // ======================= CARGAR SESIÓN DESDE LOCALSTORAGE =======================
   useEffect(() => {
     const saved = localStorage.getItem("currentUser");
@@ -59,6 +80,13 @@ const App = () => {
       }
     }
   }, []);
+
+  // Cargar estructura cuando haya sesión persistida
+  useEffect(() => {
+    if (currentUser) {
+      recargarEstructura();
+    }
+  }, [currentUser]);
 
   // ======================= CARGAR PADRÓN COMPLETO =======================
 const cargarPadronCompleto = async () => {
@@ -95,21 +123,15 @@ useEffect(() => {
 
 
   // ======================= HELPERS =======================
-const generarCodigo = () =>
-  Math.random().toString(36).substring(2, 8).toUpperCase();
+const toggleExpand = (ci) => {
+  const key = normalizeCI(ci);
+  setExpandedCoords((prev) => ({
+    ...prev,
+    [key]: !prev[key],
+  }));
+};
 
-// Normalizar datos provenientes del join
-const mapPadronFields = (padron) => ({
-  nombre: padron?.nombre || "-",
-  apellido: padron?.apellido || "-",
-  seccional: padron?.seccional || "-",
-  local_votacion: padron?.local_votacion || "-",
-  mesa: padron?.mesa || "-",
-  orden: padron?.orden || "-",
-  direccion: padron?.direccion || "-",
-});
-
-// ======================= RECARGAR ESTRUCTURA =======================
+  // ======================= RECARGAR ESTRUCTURA =======================
 const recargarEstructura = async () => {
   try {
     const { data: coords, error: coordsErr } = await supabase
@@ -179,7 +201,7 @@ const recargarEstructura = async () => {
    setEstructura({
   coordinadores:
     coords?.map((x) => ({
-      ci: Number(x.ci),
+      ci: normalizeCI(x.ci),
       loginCode: x.login_code,
       asignadoPorNombre: x.asignado_por_nombre,
       telefono: x.telefono,
@@ -194,8 +216,8 @@ const recargarEstructura = async () => {
 
   subcoordinadores:
     subs?.map((x) => ({
-      ci: Number(x.ci),
-      coordinadorCI: Number(x.coordinador_ci),
+      ci: normalizeCI(x.ci),
+      coordinadorCI: normalizeCI(x.coordinador_ci),
       loginCode: x.login_code,
       asignadoPorNombre: x.asignado_por_nombre,
       telefono: x.telefono,
@@ -210,8 +232,8 @@ const recargarEstructura = async () => {
 
   votantes:
     votos?.map((x) => ({
-      ci: Number(x.ci),
-      asignadoPor: Number(x.asignado_por),
+      ci: normalizeCI(x.ci),
+      asignadoPor: normalizeCI(x.asignado_por),
       asignadoPorNombre: x.asignado_por_nombre,
       telefono: x.telefono,
       nombre: x.padron?.nombre,
@@ -235,22 +257,23 @@ console.log("Estructura mapeada correctamente");
   // ======================= PADRÓN DISPONIBLE =======================
 const getPersonasDisponibles = () => {
   return padron.map((p) => {
-    const ciStr = p.ci.toString();
+    const ciNumber = normalizeCI(p.ci);
+    const personaBase = { ...p, ci: ciNumber };
 
-    const coordItem = estructura.coordinadores.find((c) => c.ci === ciStr);
+    const coordItem = estructura.coordinadores.find((c) => c.ci === ciNumber);
     if (coordItem) {
       return {
-        ...p,
+        ...personaBase,
         asignado: true,
         asignadoRol: "Coordinador",
         asignadoPorNombre: coordItem.asignado_por_nombre || "Superadmin",
       };
     }
 
-    const subItem = estructura.subcoordinadores.find((s) => s.ci === ciStr);
+    const subItem = estructura.subcoordinadores.find((s) => s.ci === ciNumber);
     if (subItem) {
       return {
-        ...p,
+        ...personaBase,
         asignado: true,
         asignadoRol: "Subcoordinador",
         asignadoPorNombre:
@@ -258,10 +281,10 @@ const getPersonasDisponibles = () => {
       };
     }
 
-    const votItem = estructura.votantes.find((v) => v.ci === ciStr);
+    const votItem = estructura.votantes.find((v) => v.ci === ciNumber);
     if (votItem) {
       return {
-        ...p,
+        ...personaBase,
         asignado: true,
         asignadoRol: "Votante",
         asignadoPorNombre:
@@ -270,7 +293,7 @@ const getPersonasDisponibles = () => {
     }
 
     return {
-      ...p,
+      ...personaBase,
       asignado: false,
       asignadoRol: null,
       asignadoPorNombre: null,
@@ -296,21 +319,21 @@ const buscarPorCI = (input) => {
   });
 
   if (personaPadron) {
-    const ci = personaPadron.ci;
+    const ci = normalizeCI(personaPadron.ci);
 
-    const coord = estructura.coordinadores.find((c) => c.ci == ci);
+    const coord = estructura.coordinadores.find((c) => c.ci === ci);
     if (coord)
       return setSearchResult({ tipo: "coordinador", data: coord });
 
-    const sub = estructura.subcoordinadores.find((s) => s.ci == ci);
+    const sub = estructura.subcoordinadores.find((s) => s.ci === ci);
     if (sub)
       return setSearchResult({ tipo: "subcoordinador", data: sub });
 
-    const vot = estructura.votantes.find((v) => v.ci == ci);
+    const vot = estructura.votantes.find((v) => v.ci === ci);
     if (vot) {
       const asignadoPor =
-        estructura.subcoordinadores.find((s) => s.ci == vot.asignadoPor) ||
-        estructura.coordinadores.find((c) => c.ci == vot.asignadoPor) ||
+        estructura.subcoordinadores.find((s) => s.ci === vot.asignadoPor) ||
+        estructura.coordinadores.find((c) => c.ci === vot.asignadoPor) ||
         null;
 
       return setSearchResult({
@@ -320,10 +343,63 @@ const buscarPorCI = (input) => {
       });
     }
 
-    return setSearchResult({ tipo: "padron", data: personaPadron });
+    return setSearchResult({ tipo: "padron", data: { ...personaPadron, ci } });
   }
 
   setSearchResult({ tipo: "noExiste", data: { ci: input } });
+};
+
+const DatosPersona = ({ persona, rol, loginCode }) => {
+  const nombre = (persona.nombre || "").toUpperCase();
+  const apellido = (persona.apellido || "").toUpperCase();
+
+  return (
+    <div className="space-y-1 text-sm md:text-base text-gray-700">
+      <p className="font-semibold text-gray-800 text-base md:text-lg">
+        {nombre} {apellido}
+      </p>
+      <p className="text-sm md:text-base text-gray-700">
+        CI: {persona.ci}
+        {rol ? ` — ${rol}` : ""}
+      </p>
+      {loginCode && (
+        <div className="flex flex-wrap items-center gap-3 text-sm md:text-base text-gray-700">
+          <span>Código de acceso: {loginCode}</span>
+          <button
+            onClick={() => copyToClipboard(loginCode)}
+            className="px-3 py-1 text-sm md:text-base border border-red-600 text-red-700 rounded-lg hover:bg-red-50"
+          >
+            Copiar código
+          </button>
+        </div>
+      )}
+      {persona.seccional && (
+        <p className="text-sm md:text-base text-gray-700">
+          Seccional: {persona.seccional}
+        </p>
+      )}
+      {persona.local_votacion && (
+        <p className="text-sm md:text-base text-gray-700">
+          Colegio: {persona.local_votacion}
+        </p>
+      )}
+      {persona.mesa && (
+        <p className="text-sm md:text-base text-gray-700">
+          Mesa: {persona.mesa}
+        </p>
+      )}
+      {persona.orden && (
+        <p className="text-sm md:text-base text-gray-700">
+          Orden: {persona.orden}
+        </p>
+      )}
+      {persona.direccion && (
+        <p className="text-sm md:text-base text-gray-700">
+          Domicilio: {persona.direccion}
+        </p>
+      )}
+    </div>
+  );
 };
 
   // ======================= MODAL TELÉFONO =======================
@@ -672,14 +748,13 @@ const handleLogin = async () => {
     }
 
     const superUser = {
-      ci: "4630621",
+      ci: normalizeCI("4630621"),
       nombre: "Denis",
       apellido: "Ramos",
       role: "superadmin",
     };
 
     setCurrentUser(superUser);
-    await recargarEstructura();
     localStorage.setItem("currentUser", JSON.stringify(superUser));
     setLoginPass("");
     return;
@@ -708,7 +783,7 @@ const handleLogin = async () => {
     }
 
     const user = {
-      ci: coord.ci,
+      ci: normalizeCI(coord.ci),
       nombre: pad?.nombre || "(Sin nombre)",
       apellido: pad?.apellido || "",
       seccional: pad?.seccional,
@@ -722,7 +797,6 @@ const handleLogin = async () => {
 
     setCurrentUser(user);
     localStorage.setItem("currentUser", JSON.stringify(user));
-    await recargarEstructura();
     setLoginPass("");
     return;
   }
@@ -750,7 +824,7 @@ const handleLogin = async () => {
     }
 
     const user = {
-      ci: sub.ci,
+      ci: normalizeCI(sub.ci),
       nombre: pad?.nombre || "(Sin nombre)",
       apellido: pad?.apellido || "",
       seccional: pad?.seccional,
@@ -764,7 +838,6 @@ const handleLogin = async () => {
 
     setCurrentUser(user);
     localStorage.setItem("currentUser", JSON.stringify(user));
-    await recargarEstructura();
     setLoginPass("");
     return;
   }
@@ -1233,56 +1306,21 @@ const handleLogout = () => {
         className="border rounded-lg mb-3 bg-red-50/40"
       >
         <div
-          className="flex items-center justify-between p-4 cursor-pointer"
+          className="flex items-start justify-between p-4 cursor-pointer gap-4"
           onClick={() => toggleExpand(coord.ci)}
         >
-          <div className="flex items-center gap-3 flex-1">
+          <div className="flex items-start gap-3 flex-1">
             {expandedCoords[coord.ci] ? (
               <ChevronDown className="w-5 h-5 text-red-600" />
             ) : (
               <ChevronRight className="w-5 h-5 text-red-600" />
             )}
 
-            <div>
-              <p className="font-semibold text-gray-800">
-                {coord.nombre} {coord.apellido}
-              </p>
-              <p className="text-sm text-gray-600">
-                CI: {coord.ci} — Coordinador
-              </p>
-              {coord.telefono && (
-                <p className="text-xs text-gray-500">
-                  Tel: {coord.telefono}
-                </p>
-              )}
-              {coord.loginCode && (
-                <p className="text-xs text-gray-500">
-                  Código de acceso: {coord.loginCode}
-                </p>
-              )}
-              <p className="text-xs text-gray-500">
-  {coord.seccional && (
-    <>Seccional {coord.seccional} • </>
-  )}
-  {coord.local_votacion && (
-    <>{coord.local_votacion} • </>
-  )}
-  {coord.mesa && (
-    <>Mesa {coord.mesa} • </>
-  )}
-  {coord.orden && (
-    <>Orden {coord.orden}</>
-  )}
-</p>
-
-{coord.direccion && (
-  <p className="text-xs text-gray-500">
-    Domicilio: {coord.direccion}
-  </p>
-)}
-
-
-            </div>
+            <DatosPersona
+              persona={coord}
+              rol="Coordinador"
+              loginCode={coord.loginCode}
+            />
           </div>
 
           <div className="flex flex-col md:flex-row gap-2">
@@ -1320,37 +1358,11 @@ const handleLogout = () => {
                   key={sub.ci}
                   className="border rounded p-3 mb-2 bg-red-50/40"
                 >
-                  <p className="font-semibold text-gray-800">
-                    {sub.nombre} {sub.apellido}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    CI: {sub.ci} — Sub-coordinador
-                  </p>
-                  {sub.telefono && (
-                    <p className="text-xs text-gray-500">
-                      Tel: {sub.telefono}
-                    </p>
-                  )}
-                  {sub.loginCode && (
-                    <p className="text-xs text-gray-500">
-                      Código de acceso: {sub.loginCode}
-                    </p>
-                  )}
-                  <p className="text-xs text-gray-500">
-  {sub.seccional && <>Seccional {sub.seccional} • </>}
-  {sub.local_votacion && <>{sub.local_votacion} • </>}
-  {sub.mesa && <>Mesa {sub.mesa} • </>}
-  {sub.orden && <>Orden {sub.orden}</>}
-</p>
-
-{sub.direccion && (
-  <p className="text-xs text-gray-500">
-    Domicilio: {sub.direccion}
-  </p>
-)}
-
-
-
+                  <DatosPersona
+                    persona={sub}
+                    rol="Sub-coordinador"
+                    loginCode={sub.loginCode}
+                  />
                   <p className="text-sm font-semibold mt-2">
                     Votantes
                   </p>
@@ -1361,18 +1373,9 @@ const handleLogout = () => {
                     .map((v) => (
                       <div
                         key={v.ci}
-                        className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
+                        className="bg-white border p-3 mt-2 rounded flex justify-between items-start gap-3"
                       >
-                        <span>
-                          {v.nombre} {v.apellido} — CI: {v.ci}
-                          {v.padron?.seccional ? ` — Seccional ${v.padron.seccional}` : ""}
-                          {v.padron?.local_votacion ? ` — ${v.padron.local_votacion}` : ""}
-                          {v.padron?.mesa ? ` — Mesa ${v.padron.mesa}` : ""}
-                          {v.padron?.orden ? ` — Orden ${v.padron.orden}` : ""}
-                          {v.padron?.direccion ? ` — ${v.padron.direccion}` : ""}
-
-                          {v.telefono ? ` — Tel: ${v.telefono}` : ""}
-                        </span>
+                        <DatosPersona persona={v} rol="Votante" />
 
                         <div className="flex gap-2">
                           <button
@@ -1400,14 +1403,9 @@ const handleLogout = () => {
               .map((v) => (
                 <div
                   key={v.ci}
-                  className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
+                  className="bg-white border p-3 mt-2 rounded flex justify-between items-start gap-3"
                 >
-                  <span>
-                    {v.nombre} {v.apellido} — CI: {v.ci}
-                    {v.localidad ? ` — ${v.localidad}` : ""}
-                    {v.mesa ? ` — Mesa ${v.mesa}` : ""}
-                    {v.telefono ? ` — Tel: ${v.telefono}` : ""}
-                  </span>
+                  <DatosPersona persona={v} rol="Votante" />
 
                   <div className="flex gap-2">
                     <button
@@ -1449,39 +1447,21 @@ const handleLogout = () => {
                     className="border rounded-lg mb-3 bg-red-50/40"
                   >
                     <div
-                      className="flex items-center justify-between p-4 cursor-pointer"
+                      className="flex items-start justify-between p-4 cursor-pointer gap-4"
                       onClick={() => toggleExpand(sub.ci)}
                     >
-                      <div className="flex items-center gap-3 flex-1">
+                      <div className="flex items-start gap-3 flex-1">
                         {expandedCoords[sub.ci] ? (
                           <ChevronDown className="w-5 h-5 text-red-600" />
                         ) : (
                           <ChevronRight className="w-5 h-5 text-red-600" />
                         )}
 
-                        <div>
-                          <p className="font-semibold text-gray-800">
-                            {sub.nombre} {sub.apellido}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            CI: {sub.ci} — Sub-coordinador
-                          </p>
-                          {sub.telefono && (
-                            <p className="text-xs text-gray-500">
-                              Tel: {sub.telefono}
-                            </p>
-                          )}
-                          {sub.loginCode && (
-                            <p className="text-xs text-gray-500">
-                              Código: {sub.loginCode}
-                            </p>
-                          )}
-                          {sub.localidad && sub.mesa && (
-                            <p className="text-xs text-gray-500">
-                              {sub.localidad} — Mesa {sub.mesa}
-                            </p>
-                          )}
-                        </div>
+                        <DatosPersona
+                          persona={sub}
+                          rol="Sub-coordinador"
+                          loginCode={sub.loginCode}
+                        />
                       </div>
 
                       <div className="flex flex-col md:flex-row gap-2">
@@ -1513,14 +1493,9 @@ const handleLogout = () => {
                         {getVotantesDeSubcoord(sub.ci).map((v) => (
                           <div
                             key={v.ci}
-                            className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
+                            className="bg-white border p-3 mt-2 rounded flex justify-between items-start gap-3"
                           >
-                            <span>
-                              {v.nombre} {v.apellido} — CI: {v.ci}
-                              {v.localidad ? ` — ${v.localidad}` : ""}
-                              {v.mesa ? ` — Mesa ${v.mesa}` : ""}
-                              {v.telefono ? ` — Tel: ${v.telefono}` : ""}
-                            </span>
+                            <DatosPersona persona={v} rol="Votante" />
                             <div className="flex gap-2">
                               <button
                                 onClick={() => abrirTelefono("votante", v)}
@@ -1558,14 +1533,9 @@ const handleLogout = () => {
                     {getMisVotantes().map((v) => (
                       <div
                         key={v.ci}
-                        className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
+                        className="bg-white border p-3 mt-2 rounded flex justify-between items-start gap-3"
                       >
-                        <span>
-                          {v.nombre} {v.apellido} — CI: {v.ci}
-                          {v.localidad ? ` — ${v.localidad}` : ""}
-                          {v.mesa ? ` — Mesa ${v.mesa}` : ""}
-                          {v.telefono ? ` — Tel: ${v.telefono}` : ""}
-                        </span>
+                        <DatosPersona persona={v} rol="Votante" />
                         <div className="flex gap-2">
                           <button
                             onClick={() => abrirTelefono("votante", v)}
@@ -1594,14 +1564,9 @@ const handleLogout = () => {
                 {getMisVotantes().map((v) => (
                   <div
                     key={v.ci}
-                    className="bg-white border p-2 mt-2 rounded text-sm flex justify-between items-center"
+                    className="bg-white border p-3 mt-2 rounded flex justify-between items-start gap-3"
                   >
-                    <span>
-                      {v.nombre} {v.apellido} — CI: {v.ci}
-                      {v.localidad ? ` — ${v.localidad}` : ""}
-                      {v.mesa ? ` — Mesa ${v.mesa}` : ""}
-                      {v.telefono ? ` — Tel: ${v.telefono}` : ""}
-                    </span>
+                    <DatosPersona persona={v} rol="Votante" />
                     <div className="flex gap-2">
                       <button
                         onClick={() => abrirTelefono("votante", v)}
