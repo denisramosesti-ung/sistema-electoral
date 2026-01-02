@@ -4,6 +4,7 @@
 
 import React, { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
+import { generarCodigoAcceso } from "./utils/accessCode";
 import { Users } from "lucide-react";
 import Dashboard from "./components/Dashboard";
 import { normalizeCI } from "./utils/estructuraHelpers";
@@ -29,7 +30,9 @@ const App = () => {
 
   // ======================= LOGIN =======================
   const handleLogin = async () => {
-    if (!loginID.trim()) return alert("Ingrese código.");
+    const code = loginID.trim().toUpperCase();
+    if (!code) return alert("Ingrese código.");
+
 
     // SUPERADMIN
     if (loginID === "4630621") {
@@ -51,7 +54,7 @@ const App = () => {
     const { data: coord, error: coordErr } = await supabase
       .from("coordinadores")
       .select("ci,login_code,telefono,padron(*)")
-      .eq("login_code", loginID)
+      .eq("login_code", code)
       .maybeSingle();
 
     if (coordErr) console.error("Error login coord:", coordErr);
@@ -73,7 +76,7 @@ const App = () => {
     const { data: sub, error: subErr } = await supabase
       .from("subcoordinadores")
       .select("ci,login_code,telefono,coordinador_ci,padron(*)")
-      .eq("login_code", loginID)
+      .eq("login_code", code)
       .maybeSingle();
 
     if (subErr) console.error("Error login sub:", subErr);
