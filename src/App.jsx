@@ -317,26 +317,39 @@ const handleAgregarPersona = async (persona) => {
   }
 
   if (modalType === "votante") {
-    tabla = "votantes";
+  tabla = "votantes";
 
-    let coordinadorAsignado =
-      currentUser.role === "coordinador"
-        ? normalizeCI(currentUser.ci)
-        : estructura.subcoordinadores.find(
-            (s) => normalizeCI(s.ci) === normalizeCI(currentUser.ci)
-          )?.coordinador_ci;
+  let asignadorCI;
+  let coordinadorCI;
 
-    if (!coordinadorAsignado) {
-      return alert("No se pudo determinar el coordinador asignado.");
-    }
+  if (currentUser.role === "subcoordinador") {
+    asignadorCI = normalizeCI(currentUser.ci);
 
-    data = {
-      ci,
-      asignado_por: normalizeCI(currentUser.ci),
-      asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-      coordinador_ci: normalizeCI(coordinadorAsignado),
-    };
+    const sub = estructura.subcoordinadores.find(
+      (s) => normalizeCI(s.ci) === asignadorCI
+    );
+
+    coordinadorCI = normalizeCI(sub?.coordinador_ci);
   }
+
+  if (currentUser.role === "coordinador") {
+    // el coordinador actúa como su propio subcoordinador
+    asignadorCI = normalizeCI(currentUser.ci);
+    coordinadorCI = normalizeCI(currentUser.ci);
+  }
+
+  if (!asignadorCI || !coordinadorCI) {
+    return alert("No se pudo determinar la estructura del votante.");
+  }
+
+  data = {
+    ci,
+    asignado_por: asignadorCI,          // SIEMPRE quien lo gestiona directo
+    asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+    coordinador_ci: coordinadorCI,      // SIEMPRE el coordinador
+  };
+}
+
 
   const { error } = await supabase.from(tabla).insert([data]);
   if (error) {
