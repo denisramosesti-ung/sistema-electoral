@@ -125,57 +125,75 @@ const App = () => {
   }, [currentUser]);
 
   // ======================= CARGAR ESTRUCTURA (BASE REAL DESDE SUPABASE) =======================
+// ⚠️ BLOQUE CRÍTICO
+// Este bloque NO usa joins implícitos de Supabase (padron())
+// Evita problemas de FK, RLS y relaciones rotas
+// TODO se resuelve manualmente en JS
+// COPIAR Y PEGAR COMPLETO
+
 const recargarEstructura = async () => {
   try {
-    const { data: coords } = await supabase
+    // ======================= CARGA BASE =======================
+    const { data: padronData, error: padronErr } = await supabase
+      .from("padron")
+      .select("*");
+
+    if (padronErr) {
+      console.error("Error cargando padrón:", padronErr);
+      return;
+    }
+
+    const { data: coordsRaw } = await supabase
       .from("coordinadores")
-      .select(`
-        ci,
-        login_code,
-        asignado_por_nombre,
-        telefono,
-        padron (
-          ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
-        )
-      `);
+      .select("*");
 
-    const { data: subs } = await supabase
+    const { data: subsRaw } = await supabase
       .from("subcoordinadores")
-      .select(`
-        ci,
-        coordinador_ci,
-        login_code,
-        asignado_por_nombre,
-        telefono,
-        padron (
-          ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
-        )
-      `);
+      .select("*");
 
-    const { data: votos } = await supabase
+    const { data: votosRaw } = await supabase
       .from("votantes")
-      .select(`
-        ci,
-        asignado_por,
-        coordinador_ci,
-        asignado_por_nombre,
-        telefono,
-        padron (
-          ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
-        )
-      `);
+      .select("*");
 
+    // ======================= MAPEO MANUAL =======================
+    const coordinadores = (coordsRaw || []).map(c => {
+      const p = padronData.find(
+        p => normalizeCI(p.ci) === normalizeCI(c.ci)
+      );
+      return { ...c, ...p };
+    });
+
+    const subcoordinadores = (subsRaw || []).map(s => {
+      const p = padronData.find(
+        p => normalizeCI(p.ci) === normalizeCI(s.ci)
+      );
+      return { ...s, ...p };
+    });
+
+    const votantes = (votosRaw || []).map(v => {
+      const p = padronData.find(
+        p => normalizeCI(p.ci) === normalizeCI(v.ci)
+      );
+      return { ...v, ...p };
+    });
+
+    // ======================= DEBUG (NO BORRAR) =======================
+    console.log("PADRON:", padronData.length);
+    console.log("COORDINADORES:", coordinadores);
+    console.log("SUBCOORDINADORES:", subcoordinadores);
+    console.log("VOTANTES:", votantes);
+
+    // ======================= SET FINAL =======================
     setEstructura({
-      coordinadores: coords?.map(x => ({ ...x.padron, ...x })) || [],
-      subcoordinadores: subs?.map(x => ({ ...x.padron, ...x })) || [],
-      votantes: votos?.map(x => ({ ...x.padron, ...x })) || [],
+      coordinadores,
+      subcoordinadores,
+      votantes,
     });
 
   } catch (e) {
-    console.error("Error recargando estructura", e);
+    console.error("Error recargando estructura:", e);
   }
 };
-
 
   // ======================= BUSCADOR GLOBAL POR CI =======================
   const buscarPorCI = (input) => {
