@@ -102,66 +102,56 @@ const App = () => {
     if (currentUser) recargarEstructura();
   }, [currentUser]);
 
-  // ======================= CARGAR ESTRUCTURA =======================
-  const recargarEstructura = async () => {
-    try {
-      const { data: coords } = await supabase
-        .from("coordinadores")
-        .select(`
-          ci,
-          login_code,
-          asignado_por_nombre,
-          telefono,
-          padron (
-            ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
-          )
-        `);
-
-      const { data: subs } = await supabase
-        .from("subcoordinadores")
-        .select(`
-          ci,
-          coordinador_ci,
-          login_code,
-          asignado_por_nombre,
-          telefono,
-          padron (
-            ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
-          )
-        `);
-
-      const { data: votos } = await supabase
-        .from("votantes")
-        .select(`
-           ci,
-            asignado_por,
-            asignado_por_nombre,
-            telefono,
-            padron (
-            ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
+ // ======================= CARGAR ESTRUCTURA (CORRECTO) =======================
+const recargarEstructura = async () => {
+  try {
+    const { data: coords } = await supabase
+      .from("coordinadores")
+      .select(`
+        ci,
+        login_code,
+        asignado_por_nombre,
+        telefono,
+        padron (
+          ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
         )
       `);
 
+    const { data: subs } = await supabase
+      .from("subcoordinadores")
+      .select(`
+        ci,
+        coordinador_ci,
+        login_code,
+        asignado_por_nombre,
+        telefono,
+        padron (
+          ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
+        )
+      `);
 
-      setEstructura({
-  coordinadores: coords?.map(x => ({
-    ...(x.padron || {}),
-    ...x,
-  })) || [],
+    const { data: votos } = await supabase
+      .from("votantes")
+      .select(`
+        ci,
+        asignado_por,
+        coordinador_ci,
+        asignado_por_nombre,
+        telefono,
+        padron (
+          ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
+        )
+      `);
 
-  subcoordinadores: subs?.map(x => ({
-    ...(x.padron || {}),
-    ...x,
-  })) || [],
-
-  votantes: votos?.map(x => ({
-    ...(x.padron || {}),
-    ...x,
-  })) || [],
-});
-
-    } catch {}
-  };
+    setEstructura({
+      coordinadores: coords?.map(x => ({ ...x.padron, ...x })) || [],
+      subcoordinadores: subs?.map(x => ({ ...x.padron, ...x })) || [],
+      votantes: votos?.map(x => ({ ...x.padron, ...x })) || [],
+    });
+  } catch (e) {
+    console.error("Error recargando estructura", e);
+  }
+};
 
   // ======================= BUSCADOR GLOBAL POR CI =======================
   const buscarPorCI = (input) => {
@@ -390,25 +380,29 @@ const handleAgregarPersona = async (persona) => {
   };
 
   // ======================= MIS DATOS / FILTROS =======================
-  const getMisSubcoordinadores = () => {
-    if (!currentUser || currentUser.role !== "coordinador") return [];
-    return estructura.subcoordinadores.filter(
-      (s) => normalizeCI(s.coordinador_ci) === currentUser.ci
-    );
-  };
-
-  const getMisVotantes = () => {
+const getMisVotantes = () => {
   if (!currentUser) return [];
-  return estructura.votantes.filter(
-    (v) => normalizeCI(v.asignado_por) === normalizeCI(currentUser.ci)
-  );
+
+  // SUBCOORDINADOR → solo los que él asignó (asignado_por = su CI)
+  if (currentUser.role === "subcoordinador") {
+    return estructura.votantes.filter(
+      (v) => normalizeCI(v.asignado_por) === normalizeCI(currentUser.ci)
+    );
+  }
+
+  // COORDINADOR → sus votantes DIRECTOS (asignado_por = su CI)
+  // y además que pertenezcan a su red (coordinador_ci = su CI)
+  if (currentUser.role === "coordinador") {
+    return estructura.votantes.filter(
+      (v) =>
+        normalizeCI(v.asignado_por) === normalizeCI(currentUser.ci) &&
+        normalizeCI(v.coordinador_ci) === normalizeCI(currentUser.ci)
+    );
+  }
+
+  return [];
 };
 
-
-  const getVotantesDeSubcoord = (ci) =>
-    estructura.votantes.filter(
-      (v) => normalizeCI(v.asignado_por) === normalizeCI(ci)
-    );
 
   // ======================= COMPONENTE DATOS PERSONA =======================
   const DatosPersona = ({ persona, rol, loginCode }) => {
