@@ -277,70 +277,65 @@ const App = () => {
   };
 
   // ======================= AGREGAR PERSONA =======================
-  const handleAgregarPersona = async (persona) => {
-    if (!modalType) return alert("Seleccione tipo.");
+const handleAgregarPersona = async (persona) => {
+  if (!modalType) return alert("Seleccione tipo.");
 
-    const ciStr = String(persona.ci);
-    let tabla = "";
-    let data = {};
+  const ci = normalizeCI(persona.ci); // Siempre número
+  let tabla = "";
+  let data = {};
 
-    if (modalType === "coordinador") {
-      tabla = "coordinadores";
-      data = {
-        ci: ciStr,
-        login_code: ciStr,
-        asignado_por_nombre: "Superadmin",
-      };
-    }
-
-    if (modalType === "subcoordinador") {
-      tabla = "subcoordinadores";
-      data = {
-        ci: ciStr,
-        coordinador_ci: currentUser.ci,
-        login_code: ciStr,
-        asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-      };
-    }
-
-   if (modalType === "votante") {
-  tabla = "votantes";
-
-  let coordinadorAsignado;
-
-  if (currentUser.role === "coordinador") {
-    coordinadorAsignado = currentUser.ci;
-  } else if (currentUser.role === "subcoordinador") {
-    const sub = estructura.subcoordinadores.find(
-      (s) => normalizeCI(s.ci) === currentUser.ci
-    );
-    coordinadorAsignado = sub?.coordinador_ci;
+  if (modalType === "coordinador") {
+    tabla = "coordinadores";
+    data = {
+      ci,
+      login_code: String(ci),
+      asignado_por_nombre: "Superadmin",
+    };
   }
 
-  if (!coordinadorAsignado) {
-    return alert("No se pudo determinar el coordinador asignado.");
+  if (modalType === "subcoordinador") {
+    tabla = "subcoordinadores";
+    data = {
+      ci,
+      coordinador_ci: normalizeCI(currentUser.ci),
+      login_code: String(ci),
+      asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+    };
   }
 
-  data = {
-    ci: ciStr,
-    asignado_por: currentUser.ci,
-    asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-    coordinador_ci: coordinadorAsignado,
-  };
-}
+  if (modalType === "votante") {
+    tabla = "votantes";
 
-    const { error } = await supabase.from(tabla).insert([data]);
-    if (error) {
-  console.error("Supabase error:", error);
-  alert(error.message || "Error desconocido");
-  return;
-}
+    let coordinadorAsignado =
+      currentUser.role === "coordinador"
+        ? normalizeCI(currentUser.ci)
+        : estructura.subcoordinadores.find(
+            (s) => normalizeCI(s.ci) === normalizeCI(currentUser.ci)
+          )?.coordinador_ci;
 
+    if (!coordinadorAsignado) {
+      return alert("No se pudo determinar el coordinador asignado.");
+    }
 
-    alert("Agregado correctamente.");
-    setShowAddModal(false);
-    recargarEstructura();
-  };
+    data = {
+      ci,
+      asignado_por: normalizeCI(currentUser.ci),
+      asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+      coordinador_ci: normalizeCI(coordinadorAsignado),
+    };
+  }
+
+  const { error } = await supabase.from(tabla).insert([data]);
+  if (error) {
+    console.error("Supabase error:", error);
+    alert(error.message || "Error desconocido");
+    return;
+  }
+
+  alert("Agregado correctamente.");
+  setShowAddModal(false);
+  recargarEstructura();
+};
 
   // ======================= QUITAR PERSONA =======================
   const quitarPersona = async (ci, tipo) => {
