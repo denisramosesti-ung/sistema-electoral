@@ -1,6 +1,6 @@
 // ======================= APP SISTEMA ELECTORAL =======================
 // Orquestador principal (estado + UI)
-// La lógica vive en services/ y utils/
+// Toda la lógica pesada vive en services/ y utils/
 
 import React, { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
@@ -16,10 +16,10 @@ import ModalTelefono from "./components/ModalTelefono";
 
 // SERVICES
 import {
-  recargarEstructura as cargarEstructuraCompleta,
-  agregarPersona,
-  quitarPersona,
-  actualizarTelefono,
+  cargarEstructuraCompleta,
+  agregarPersonaService,
+  eliminarPersonaService,
+  actualizarTelefonoService,
 } from "./services/estructuraService";
 
 import { getEstadisticas } from "./services/estadisticasService";
@@ -148,58 +148,23 @@ const App = () => {
     localStorage.removeItem("currentUser");
   };
 
-  // ======================= AGREGAR PERSONA =======================
+  // ======================= CALLBACKS =======================
   const handleAgregarPersona = async (persona) => {
-    const ci = normalizeCI(persona.ci);
-    let tabla = "";
-    let data = {};
-
-    if (modalType === "coordinador") {
-      tabla = "coordinadores";
-      data = { ci };
-    }
-
-    if (modalType === "subcoordinador") {
-      tabla = "subcoordinadores";
-      data = {
-        ci,
-        coordinador_ci: currentUser.ci,
-      };
-    }
-
-    if (modalType === "votante") {
-      tabla = "votantes";
-      data = {
-        ci,
-        asignado_por: currentUser.ci,
-        coordinador_ci:
-          currentUser.role === "coordinador"
-            ? currentUser.ci
-            : estructura.subcoordinadores.find(
-                (s) => normalizeCI(s.ci) === currentUser.ci
-              )?.coordinador_ci,
-      };
-    }
-
-    await agregarPersona(tabla, data);
+    await agregarPersonaService({
+      persona,
+      modalType,
+      currentUser,
+      estructura,
+    });
     setShowAddModal(false);
     recargar();
   };
 
-  // ======================= ELIMINAR =======================
   const handleEliminar = async (ci, tipo) => {
-    const tabla =
-      tipo === "coordinador"
-        ? "coordinadores"
-        : tipo === "subcoordinador"
-        ? "subcoordinadores"
-        : "votantes";
-
-    await quitarPersona(tabla, ci);
+    await eliminarPersonaService(ci, tipo, currentUser);
     recargar();
   };
 
-  // ======================= TELÉFONO =======================
   const handleEditarTelefono = (tipo, persona) => {
     setPhoneTarget({ tipo, ...persona });
     setPhoneValue(persona.telefono || "+595");
@@ -207,7 +172,7 @@ const App = () => {
   };
 
   const handleGuardarTelefono = async () => {
-    await actualizarTelefono(phoneTarget.tipo, phoneTarget.ci, phoneValue);
+    await actualizarTelefonoService(phoneTarget, phoneValue);
     setPhoneModalOpen(false);
     setPhoneTarget(null);
     setPhoneValue("+595");
@@ -302,8 +267,6 @@ const App = () => {
       <MiEstructura
         estructura={estructura}
         currentUser={currentUser}
-        expanded={{}}
-        toggleExpand={() => {}}
         abrirTelefono={handleEditarTelefono}
         quitarPersona={handleEliminar}
       />
