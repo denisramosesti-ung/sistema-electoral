@@ -372,11 +372,12 @@ const handleAgregarPersona = async (persona) => {
   };
 
   const getMisVotantes = () => {
-    if (!currentUser) return [];
-    return estructura.votantes.filter(
-      (v) => normalizeCI(v.asignado_por) === currentUser.ci
-    );
-  };
+  if (!currentUser) return [];
+  return estructura.votantes.filter(
+    (v) => normalizeCI(v.asignado_por) === normalizeCI(currentUser.ci)
+  );
+};
+
 
   const getVotantesDeSubcoord = (ci) =>
     estructura.votantes.filter(
