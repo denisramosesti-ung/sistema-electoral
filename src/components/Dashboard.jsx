@@ -4,6 +4,8 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
+import { generarAccessCode } from "../utils/accessCode";
+
 
 import {
   UserPlus,
@@ -240,75 +242,119 @@ const Dashboard = ({ currentUser, onLogout }) => {
   };
 
   // ======================= AGREGAR PERSONA =======================
-  const handleAgregarPersona = async (persona) => {
-    if (!modalType) return alert("Seleccione tipo.");
+const handleAgregarPersona = async (persona) => {
+  if (!modalType) return alert("Seleccione tipo.");
 
-    const ci = normalizeCI(persona.ci);
-    let tabla = "";
-    let data = {};
+  const ci = normalizeCI(persona.ci);
+  let tabla = "";
+  let data = {};
 
-    if (modalType === "coordinador") {
-      if (currentUser.role !== "superadmin") return alert("Solo superadmin.");
-      tabla = "coordinadores";
-      data = {
-        ci,
-        login_code: String(ci),
-        asignado_por_nombre: "Superadmin",
-      };
+  // ======================= COORDINADOR =======================
+  if (modalType === "coordinador") {
+    if (currentUser.role !== "superadmin") {
+      alert("Solo el superadmin puede agregar coordinadores.");
+      return;
     }
 
-    if (modalType === "subcoordinador") {
-      if (currentUser.role !== "coordinador") return alert("Solo coordinador.");
-      tabla = "subcoordinadores";
-      data = {
-        ci,
-        coordinador_ci: normalizeCI(currentUser.ci),
-        login_code: String(ci),
-        asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-      };
-    }
+    const accessCode = generarAccessCode(8);
 
-    if (modalType === "votante") {
-      if (currentUser.role !== "coordinador" && currentUser.role !== "subcoordinador")
-        return alert("No permitido.");
-
-      tabla = "votantes";
-
-      let coordinador_ci = null;
-
-      if (currentUser.role === "coordinador") {
-        coordinador_ci = normalizeCI(currentUser.ci);
-      } else {
-        // subcoordinador -> resolver su coordinador_ci desde estructura
-        const sub = (estructura.subcoordinadores || []).find(
-          (s) => normalizeCI(s.ci) === normalizeCI(currentUser.ci)
-        );
-        coordinador_ci = normalizeCI(sub?.coordinador_ci);
-      }
-
-      if (!coordinador_ci) {
-        alert("Error interno: no se pudo resolver coordinador_ci");
-        return;
-      }
-
-      data = {
-        ci,
-        asignado_por: normalizeCI(currentUser.ci),
-        asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-        coordinador_ci,
-      };
-    }
+    tabla = "coordinadores";
+    data = {
+      ci,
+      login_code: accessCode,
+      asignado_por_nombre: "Superadmin",
+    };
 
     const { error } = await supabase.from(tabla).insert([data]);
     if (error) {
-      console.error("Supabase insert error:", error);
-      alert(error.message || "Error desconocido");
+      console.error("Error creando coordinador:", error);
+      alert(error.message || "Error creando coordinador");
+      return;
+    }
+
+    alert(`Código de acceso del coordinador:\n\n${accessCode}`);
+    setShowAddModal(false);
+    recargarEstructura();
+    return;
+  }
+
+  // ======================= SUBCOORDINADOR =======================
+  if (modalType === "subcoordinador") {
+    if (currentUser.role !== "coordinador") {
+      alert("Solo un coordinador puede agregar subcoordinadores.");
+      return;
+    }
+
+    const accessCode = generarAccessCode(8);
+
+    tabla = "subcoordinadores";
+    data = {
+      ci,
+      coordinador_ci: normalizeCI(currentUser.ci),
+      login_code: accessCode,
+      asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+    };
+
+    const { error } = await supabase.from(tabla).insert([data]);
+    if (error) {
+      console.error("Error creando subcoordinador:", error);
+      alert(error.message || "Error creando subcoordinador");
+      return;
+    }
+
+    alert(`Código de acceso del subcoordinador:\n\n${accessCode}`);
+    setShowAddModal(false);
+    recargarEstructura();
+    return;
+  }
+
+  // ======================= VOTANTE =======================
+  if (modalType === "votante") {
+    if (
+      currentUser.role !== "coordinador" &&
+      currentUser.role !== "subcoordinador"
+    ) {
+      alert("No permitido.");
+      return;
+    }
+
+    tabla = "votantes";
+
+    let coordinador_ci = null;
+
+    if (currentUser.role === "coordinador") {
+      coordinador_ci = normalizeCI(currentUser.ci);
+    } else {
+      const sub = (estructura.subcoordinadores || []).find(
+        (s) => normalizeCI(s.ci) === normalizeCI(currentUser.ci)
+      );
+      coordinador_ci = normalizeCI(sub?.coordinador_ci);
+    }
+
+    if (!coordinador_ci) {
+      alert("Error interno: no se pudo resolver coordinador_ci");
+      return;
+    }
+
+    data = {
+      ci,
+      asignado_por: normalizeCI(currentUser.ci),
+      asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+      coordinador_ci,
+    };
+
+    const { error } = await supabase.from(tabla).insert([data]);
+    if (error) {
+      console.error("Error creando votante:", error);
+      alert(error.message || "Error creando votante");
       return;
     }
 
     setShowAddModal(false);
     recargarEstructura();
-  };
+    return;
+  }
+};
 
   // ======================= QUITAR PERSONA =======================
   const quitarPersona = async (ci, tipo) => {
