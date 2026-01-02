@@ -112,7 +112,7 @@ const App = () => {
           login_code,
           asignado_por_nombre,
           telefono,
-          padron!inner (
+          padron (
             ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
           )
         `);
@@ -125,7 +125,7 @@ const App = () => {
           login_code,
           asignado_por_nombre,
           telefono,
-          padron!inner (
+          padron (
             ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
           )
         `);
@@ -133,14 +133,15 @@ const App = () => {
       const { data: votos } = await supabase
         .from("votantes")
         .select(`
-          ci,
-          asignado_por,
-          asignado_por_nombre,
-          telefono,
-          padron!inner (
+           ci,
+            asignado_por,
+            asignado_por_nombre,
+            telefono,
+            padron (
             ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
-          )
-        `);
+        )
+      `);
+
 
       setEstructura({
         coordinadores: coords?.map(x => ({ ...x.padron, ...x })) || [],
