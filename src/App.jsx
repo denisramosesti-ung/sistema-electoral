@@ -67,20 +67,40 @@ const App = () => {
       [normalizeCI(ci)]: !prev[normalizeCI(ci)],
     }));
   };
+
   // ======================= CARGAR PADRÓN COMPLETO =======================
   const cargarPadronCompleto = async () => {
-    const { count, error: countError } = await supabase
-      .from("padron")
-      .select("ci", { count: "exact", head: true });
+    try {
+      // OJO: si tenés muchos registros, esto es pesado.
+      // Mantengo tu lógica de count + range.
+      const { count, error: countError } = await supabase
+        .from("padron")
+        .select("ci", { count: "exact", head: true });
 
-    if (countError) return;
+      if (countError) {
+        console.error("Error count padron:", countError);
+        return;
+      }
 
-    const { data, error } = await supabase
-      .from("padron")
-      .select("*")
-      .range(0, count - 1);
+      if (!count || count <= 0) {
+        setPadron([]);
+        return;
+      }
 
-    if (!error && data) setPadron(data);
+      const { data, error } = await supabase
+        .from("padron")
+        .select("*")
+        .range(0, count - 1);
+
+      if (error) {
+        console.error("Error cargando padron:", error);
+        return;
+      }
+
+      if (data) setPadron(data);
+    } catch (e) {
+      console.error("Error cargando padrón:", e);
+    }
   };
 
   useEffect(() => {
@@ -95,70 +115,85 @@ const App = () => {
     try {
       const u = JSON.parse(saved);
       if (u && u.ci && u.role) setCurrentUser(u);
-    } catch {}
+    } catch (e) {
+      console.error("Error leyendo sesión local:", e);
+    }
   }, []);
-
   useEffect(() => {
     if (currentUser) recargarEstructura();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
 
- // ======================= CARGAR ESTRUCTURA (CORRECTO) =======================
-const recargarEstructura = async () => {
-  try {
-    const { data: coords } = await supabase
-      .from("coordinadores")
-      .select(`
-        ci,
-        login_code,
-        asignado_por_nombre,
-        telefono,
-        padron (
-          ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
-        )
-      `);
+  // ======================= CARGAR ESTRUCTURA (ROBUSTO) =======================
+  const recargarEstructura = async () => {
+    try {
+      const { data: coords, error: coordsErr } = await supabase
+        .from("coordinadores")
+        .select(`
+          ci,
+          login_code,
+          asignado_por_nombre,
+          telefono,
+          padron (
+            ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
+          )
+        `);
 
-    const { data: subs } = await supabase
-      .from("subcoordinadores")
-      .select(`
-        ci,
-        coordinador_ci,
-        login_code,
-        asignado_por_nombre,
-        telefono,
-        padron (
-          ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
-        )
-      `);
+      if (coordsErr) console.error("Error coords:", coordsErr);
 
-    const { data: votos } = await supabase
-      .from("votantes")
-      .select(`
-        ci,
-        asignado_por,
-        coordinador_ci,
-        asignado_por_nombre,
-        telefono,
-        padron (
-          ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
-        )
-      `);
+      const { data: subs, error: subsErr } = await supabase
+        .from("subcoordinadores")
+        .select(`
+          ci,
+          coordinador_ci,
+          login_code,
+          asignado_por_nombre,
+          telefono,
+          padron (
+            ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
+          )
+        `);
 
-    setEstructura({
-      coordinadores: coords?.map(x => ({ ...x.padron, ...x })) || [],
-      subcoordinadores: subs?.map(x => ({ ...x.padron, ...x })) || [],
-      votantes: votos?.map(x => ({ ...x.padron, ...x })) || [],
-    });
-  } catch (e) {
-    console.error("Error recargando estructura", e);
-  }
-};
+      if (subsErr) console.error("Error subs:", subsErr);
+
+      const { data: votos, error: votosErr } = await supabase
+        .from("votantes")
+        .select(`
+          ci,
+          asignado_por,
+          coordinador_ci,
+          asignado_por_nombre,
+          telefono,
+          padron (
+            ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
+          )
+        `);
+
+      if (votosErr) console.error("Error votos:", votosErr);
+
+      // IMPORTANTE:
+      // - padron puede venir null por FK/relación o por RLS.
+      // - si es null y vos hacés x.padron.nombre -> crashea la app (pantalla blanca).
+      // Por eso usamos fallback {}.
+      setEstructura({
+        coordinadores:
+          coords?.map((x) => ({ ...(x?.padron || {}), ...x })) || [],
+        subcoordinadores:
+          subs?.map((x) => ({ ...(x?.padron || {}), ...x })) || [],
+        votantes:
+          votos?.map((x) => ({ ...(x?.padron || {}), ...x })) || [],
+      });
+    } catch (e) {
+      console.error("Error recargando estructura:", e);
+    }
+  };
 
   // ======================= BUSCADOR GLOBAL POR CI =======================
   const buscarPorCI = (input) => {
     if (!input.trim()) return setSearchResult(null);
     const clean = input.replace(/\D/g, "");
 
-    const persona = padron.find(p => {
+    const persona = padron.find((p) => {
       const raw = String(p.ci || "");
       return raw.includes(clean);
     });
@@ -170,19 +205,23 @@ const recargarEstructura = async () => {
 
     const ci = normalizeCI(persona.ci);
 
-    const coord = estructura.coordinadores.find(c => normalizeCI(c.ci) === ci);
+    const coord = estructura.coordinadores.find(
+      (c) => normalizeCI(c.ci) === ci
+    );
     if (coord) return setSearchResult({ tipo: "coordinador", data: coord });
 
-    const sub = estructura.subcoordinadores.find(s => normalizeCI(s.ci) === ci);
+    const sub = estructura.subcoordinadores.find(
+      (s) => normalizeCI(s.ci) === ci
+    );
     if (sub) return setSearchResult({ tipo: "subcoordinador", data: sub });
 
-    const vot = estructura.votantes.find(v => normalizeCI(v.ci) === ci);
+    const vot = estructura.votantes.find((v) => normalizeCI(v.ci) === ci);
     if (vot) return setSearchResult({ tipo: "votante", data: vot });
 
     return setSearchResult({ tipo: "padron", data: persona });
   };
 
-  // ======================= LOGIN =======================
+  // ======================= LOGIN (SIN PANTALLA BLANCA) =======================
   const handleLogin = async () => {
     if (!loginID.trim()) return alert("Ingrese código.");
 
@@ -203,13 +242,24 @@ const recargarEstructura = async () => {
     }
 
     // COORD
-    const { data: coord } = await supabase
+    const { data: coord, error: coordErr } = await supabase
       .from("coordinadores")
       .select("ci,login_code,telefono,padron(*)")
       .eq("login_code", loginID)
       .maybeSingle();
 
+    if (coordErr) console.error("Error login coord:", coordErr);
+
     if (coord) {
+      // CLAVE: coord.padron puede venir null si la relación no está bien o RLS bloquea.
+      if (!coord.padron) {
+        alert(
+          "El coordinador existe, pero no se pudo leer sus datos del padrón. Revisá relación FK/RLS entre coordinadores.ci y padron.ci."
+        );
+        console.error("coord.padron es null:", coord);
+        return;
+      }
+
       const u = {
         ci: normalizeCI(coord.ci),
         nombre: coord.padron.nombre,
@@ -224,13 +274,23 @@ const recargarEstructura = async () => {
     }
 
     // SUB
-    const { data: sub } = await supabase
+    const { data: sub, error: subErr } = await supabase
       .from("subcoordinadores")
-      .select("ci,login_code,telefono,padron(*)")
+      .select("ci,login_code,telefono,coordinador_ci,padron(*)")
       .eq("login_code", loginID)
       .maybeSingle();
 
+    if (subErr) console.error("Error login sub:", subErr);
+
     if (sub) {
+      if (!sub.padron) {
+        alert(
+          "El subcoordinador existe, pero no se pudo leer sus datos del padrón. Revisá relación FK/RLS entre subcoordinadores.ci y padron.ci."
+        );
+        console.error("sub.padron es null:", sub);
+        return;
+      }
+
       const u = {
         ci: normalizeCI(sub.ci),
         nombre: sub.padron.nombre,
@@ -270,7 +330,16 @@ const recargarEstructura = async () => {
     if (phoneTarget.tipo === "coordinador") tabla = "coordinadores";
     if (phoneTarget.tipo === "subcoordinador") tabla = "subcoordinadores";
 
-    await supabase.from(tabla).update({ telefono }).eq("ci", phoneTarget.ci);
+    const { error } = await supabase
+      .from(tabla)
+      .update({ telefono })
+      .eq("ci", phoneTarget.ci);
+
+    if (error) {
+      console.error("Error guardando teléfono:", error);
+      alert(error.message || "Error guardando teléfono");
+      return;
+    }
 
     alert("Número actualizado.");
     setPhoneModalOpen(false);
@@ -280,73 +349,72 @@ const recargarEstructura = async () => {
   };
 
   // ======================= AGREGAR PERSONA =======================
-const handleAgregarPersona = async (persona) => {
-  if (!modalType) return alert("Seleccione tipo.");
+  const handleAgregarPersona = async (persona) => {
+    if (!modalType) return alert("Seleccione tipo.");
 
-  const ci = normalizeCI(persona.ci);
-  let tabla = "";
-  let data = {};
+    const ci = normalizeCI(persona.ci);
+    let tabla = "";
+    let data = {};
 
-  if (modalType === "coordinador") {
-    tabla = "coordinadores";
-    data = {
-      ci,
-      login_code: String(ci),
-      asignado_por_nombre: "Superadmin",
-    };
-  }
-
-  if (modalType === "subcoordinador") {
-    tabla = "subcoordinadores";
-    data = {
-      ci,
-      coordinador_ci: normalizeCI(currentUser.ci),
-      login_code: String(ci),
-      asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-    };
-  }
-
-  if (modalType === "votante") {
-    tabla = "votantes";
-
-    let coordinador_ci;
-
-    if (currentUser.role === "coordinador") {
-      coordinador_ci = normalizeCI(currentUser.ci);
+    if (modalType === "coordinador") {
+      tabla = "coordinadores";
+      data = {
+        ci,
+        login_code: String(ci),
+        asignado_por_nombre: "Superadmin",
+      };
     }
 
-    if (currentUser.role === "subcoordinador") {
-      const sub = estructura.subcoordinadores.find(
-        (s) => normalizeCI(s.ci) === normalizeCI(currentUser.ci)
-      );
-      coordinador_ci = normalizeCI(sub?.coordinador_ci);
+    if (modalType === "subcoordinador") {
+      tabla = "subcoordinadores";
+      data = {
+        ci,
+        coordinador_ci: normalizeCI(currentUser.ci),
+        login_code: String(ci),
+        asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+      };
     }
 
-    if (!coordinador_ci) {
-      alert("Error interno: no se pudo resolver coordinador");
+    if (modalType === "votante") {
+      tabla = "votantes";
+
+      let coordinador_ci;
+
+      if (currentUser.role === "coordinador") {
+        coordinador_ci = normalizeCI(currentUser.ci);
+      }
+
+      if (currentUser.role === "subcoordinador") {
+        const sub = estructura.subcoordinadores.find(
+          (s) => normalizeCI(s.ci) === normalizeCI(currentUser.ci)
+        );
+        coordinador_ci = normalizeCI(sub?.coordinador_ci);
+      }
+
+      if (!coordinador_ci) {
+        alert("Error interno: no se pudo resolver coordinador");
+        return;
+      }
+
+      data = {
+        ci,
+        asignado_por: normalizeCI(currentUser.ci),
+        asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+        coordinador_ci, // nunca null
+      };
+    }
+
+    const { error } = await supabase.from(tabla).insert([data]);
+    if (error) {
+      console.error("Supabase insert error:", error);
+      alert(error.message || "Error desconocido");
       return;
     }
 
-    data = {
-      ci,
-      asignado_por: normalizeCI(currentUser.ci),
-      asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-      coordinador_ci, // 🔒 NUNCA MÁS NULL
-    };
-  }
-
-  const { error } = await supabase.from(tabla).insert([data]);
-  if (error) {
-    console.error(error);
-    alert(error.message);
-    return;
-  }
-
-  alert("Agregado correctamente.");
-  setShowAddModal(false);
-  recargarEstructura();
-};
-
+    alert("Agregado correctamente.");
+    setShowAddModal(false);
+    recargarEstructura();
+  };
 
   // ======================= QUITAR PERSONA =======================
   const quitarPersona = async (ci, tipo) => {
@@ -358,6 +426,7 @@ const handleAgregarPersona = async (persona) => {
     if (tipo === "coordinador") {
       if (!isSuper) return alert("Solo superadmin.");
       await supabase.from("subcoordinadores").delete().eq("coordinador_ci", ci);
+      await supabase.from("votantes").delete().eq("coordinador_ci", ci);
       await supabase.from("votantes").delete().eq("asignado_por", ci);
       await supabase.from("coordinadores").delete().eq("ci", ci);
     }
@@ -374,46 +443,62 @@ const handleAgregarPersona = async (persona) => {
     recargarEstructura();
   };
 
-  // ======================= MIS DATOS / FILTROS =======================
-const getMisVotantes = () => {
-  if (!currentUser) return [];
-
-  // SUBCOORDINADOR → solo los que él asignó (asignado_por = su CI)
-  if (currentUser.role === "subcoordinador") {
-    return estructura.votantes.filter(
-      (v) => normalizeCI(v.asignado_por) === normalizeCI(currentUser.ci)
+  // ======================= SUBCOORDINADORES DEL COORDINADOR =======================
+  const getMisSubcoordinadores = () => {
+    if (!currentUser || currentUser.role !== "coordinador") return [];
+    return estructura.subcoordinadores.filter(
+      (s) => normalizeCI(s.coordinador_ci) === normalizeCI(currentUser.ci)
     );
-  }
+  };
 
-  // COORDINADOR → sus votantes DIRECTOS (asignado_por = su CI)
-  // y además que pertenezcan a su red (coordinador_ci = su CI)
-  if (currentUser.role === "coordinador") {
+  // ======================= VOTANTES POR SUBCOORD =======================
+  const getVotantesDeSubcoord = (ci) => {
     return estructura.votantes.filter(
-      (v) =>
-        normalizeCI(v.asignado_por) === normalizeCI(currentUser.ci) &&
-        normalizeCI(v.coordinador_ci) === normalizeCI(currentUser.ci)
+      (v) => normalizeCI(v.asignado_por) === normalizeCI(ci)
     );
-  }
+  };
 
-  return [];
-};
+  // ======================= MIS VOTANTES (según rol) =======================
+  const getMisVotantes = () => {
+    if (!currentUser) return [];
 
+    if (currentUser.role === "subcoordinador") {
+      return estructura.votantes.filter(
+        (v) => normalizeCI(v.asignado_por) === normalizeCI(currentUser.ci)
+      );
+    }
+
+    if (currentUser.role === "coordinador") {
+      // votantes DIRECTOS del coordinador (asignado_por=ci coord)
+      return estructura.votantes.filter(
+        (v) => normalizeCI(v.asignado_por) === normalizeCI(currentUser.ci)
+      );
+    }
+
+    return [];
+  };
 
   // ======================= COMPONENTE DATOS PERSONA =======================
   const DatosPersona = ({ persona, rol, loginCode }) => {
     return (
       <div className="space-y-1 text-xs md:text-sm">
         <p className="font-semibold">
-          {persona.nombre} {persona.apellido}
+          {persona.nombre || "-"} {persona.apellido || ""}
         </p>
-        <p><b>CI:</b> {persona.ci}</p>
-        {rol && <p><b>Rol:</b> {rol}</p>}
+        <p>
+          <b>CI:</b> {persona.ci}
+        </p>
+        {rol && (
+          <p>
+            <b>Rol:</b> {rol}
+          </p>
+        )}
         {loginCode && (
           <button
             onClick={() => copyToClipboard(loginCode)}
-            className="p-1 border rounded text-red-600"
+            className="p-1 border rounded text-red-600 inline-flex items-center gap-1"
           >
-            Copiar acceso
+            <Copy className="w-4 h-4" /> Copiar acceso
           </button>
         )}
         {persona.seccional && <p>Seccional: {persona.seccional}</p>}
@@ -425,30 +510,35 @@ const getMisVotantes = () => {
       </div>
     );
   };
+
   // ======================= DISPONIBLES (PADRÓN + ROL REAL) =======================
-const getPersonasDisponibles = () => {
-  return padron.map((p) => {
-    const ci = normalizeCI(p.ci);
+  const getPersonasDisponibles = () => {
+    return padron.map((p) => {
+      const ci = normalizeCI(p.ci);
 
-    const coord = estructura.coordinadores.find((c) => normalizeCI(c.ci) === ci);
-    const sub = estructura.subcoordinadores.find((s) => normalizeCI(s.ci) === ci);
-    const vot = estructura.votantes.find((v) => normalizeCI(v.ci) === ci);
+      const coord = estructura.coordinadores.find(
+        (c) => normalizeCI(c.ci) === ci
+      );
+      const sub = estructura.subcoordinadores.find(
+        (s) => normalizeCI(s.ci) === ci
+      );
+      const vot = estructura.votantes.find((v) => normalizeCI(v.ci) === ci);
 
-    let rol = null;
-    if (coord) rol = "coordinador";
-    else if (sub) rol = "subcoordinador";
-    else if (vot) rol = "votante";
+      let rol = null;
+      if (coord) rol = "coordinador";
+      else if (sub) rol = "subcoordinador";
+      else if (vot) rol = "votante";
 
-    return {
-      ...p,
-      ci,
-      asignado: rol !== null,
-      asignadoRol: rol,
-      asignadoPorNombre: sub?.asignado_por_nombre || vot?.asignado_por_nombre || "",
-    };
-  });
-};
-
+      return {
+        ...p,
+        ci,
+        asignado: rol !== null,
+        asignadoRol: rol,
+        asignadoPorNombre:
+          sub?.asignado_por_nombre || vot?.asignado_por_nombre || "",
+      };
+    });
+  };
 
   // ======================= ESTRUCTURA PROPIA PARA ESTADÍSTICAS/PDF =======================
   const getEstructuraPropia = () => {
@@ -538,7 +628,7 @@ const getPersonasDisponibles = () => {
       const padronEntry = resolvePadron(p.ci);
       return [
         p.ci,
-        `${p.nombre} ${p.apellido}`,
+        `${p.nombre || ""} ${p.apellido || ""}`.trim(),
         resolveSeccional(p),
         padronEntry?.local_votacion || p.local_votacion || "-",
         padronEntry?.mesa || p.mesa || "-",
@@ -571,7 +661,6 @@ const getPersonasDisponibles = () => {
       const totalSub = estructura.subcoordinadores.length;
       const totalVotantes = estructura.votantes.length;
 
-      // Resumen de totales
       autoTable(doc, {
         startY: y,
         head: [["Indicador", "Cantidad"]],
@@ -587,7 +676,6 @@ const getPersonasDisponibles = () => {
       y = doc.lastAutoTable.finalY + 10;
 
       if (tipo === "ranking") {
-        // ---------- RANKING GLOBAL ----------
         doc.setFont("helvetica", "bold");
         doc.text("Ranking de Coordinadores y Subcoordinadores", 14, y);
         y += 4;
@@ -599,9 +687,10 @@ const getPersonasDisponibles = () => {
           const directos = estructura.votantes.filter(
             (v) => normalizeCI(v.asignado_por) === normalizeCI(p.ci)
           ).length;
+
           return {
             ci: p.ci,
-            nombre: `${p.nombre} ${p.apellido}`,
+            nombre: `${p.nombre || ""} ${p.apellido || ""}`.trim(),
             seccional: resolveSeccional(p),
             telefono: p.telefono || "-",
             rol: estructura.coordinadores.some(
@@ -626,9 +715,7 @@ const getPersonasDisponibles = () => {
             p.seccional,
             p.telefono,
             p.cantidad,
-            totalGlobal > 0
-              ? ((p.cantidad / totalGlobal) * 100).toFixed(1)
-              : "0",
+            totalGlobal > 0 ? ((p.cantidad / totalGlobal) * 100).toFixed(1) : "0",
           ]),
           theme: "striped",
           headStyles: { fillColor: colorRojo },
@@ -648,124 +735,97 @@ const getPersonasDisponibles = () => {
         );
         doc.save("informe_ranking_global.pdf");
         return;
-      } else {
-        // ---------- ESTRUCTURA COMPLETA (GLOBAL) ----------
-        doc.setFont("helvetica", "bold");
-        doc.text("Estructura general (Coordinadores / Sub / Votantes)", 14, y);
-        y += 6;
+      }
 
-        estructura.coordinadores.forEach((coord) => {
+      // ESTRUCTURA COMPLETA
+      doc.setFont("helvetica", "bold");
+      doc.text("Estructura general (Coordinadores / Sub / Votantes)", 14, y);
+      y += 6;
+
+      estructura.coordinadores.forEach((coord) => {
+        doc.setFont("helvetica", "bold");
+        doc.text(
+          `Coordinador: ${coord.nombre || ""} ${coord.apellido || ""} (CI ${coord.ci})`,
+          14,
+          y
+        );
+        y += 4;
+
+        const subs = estructura.subcoordinadores.filter(
+          (s) => normalizeCI(s.coordinador_ci) === normalizeCI(coord.ci)
+        );
+
+        if (subs.length > 0) {
+          autoTable(doc, {
+            startY: y,
+            head: [[
+              "CI","Nombre","Seccional","Local","Mesa","Orden","Dirección","Teléfono",
+            ]],
+            body: subs.map((s) => personaToRow(s)),
+            theme: "striped",
+            headStyles: { fillColor: colorRojo },
+            bodyStyles: { fontSize: 9 },
+          });
+          y = doc.lastAutoTable.finalY + 4;
+        }
+
+        subs.forEach((sub) => {
+          const votantesSub = getVotantesDeSubcoord(sub.ci);
+          if (votantesSub.length === 0) return;
+
           doc.setFont("helvetica", "bold");
           doc.text(
-            `Coordinador: ${coord.nombre} ${coord.apellido} (CI ${coord.ci})`,
-            14,
+            `Votantes de ${sub.nombre || ""} ${sub.apellido || ""} (CI ${sub.ci})`,
+            18,
             y
           );
           y += 4;
 
-          const subs = estructura.subcoordinadores.filter(
-            (s) => normalizeCI(s.coordinador_ci) === normalizeCI(coord.ci)
-          );
-
-          if (subs.length > 0) {
-            autoTable(doc, {
-              startY: y,
-              head: [
-                [
-                  "CI",
-                  "Nombre",
-                  "Seccional",
-                  "Local",
-                  "Mesa",
-                  "Orden",
-                  "Dirección",
-                  "Teléfono",
-                ],
-              ],
-              body: subs.map((s) => personaToRow(s)),
-              theme: "striped",
-              headStyles: { fillColor: colorRojo },
-              bodyStyles: { fontSize: 9 },
-            });
-            y = doc.lastAutoTable.finalY + 4;
-          }
-
-          subs.forEach((sub) => {
-            const votantesSub = getVotantesDeSubcoord(sub.ci);
-            if (votantesSub.length === 0) return;
-
-            doc.setFont("helvetica", "bold");
-            doc.text(
-              `Votantes de ${sub.nombre} ${sub.apellido} (CI ${sub.ci})`,
-              18,
-              y
-            );
-            y += 4;
-
-            autoTable(doc, {
-              startY: y,
-              head: [
-                [
-                  "CI",
-                  "Nombre",
-                  "Seccional",
-                  "Local",
-                  "Mesa",
-                  "Orden",
-                  "Dirección",
-                  "Teléfono",
-                ],
-              ],
-              body: votantesSub.map((v) => personaToRow(v)),
-              theme: "striped",
-              headStyles: { fillColor: colorRojo },
-              bodyStyles: { fontSize: 9 },
-            });
-            y = doc.lastAutoTable.finalY + 4;
+          autoTable(doc, {
+            startY: y,
+            head: [[
+              "CI","Nombre","Seccional","Local","Mesa","Orden","Dirección","Teléfono",
+            ]],
+            body: votantesSub.map((v) => personaToRow(v)),
+            theme: "striped",
+            headStyles: { fillColor: colorRojo },
+            bodyStyles: { fontSize: 9 },
           });
-
-          const directosCoord = estructura.votantes.filter(
-            (v) => normalizeCI(v.asignado_por) === normalizeCI(coord.ci)
-          );
-
-          if (directosCoord.length > 0) {
-            doc.setFont("helvetica", "bold");
-            doc.text("Votantes directos del coordinador", 18, y);
-            y += 4;
-
-            autoTable(doc, {
-              startY: y,
-              head: [
-                [
-                  "CI",
-                  "Nombre",
-                  "Seccional",
-                  "Local",
-                  "Mesa",
-                  "Orden",
-                  "Dirección",
-                  "Teléfono",
-                ],
-              ],
-              body: directosCoord.map((v) => personaToRow(v)),
-              theme: "striped",
-              headStyles: { fillColor: colorRojo },
-              bodyStyles: { fontSize: 9 },
-            });
-            y = doc.lastAutoTable.finalY + 6;
-          }
+          y = doc.lastAutoTable.finalY + 4;
         });
 
-        doc.setFont("helvetica", "italic");
-        doc.setFontSize(10);
-        doc.text(
-          "Generado automáticamente por el Sistema Electoral — Uso privado y estratégico",
-          14,
-          y
+        const directosCoord = estructura.votantes.filter(
+          (v) => normalizeCI(v.asignado_por) === normalizeCI(coord.ci)
         );
-        doc.save("informe_estructura_general.pdf");
-        return;
-      }
+
+        if (directosCoord.length > 0) {
+          doc.setFont("helvetica", "bold");
+          doc.text("Votantes directos del coordinador", 18, y);
+          y += 4;
+
+          autoTable(doc, {
+            startY: y,
+            head: [[
+              "CI","Nombre","Seccional","Local","Mesa","Orden","Dirección","Teléfono",
+            ]],
+            body: directosCoord.map((v) => personaToRow(v)),
+            theme: "striped",
+            headStyles: { fillColor: colorRojo },
+            bodyStyles: { fontSize: 9 },
+          });
+          y = doc.lastAutoTable.finalY + 6;
+        }
+      });
+
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(10);
+      doc.text(
+        "Generado automáticamente por el Sistema Electoral — Uso privado y estratégico",
+        14,
+        y
+      );
+      doc.save("informe_estructura_general.pdf");
+      return;
     }
 
     // ----- COORDINADOR / SUBCOORDINADOR: ESTRUCTURA PROPIA -----
@@ -796,18 +856,9 @@ const getPersonasDisponibles = () => {
       if (misSubcoords.length > 0) {
         autoTable(doc, {
           startY: y,
-          head: [
-            [
-              "CI",
-              "Nombre",
-              "Seccional",
-              "Local",
-              "Mesa",
-              "Orden",
-              "Dirección",
-              "Teléfono",
-            ],
-          ],
+          head: [[
+            "CI","Nombre","Seccional","Local","Mesa","Orden","Dirección","Teléfono",
+          ]],
           body: misSubcoords.map((s) => personaToRow(s)),
           theme: "striped",
           headStyles: { fillColor: colorRojo },
@@ -822,7 +873,7 @@ const getPersonasDisponibles = () => {
 
         doc.setFont("helvetica", "bold");
         doc.text(
-          `Votantes de ${sub.nombre} ${sub.apellido} (CI ${sub.ci})`,
+          `Votantes de ${sub.nombre || ""} ${sub.apellido || ""} (CI ${sub.ci})`,
           14,
           y
         );
@@ -830,18 +881,9 @@ const getPersonasDisponibles = () => {
 
         autoTable(doc, {
           startY: y,
-          head: [
-            [
-              "CI",
-              "Nombre",
-              "Seccional",
-              "Local",
-              "Mesa",
-              "Orden",
-              "Dirección",
-              "Teléfono",
-            ],
-          ],
+          head: [[
+            "CI","Nombre","Seccional","Local","Mesa","Orden","Dirección","Teléfono",
+          ]],
           body: votantesSub.map((v) => personaToRow(v)),
           theme: "striped",
           headStyles: { fillColor: colorRojo },
@@ -857,18 +899,9 @@ const getPersonasDisponibles = () => {
 
         autoTable(doc, {
           startY: y,
-          head: [
-            [
-              "CI",
-              "Nombre",
-              "Seccional",
-              "Local",
-              "Mesa",
-              "Orden",
-              "Dirección",
-              "Teléfono",
-            ],
-          ],
+          head: [[
+            "CI","Nombre","Seccional","Local","Mesa","Orden","Dirección","Teléfono",
+          ]],
           body: misVotantes.map((v) => personaToRow(v)),
           theme: "striped",
           headStyles: { fillColor: colorRojo },
@@ -884,18 +917,9 @@ const getPersonasDisponibles = () => {
 
       autoTable(doc, {
         startY: y,
-        head: [
-          [
-            "CI",
-            "Nombre",
-            "Seccional",
-            "Local",
-            "Mesa",
-            "Orden",
-            "Dirección",
-            "Teléfono",
-          ],
-        ],
+        head: [[
+          "CI","Nombre","Seccional","Local","Mesa","Orden","Dirección","Teléfono",
+        ]],
         body: misVotantes.map((v) => personaToRow(v)),
         theme: "striped",
         headStyles: { fillColor: colorRojo },
@@ -916,7 +940,6 @@ const getPersonasDisponibles = () => {
 
     doc.save("informe_mi_estructura.pdf");
   };
-
   // ======================= PANTALLA LOGIN =======================
   if (!currentUser) {
     return (
@@ -1024,9 +1047,7 @@ const getPersonasDisponibles = () => {
             </div>
             <div className="bg-white rounded-lg shadow p-6">
               <p className="text-gray-600 text-sm">Votantes</p>
-              <p className="text-4xl font-bold text-red-600">
-                {stats.votantes}
-              </p>
+              <p className="text-4xl font-bold text-red-600">{stats.votantes}</p>
             </div>
           </>
         )}
@@ -1047,9 +1068,7 @@ const getPersonasDisponibles = () => {
             </div>
             <div className="bg-white rounded-lg shadow p-6">
               <p className="text-gray-600 text-sm">Total en red</p>
-              <p className="text-4xl font-bold text-red-600">
-                {stats.total}
-              </p>
+              <p className="text-4xl font-bold text-red-600">{stats.total}</p>
             </div>
           </>
         )}
@@ -1057,9 +1076,7 @@ const getPersonasDisponibles = () => {
         {currentUser.role === "subcoordinador" && (
           <div className="bg-white rounded-lg shadow p-6">
             <p className="text-gray-600 text-sm">Mis votantes</p>
-            <p className="text-4xl font-bold text-red-600">
-              {stats.votantes}
-            </p>
+            <p className="text-4xl font-bold text-red-600">{stats.votantes}</p>
           </div>
         )}
       </div>
@@ -1118,6 +1135,7 @@ const getPersonasDisponibles = () => {
             <BarChart3 className="w-4 h-4" />
             Descargar PDF
           </button>
+
           <div className="absolute mt-1 bg-white border rounded-lg shadow-lg hidden z-20 min-w-[220px]">
             {currentUser.role === "superadmin" && (
               <>
@@ -1215,16 +1233,14 @@ const getPersonasDisponibles = () => {
                     </p>
                   )}
                   <p>
-                    <b>Teléfono:</b>{" "}
-                    {searchResult.data.telefono || "-"}
+                    <b>Teléfono:</b> {searchResult.data.telefono || "-"}
                   </p>
                 </>
               )}
 
               {searchResult.tipo === "noExiste" && (
                 <p>
-                  Este CI <b>{searchResult.data.ci}</b> no pertenece al
-                  padrón.
+                  Este CI <b>{searchResult.data.ci}</b> no pertenece al padrón.
                 </p>
               )}
 
@@ -1242,10 +1258,7 @@ const getPersonasDisponibles = () => {
                   </button>
                   <button
                     onClick={() =>
-                      quitarPersona(
-                        searchResult.data.ci,
-                        searchResult.tipo
-                      )
+                      quitarPersona(searchResult.data.ci, searchResult.tipo)
                     }
                     className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-1"
                   >
@@ -1363,17 +1376,13 @@ const getPersonasDisponibles = () => {
                                   <DatosPersona persona={v} rol="Votante" />
                                   <div className="flex gap-2">
                                     <button
-                                      onClick={() =>
-                                        abrirTelefono("votante", v)
-                                      }
+                                      onClick={() => abrirTelefono("votante", v)}
                                       className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
                                     >
                                       <Phone className="w-5 h-5" />
                                     </button>
                                     <button
-                                      onClick={() =>
-                                        quitarPersona(v.ci, "votante")
-                                      }
+                                      onClick={() => quitarPersona(v.ci, "votante")}
                                       className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
                                     >
                                       <Trash2 className="w-5 h-5" />
@@ -1381,6 +1390,12 @@ const getPersonasDisponibles = () => {
                                   </div>
                                 </div>
                               ))}
+
+                              {getVotantesDeSubcoord(sub.ci).length === 0 && (
+                                <p className="text-gray-500 text-sm">
+                                  Sin votantes asignados.
+                                </p>
+                              )}
                             </div>
                           ))}
 
@@ -1399,17 +1414,13 @@ const getPersonasDisponibles = () => {
                               <DatosPersona persona={v} rol="Votante" />
                               <div className="flex gap-2">
                                 <button
-                                  onClick={() =>
-                                    abrirTelefono("votante", v)
-                                  }
+                                  onClick={() => abrirTelefono("votante", v)}
                                   className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
                                 >
                                   <Phone className="w-5 h-5" />
                                 </button>
                                 <button
-                                  onClick={() =>
-                                    quitarPersona(v.ci, "votante")
-                                  }
+                                  onClick={() => quitarPersona(v.ci, "votante")}
                                   className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
                                 >
                                   <Trash2 className="w-5 h-5" />
@@ -1430,7 +1441,7 @@ const getPersonasDisponibles = () => {
               </>
             )}
 
-            {/* COORDINADOR: VE SUBS Y SUS VOTANTES + SUS VOTANTES DIRECTOS */}
+            {/* COORDINADOR */}
             {currentUser.role === "coordinador" && (
               <>
                 {getMisSubcoordinadores().map((sub) => (
@@ -1479,6 +1490,7 @@ const getPersonasDisponibles = () => {
                     {expandedCoords[normalizeCI(sub.ci)] && (
                       <div className="bg-white px-4 pb-4">
                         <p className="text-sm font-semibold mt-2">Votantes</p>
+
                         {getVotantesDeSubcoord(sub.ci).map((v) => (
                           <div
                             key={v.ci}
@@ -1551,7 +1563,7 @@ const getPersonasDisponibles = () => {
               </>
             )}
 
-            {/* SUBCOORDINADOR: SOLO SUS VOTANTES */}
+            {/* SUBCOORDINADOR */}
             {currentUser.role === "subcoordinador" && (
               <>
                 {getMisVotantes().map((v) => (
