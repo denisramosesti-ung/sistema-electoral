@@ -1,240 +1,94 @@
 // ======================= APP SISTEMA ELECTORAL =======================
-// Control total de roles y estructura con PDF por tipo de usuario
-// Clean build (sin duplicados) – Versión organizada con menú PDF
+// Orquestador principal (estado + UI)
+// La lógica vive en services/ y utils/
 
 import React, { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
-import {
-  Users,
-  UserPlus,
-  LogOut,
-  BarChart3,
-  ChevronDown,
-  ChevronRight,
-  Copy,
-  Phone,
-  Trash2,
-} from "lucide-react";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+
+// ICONOS
+import { LogOut, UserPlus, BarChart3 } from "lucide-react";
+
+// COMPONENTES
 import AddPersonModal from "./AddPersonModal";
+import MiEstructura from "./components/MiEstructura";
+import BuscadorCI from "./components/BuscadorCI";
+import ModalTelefono from "./components/ModalTelefono";
 
-// ======================= COMPONENTE PRINCIPAL =======================
+// SERVICES
+import {
+  recargarEstructura as cargarEstructuraCompleta,
+  agregarPersona,
+  quitarPersona,
+  actualizarTelefono,
+} from "./services/estructuraService";
+
+import { getEstadisticas } from "./services/estadisticasService";
+import { generarPDF } from "./services/pdfService";
+
+// HELPERS
+import {
+  normalizeCI,
+  getPersonasDisponibles,
+} from "./utils/estructuraHelpers";
+
+// ======================= COMPONENTE =======================
 const App = () => {
-  // PADRÓN COMPLETO DESDE SUPABASE
-  const [padron, setPadron] = useState([]);
-
-  // AUTENTICACIÓN
-  const [currentUser, setCurrentUser] = useState(null);
-  const [loginID, setLoginID] = useState("");
-  const [loginPass, setLoginPass] = useState("");
-
-  // ESTRUCTURA CAPTADA
+  // ======================= ESTADO GLOBAL =======================
   const [estructura, setEstructura] = useState({
     coordinadores: [],
     subcoordinadores: [],
     votantes: [],
   });
 
-  // UI estados
+  const [padron, setPadron] = useState([]);
+
+  // ======================= SESIÓN =======================
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loginID, setLoginID] = useState("");
+  const [loginPass, setLoginPass] = useState("");
+
+  // ======================= UI =======================
   const [showAddModal, setShowAddModal] = useState(false);
   const [modalType, setModalType] = useState("");
-  const [expandedCoords, setExpandedCoords] = useState({});
+
   const [searchCI, setSearchCI] = useState("");
   const [searchResult, setSearchResult] = useState(null);
 
-  // Modal teléfono
   const [phoneModalOpen, setPhoneModalOpen] = useState(false);
   const [phoneTarget, setPhoneTarget] = useState(null);
   const [phoneValue, setPhoneValue] = useState("+595");
 
-  // ======================= HELPERS BASE =======================
-  const normalizeCI = (v) => Number(v) || 0;
-
-  const copyToClipboard = async (text) => {
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      alert("Código copiado!");
-    } catch {
-      alert("No se pudo copiar.");
-    }
-  };
-
-  const toggleExpand = (ci) => {
-    setExpandedCoords((prev) => ({
-      ...prev,
-      [normalizeCI(ci)]: !prev[normalizeCI(ci)],
-    }));
-  };
-
-  // ======================= CARGAR PADRÓN COMPLETO =======================
-  const cargarPadronCompleto = async () => {
-    try {
-      // OJO: si tenés muchos registros, esto es pesado.
-      // Mantengo tu lógica de count + range.
-      const { count, error: countError } = await supabase
-        .from("padron")
-        .select("ci", { count: "exact", head: true });
-
-      if (countError) {
-        console.error("Error count padron:", countError);
-        return;
-      }
-
-      if (!count || count <= 0) {
-        setPadron([]);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("padron")
-        .select("*")
-        .range(0, count - 1);
-
-      if (error) {
-        console.error("Error cargando padron:", error);
-        return;
-      }
-
-      if (data) setPadron(data);
-    } catch (e) {
-      console.error("Error cargando padrón:", e);
-    }
-  };
-
+  // ======================= CARGA INICIAL =======================
   useEffect(() => {
-    cargarPadronCompleto();
+    const loadPadron = async () => {
+      const { data } = await supabase.from("padron").select("*");
+      setPadron(data || []);
+    };
+    loadPadron();
   }, []);
 
-  // ======================= SESIÓN PERSISTENTE =======================
   useEffect(() => {
     const saved = localStorage.getItem("currentUser");
-    if (!saved) return;
-
-    try {
-      const u = JSON.parse(saved);
-      if (u && u.ci && u.role) setCurrentUser(u);
-    } catch (e) {
-      console.error("Error leyendo sesión local:", e);
-    }
+    if (saved) setCurrentUser(JSON.parse(saved));
   }, []);
+
   useEffect(() => {
-    if (currentUser) recargarEstructura();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!currentUser) return;
+    recargar();
   }, [currentUser]);
 
-  // ======================= CARGAR ESTRUCTURA (BASE REAL DESDE SUPABASE) =======================
-// ⚠️ BLOQUE CRÍTICO
-// Este bloque NO usa joins implícitos de Supabase (padron())
-// Evita problemas de FK, RLS y relaciones rotas
-// TODO se resuelve manualmente en JS
-// COPIAR Y PEGAR COMPLETO
-
-const recargarEstructura = async () => {
-  try {
-    // ======================= CARGA BASE =======================
-    const { data: padronData, error: padronErr } = await supabase
-      .from("padron")
-      .select("*");
-
-    if (padronErr) {
-      console.error("Error cargando padrón:", padronErr);
-      return;
-    }
-
-    const { data: coordsRaw } = await supabase
-      .from("coordinadores")
-      .select("*");
-
-    const { data: subsRaw } = await supabase
-      .from("subcoordinadores")
-      .select("*");
-
-    const { data: votosRaw } = await supabase
-      .from("votantes")
-      .select("*");
-
-    // ======================= MAPEO MANUAL =======================
-    const coordinadores = (coordsRaw || []).map(c => {
-      const p = padronData.find(
-        p => normalizeCI(p.ci) === normalizeCI(c.ci)
-      );
-      return { ...c, ...p };
-    });
-
-    const subcoordinadores = (subsRaw || []).map(s => {
-      const p = padronData.find(
-        p => normalizeCI(p.ci) === normalizeCI(s.ci)
-      );
-      return { ...s, ...p };
-    });
-
-    const votantes = (votosRaw || []).map(v => {
-      const p = padronData.find(
-        p => normalizeCI(p.ci) === normalizeCI(v.ci)
-      );
-      return { ...v, ...p };
-    });
-
-    // ======================= DEBUG (NO BORRAR) =======================
-    console.log("PADRON:", padronData.length);
-    console.log("COORDINADORES:", coordinadores);
-    console.log("SUBCOORDINADORES:", subcoordinadores);
-    console.log("VOTANTES:", votantes);
-
-    // ======================= SET FINAL =======================
-    setEstructura({
-      coordinadores,
-      subcoordinadores,
-      votantes,
-    });
-
-  } catch (e) {
-    console.error("Error recargando estructura:", e);
-  }
-};
-
-  // ======================= BUSCADOR GLOBAL POR CI =======================
-  const buscarPorCI = (input) => {
-    if (!input.trim()) return setSearchResult(null);
-    const clean = input.replace(/\D/g, "");
-
-    const persona = padron.find((p) => {
-      const raw = String(p.ci || "");
-      return raw.includes(clean);
-    });
-
-    if (!persona) {
-      setSearchResult({ tipo: "noExiste", data: { ci: clean } });
-      return;
-    }
-
-    const ci = normalizeCI(persona.ci);
-
-    const coord = estructura.coordinadores.find(
-      (c) => normalizeCI(c.ci) === ci
-    );
-    if (coord) return setSearchResult({ tipo: "coordinador", data: coord });
-
-    const sub = estructura.subcoordinadores.find(
-      (s) => normalizeCI(s.ci) === ci
-    );
-    if (sub) return setSearchResult({ tipo: "subcoordinador", data: sub });
-
-    const vot = estructura.votantes.find((v) => normalizeCI(v.ci) === ci);
-    if (vot) return setSearchResult({ tipo: "votante", data: vot });
-
-    return setSearchResult({ tipo: "padron", data: persona });
+  const recargar = async () => {
+    const data = await cargarEstructuraCompleta();
+    setEstructura(data);
   };
 
-  // ======================= LOGIN (SIN PANTALLA BLANCA) =======================
+  // ======================= LOGIN =======================
   const handleLogin = async () => {
-    if (!loginID.trim()) return alert("Ingrese código.");
+    if (!loginID.trim()) return alert("Ingrese código");
 
     // SUPERADMIN
     if (loginID === "4630621") {
-      if (loginPass !== "12345") return alert("Contraseña incorrecta.");
+      if (loginPass !== "12345") return alert("Contraseña incorrecta");
 
       const u = {
         ci: 4630621,
@@ -248,1433 +102,228 @@ const recargarEstructura = async () => {
       return;
     }
 
-    // COORD
-    const { data: coord, error: coordErr } = await supabase
+    // COORDINADOR
+    const { data: coord } = await supabase
       .from("coordinadores")
-      .select("ci,login_code,telefono,padron(*)")
+      .select("*,padron(*)")
       .eq("login_code", loginID)
       .maybeSingle();
 
-    if (coordErr) console.error("Error login coord:", coordErr);
-
-    if (coord) {
-      // CLAVE: coord.padron puede venir null si la relación no está bien o RLS bloquea.
-      if (!coord.padron) {
-        alert(
-          "El coordinador existe, pero no se pudo leer sus datos del padrón. Revisá relación FK/RLS entre coordinadores.ci y padron.ci."
-        );
-        console.error("coord.padron es null:", coord);
-        return;
-      }
-
+    if (coord?.padron) {
       const u = {
         ci: normalizeCI(coord.ci),
         nombre: coord.padron.nombre,
         apellido: coord.padron.apellido,
-        telefono: coord.telefono,
         role: "coordinador",
       };
-
       setCurrentUser(u);
       localStorage.setItem("currentUser", JSON.stringify(u));
       return;
     }
 
-    // SUB
-    const { data: sub, error: subErr } = await supabase
+    // SUBCOORDINADOR
+    const { data: sub } = await supabase
       .from("subcoordinadores")
-      .select("ci,login_code,telefono,coordinador_ci,padron(*)")
+      .select("*,padron(*)")
       .eq("login_code", loginID)
       .maybeSingle();
 
-    if (subErr) console.error("Error login sub:", subErr);
-
-    if (sub) {
-      if (!sub.padron) {
-        alert(
-          "El subcoordinador existe, pero no se pudo leer sus datos del padrón. Revisá relación FK/RLS entre subcoordinadores.ci y padron.ci."
-        );
-        console.error("sub.padron es null:", sub);
-        return;
-      }
-
+    if (sub?.padron) {
       const u = {
         ci: normalizeCI(sub.ci),
         nombre: sub.padron.nombre,
         apellido: sub.padron.apellido,
-        telefono: sub.telefono,
         role: "subcoordinador",
       };
-
       setCurrentUser(u);
       localStorage.setItem("currentUser", JSON.stringify(u));
       return;
     }
 
-    alert("Usuario no encontrado.");
+    alert("Usuario no encontrado");
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem("currentUser");
-    setExpandedCoords({});
-    setSearchResult(null);
-  };
-  // ======================= CRUD / TELÉFONO =======================
-  const abrirTelefono = (tipo, p) => {
-    setPhoneTarget({ tipo, ...p });
-    setPhoneValue(p.telefono || "+595");
-    setPhoneModalOpen(true);
-  };
-
-  const guardarTelefono = async () => {
-    if (!phoneTarget) return;
-
-    const telefono = phoneValue.trim();
-    if (!telefono) return alert("Ingrese número");
-
-    let tabla = "votantes";
-    if (phoneTarget.tipo === "coordinador") tabla = "coordinadores";
-    if (phoneTarget.tipo === "subcoordinador") tabla = "subcoordinadores";
-
-    const { error } = await supabase
-      .from(tabla)
-      .update({ telefono })
-      .eq("ci", phoneTarget.ci);
-
-    if (error) {
-      console.error("Error guardando teléfono:", error);
-      alert(error.message || "Error guardando teléfono");
-      return;
-    }
-
-    alert("Número actualizado.");
-    setPhoneModalOpen(false);
-    setPhoneTarget(null);
-    setPhoneValue("+595");
-    recargarEstructura();
   };
 
   // ======================= AGREGAR PERSONA =======================
   const handleAgregarPersona = async (persona) => {
-    if (!modalType) return alert("Seleccione tipo.");
-
     const ci = normalizeCI(persona.ci);
     let tabla = "";
     let data = {};
 
     if (modalType === "coordinador") {
       tabla = "coordinadores";
-      data = {
-        ci,
-        login_code: String(ci),
-        asignado_por_nombre: "Superadmin",
-      };
+      data = { ci };
     }
 
     if (modalType === "subcoordinador") {
       tabla = "subcoordinadores";
       data = {
         ci,
-        coordinador_ci: normalizeCI(currentUser.ci),
-        login_code: String(ci),
-        asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+        coordinador_ci: currentUser.ci,
       };
     }
 
     if (modalType === "votante") {
       tabla = "votantes";
-
-      let coordinador_ci;
-
-      if (currentUser.role === "coordinador") {
-        coordinador_ci = normalizeCI(currentUser.ci);
-      }
-
-      if (currentUser.role === "subcoordinador") {
-        const sub = estructura.subcoordinadores.find(
-          (s) => normalizeCI(s.ci) === normalizeCI(currentUser.ci)
-        );
-        coordinador_ci = normalizeCI(sub?.coordinador_ci);
-      }
-
-      if (!coordinador_ci) {
-        alert("Error interno: no se pudo resolver coordinador");
-        return;
-      }
-
       data = {
         ci,
-        asignado_por: normalizeCI(currentUser.ci),
-        asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-        coordinador_ci, // nunca null
+        asignado_por: currentUser.ci,
+        coordinador_ci:
+          currentUser.role === "coordinador"
+            ? currentUser.ci
+            : estructura.subcoordinadores.find(
+                (s) => normalizeCI(s.ci) === currentUser.ci
+              )?.coordinador_ci,
       };
     }
 
-    const { error } = await supabase.from(tabla).insert([data]);
-    if (error) {
-      console.error("Supabase insert error:", error);
-      alert(error.message || "Error desconocido");
-      return;
-    }
-
-    alert("Agregado correctamente.");
+    await agregarPersona(tabla, data);
     setShowAddModal(false);
-    recargarEstructura();
+    recargar();
   };
 
-  // ======================= QUITAR PERSONA =======================
-  const quitarPersona = async (ci, tipo) => {
-    if (!window.confirm("¿Quitar persona?")) return;
+  // ======================= ELIMINAR =======================
+  const handleEliminar = async (ci, tipo) => {
+    const tabla =
+      tipo === "coordinador"
+        ? "coordinadores"
+        : tipo === "subcoordinador"
+        ? "subcoordinadores"
+        : "votantes";
 
-    const isSuper = currentUser.role === "superadmin";
-    ci = normalizeCI(ci);
-
-    if (tipo === "coordinador") {
-      if (!isSuper) return alert("Solo superadmin.");
-      await supabase.from("subcoordinadores").delete().eq("coordinador_ci", ci);
-      await supabase.from("votantes").delete().eq("coordinador_ci", ci);
-      await supabase.from("votantes").delete().eq("asignado_por", ci);
-      await supabase.from("coordinadores").delete().eq("ci", ci);
-    }
-
-    if (tipo === "subcoordinador") {
-      await supabase.from("votantes").delete().eq("asignado_por", ci);
-      await supabase.from("subcoordinadores").delete().eq("ci", ci);
-    }
-
-    if (tipo === "votante") {
-      await supabase.from("votantes").delete().eq("ci", ci);
-    }
-
-    recargarEstructura();
+    await quitarPersona(tabla, ci);
+    recargar();
   };
 
-  // ======================= SUBCOORDINADORES DEL COORDINADOR =======================
-const getMisSubcoordinadores = () => {
-  if (!currentUser || currentUser.role !== "coordinador") return [];
-
-  return estructura.subcoordinadores.filter(
-    (s) => normalizeCI(s.coordinador_ci) === normalizeCI(currentUser.ci)
-  );
-};
-
-
- // ======================= VOTANTES DE UN SUBCOORDINADOR =======================
-// Devuelve SOLO los votantes cargados por ese sub
-const getVotantesDeSubcoord = (subCi) => {
-  return estructura.votantes.filter(
-    (v) => normalizeCI(v.asignado_por) === normalizeCI(subCi)
-  );
-};
-
-
-  // ======================= MIS VOTANTES =======================
-const getMisVotantes = () => {
-  if (!currentUser) return [];
-
-  // SUBCOORDINADOR → solo los que él cargó
-  if (currentUser.role === "subcoordinador") {
-    return estructura.votantes.filter(
-      (v) => normalizeCI(v.asignado_por) === normalizeCI(currentUser.ci)
-    );
-  }
-
-  // COORDINADOR → solo sus votantes directos
-  if (currentUser.role === "coordinador") {
-    return estructura.votantes.filter(
-      (v) => normalizeCI(v.asignado_por) === normalizeCI(currentUser.ci)
-    );
-  }
-
-  return [];
-};
-
-// ======================= VOTANTES DIRECTOS DEL COORDINADOR =======================
-const getVotantesDirectosCoord = (coordCi) => {
-  return estructura.votantes.filter(
-    (v) => normalizeCI(v.asignado_por) === normalizeCI(coordCi)
-  );
-};
-
-
-
-  // ======================= COMPONENTE DATOS PERSONA =======================
-  const DatosPersona = ({ persona, rol, loginCode }) => {
-    return (
-      <div className="space-y-1 text-xs md:text-sm">
-        <p className="font-semibold">
-          {persona.nombre || "-"} {persona.apellido || ""}
-        </p>
-        <p>
-          <b>CI:</b> {persona.ci}
-        </p>
-        {rol && (
-          <p>
-            <b>Rol:</b> {rol}
-          </p>
-        )}
-        {loginCode && (
-          <button
-            onClick={() => copyToClipboard(loginCode)}
-            className="p-1 border rounded text-red-600 inline-flex items-center gap-1"
-          >
-            <Copy className="w-4 h-4" /> Copiar acceso
-          </button>
-        )}
-        {persona.seccional && <p>Seccional: {persona.seccional}</p>}
-        {persona.local_votacion && <p>Local: {persona.local_votacion}</p>}
-        {persona.mesa && <p>Mesa: {persona.mesa}</p>}
-        {persona.orden && <p>Orden: {persona.orden}</p>}
-        {persona.direccion && <p>Dirección: {persona.direccion}</p>}
-        {persona.telefono && <p>Tel: {persona.telefono}</p>}
-      </div>
-    );
+  // ======================= TELÉFONO =======================
+  const handleEditarTelefono = (tipo, persona) => {
+    setPhoneTarget({ tipo, ...persona });
+    setPhoneValue(persona.telefono || "+595");
+    setPhoneModalOpen(true);
   };
 
-  // ======================= DISPONIBLES (PADRÓN + ROL REAL) =======================
-  const getPersonasDisponibles = () => {
-    return padron.map((p) => {
-      const ci = normalizeCI(p.ci);
-
-      const coord = estructura.coordinadores.find(
-        (c) => normalizeCI(c.ci) === ci
-      );
-      const sub = estructura.subcoordinadores.find(
-        (s) => normalizeCI(s.ci) === ci
-      );
-      const vot = estructura.votantes.find((v) => normalizeCI(v.ci) === ci);
-
-      let rol = null;
-      if (coord) rol = "coordinador";
-      else if (sub) rol = "subcoordinador";
-      else if (vot) rol = "votante";
-
-      return {
-        ...p,
-        ci,
-        asignado: rol !== null,
-        asignadoRol: rol,
-        asignadoPorNombre:
-          sub?.asignado_por_nombre || vot?.asignado_por_nombre || "",
-      };
-    });
+  const handleGuardarTelefono = async () => {
+    await actualizarTelefono(phoneTarget.tipo, phoneTarget.ci, phoneValue);
+    setPhoneModalOpen(false);
+    setPhoneTarget(null);
+    setPhoneValue("+595");
+    recargar();
   };
 
-  // ======================= ESTRUCTURA PROPIA PARA ESTADÍSTICAS/PDF =======================
-  const getEstructuraPropia = () => {
-    if (!currentUser) {
-      return {
-        isCoord: false,
-        misSubcoords: [],
-        misVotantes: [],
-        votantesIndirectos: 0,
-        totalVotos: 0,
-      };
-    }
+  // ======================= ESTADÍSTICAS =======================
+  const stats = getEstadisticas(estructura, currentUser);
 
-    const isCoord = currentUser.role === "coordinador";
-    const isSub = currentUser.role === "subcoordinador";
-
-    let misSubcoords = [];
-    let misVotantes = [];
-
-    if (isCoord) {
-      misSubcoords = getMisSubcoordinadores();
-      misVotantes = getMisVotantes();
-    } else if (isSub) {
-      misVotantes = getMisVotantes();
-    }
-
-    const votantesIndirectos = isCoord
-      ? misSubcoords.reduce(
-          (acc, s) => acc + getVotantesDeSubcoord(s.ci).length,
-          0
-        )
-      : 0;
-
-    const totalVotos = misVotantes.length + votantesIndirectos;
-
-    return { isCoord, misSubcoords, misVotantes, votantesIndirectos, totalVotos };
-  };
-
-  // ======================= ESTADÍSTICAS (ALINEADAS A SUPABASE) =======================
-const getEstadisticas = () => {
-  if (!currentUser) return {};
-
-  // SUPERADMIN
-  if (currentUser.role === "superadmin") {
-    return {
-      coordinadores: estructura.coordinadores.length,
-      subcoordinadores: estructura.subcoordinadores.length,
-      votantes: estructura.votantes.length,
-    };
-  }
-
-  // COORDINADOR
-  if (currentUser.role === "coordinador") {
-    const misSubs = getMisSubcoordinadores();
-    const votantesDirectos = getMisVotantes();
-
-    const votantesDeSubs = misSubs.reduce(
-      (acc, sub) =>
-        acc +
-        estructura.votantes.filter(
-          (v) => normalizeCI(v.asignado_por) === normalizeCI(sub.ci)
-        ).length,
-      0
-    );
-
-    return {
-      subcoordinadores: misSubs.length,
-      votantesDirectos: votantesDirectos.length,
-      total: votantesDirectos.length + votantesDeSubs,
-    };
-  }
-
-  // SUBCOORDINADOR
-  if (currentUser.role === "subcoordinador") {
-    return {
-      votantes: getMisVotantes().length,
-    };
-  }
-
-  return {};
-};
-
-
-  // ======================= PDF (MENÚ: RANKING / ESTRUCTURA) =======================
-  const generarPDF = (tipo = "estructura") => {
-    if (!currentUser) return;
-
-    const doc = new jsPDF({ orientation: "portrait" });
-    const colorRojo = [200, 0, 0];
-
-    const resolvePadron = (ci) =>
-      padron.find((x) => normalizeCI(x.ci) === normalizeCI(ci));
-
-    const resolveSeccional = (persona) => {
-      const padronEntry = resolvePadron(persona.ci);
-      return persona.seccional || padronEntry?.seccional || "-";
-    };
-
-    const personaToRow = (p) => {
-      const padronEntry = resolvePadron(p.ci);
-      return [
-        p.ci,
-        `${p.nombre || ""} ${p.apellido || ""}`.trim(),
-        resolveSeccional(p),
-        padronEntry?.local_votacion || p.local_votacion || "-",
-        padronEntry?.mesa || p.mesa || "-",
-        padronEntry?.orden || p.orden || "-",
-        padronEntry?.direccion || p.direccion || "-",
-        p.telefono || "-",
-      ];
-    };
-
-    // Encabezado
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.setTextColor(...colorRojo);
-    doc.text("INFORME DE CAPTACIÓN ELECTORAL", 14, 18);
-
-    doc.setFontSize(11);
-    doc.setTextColor(0, 0, 0);
-    doc.text(
-      `Generado por: ${currentUser.nombre} ${currentUser.apellido} — (${currentUser.role})`,
-      14,
-      28
-    );
-    doc.text(`Fecha y hora: ${new Date().toLocaleString()}`, 14, 34);
-
-    let y = 42;
-
-    // ----- SUPERADMIN: PDF RANKING O ESTRUCTURA GLOBAL -----
-    if (currentUser.role === "superadmin") {
-      const totalCoordinadores = estructura.coordinadores.length;
-      const totalSub = estructura.subcoordinadores.length;
-      const totalVotantes = estructura.votantes.length;
-
-      autoTable(doc, {
-        startY: y,
-        head: [["Indicador", "Cantidad"]],
-        body: [
-          ["Coordinadores", totalCoordinadores],
-          ["Subcoordinadores", totalSub],
-          ["Total de Votantes Captados", totalVotantes],
-        ],
-        theme: "grid",
-        headStyles: { fillColor: colorRojo },
-      });
-
-      y = doc.lastAutoTable.finalY + 10;
-
-      if (tipo === "ranking") {
-        doc.setFont("helvetica", "bold");
-        doc.text("Ranking de Coordinadores y Subcoordinadores", 14, y);
-        y += 4;
-
-        const ranking = [
-          ...estructura.coordinadores,
-          ...estructura.subcoordinadores,
-        ].map((p) => {
-          const directos = estructura.votantes.filter(
-            (v) => normalizeCI(v.asignado_por) === normalizeCI(p.ci)
-          ).length;
-
-          return {
-            ci: p.ci,
-            nombre: `${p.nombre || ""} ${p.apellido || ""}`.trim(),
-            seccional: resolveSeccional(p),
-            telefono: p.telefono || "-",
-            rol: estructura.coordinadores.some(
-              (c) => normalizeCI(c.ci) === normalizeCI(p.ci)
-            )
-              ? "Coordinador"
-              : "Subcoordinador",
-            cantidad: directos,
-          };
-        });
-
-        const ordenado = ranking.sort((a, b) => b.cantidad - a.cantidad);
-        const totalGlobal = ordenado.reduce((acc, a) => acc + a.cantidad, 0);
-
-        autoTable(doc, {
-          startY: y + 4,
-          head: [["#", "Nombre", "Rol", "Seccional", "Teléfono", "Votantes", "%"]],
-          body: ordenado.map((p, i) => [
-            i + 1,
-            p.nombre,
-            p.rol,
-            p.seccional,
-            p.telefono,
-            p.cantidad,
-            totalGlobal > 0 ? ((p.cantidad / totalGlobal) * 100).toFixed(1) : "0",
-          ]),
-          theme: "striped",
-          headStyles: { fillColor: colorRojo },
-          bodyStyles: { fontSize: 10 },
-        });
-
-        y = doc.lastAutoTable.finalY + 10;
-
-        doc.setFont("helvetica", "italic");
-        doc.setFontSize(10);
-        doc.text(`Total global de votantes: ${totalGlobal}`, 14, y);
-        y += 6;
-        doc.text(
-          "Generado automáticamente por el Sistema Electoral — Uso privado y estratégico",
-          14,
-          y
-        );
-        doc.save("informe_ranking_global.pdf");
-        return;
-      }
-
-      // ESTRUCTURA COMPLETA
-      doc.setFont("helvetica", "bold");
-      doc.text("Estructura general (Coordinadores / Sub / Votantes)", 14, y);
-      y += 6;
-
-      estructura.coordinadores.forEach((coord) => {
-        doc.setFont("helvetica", "bold");
-        doc.text(
-          `Coordinador: ${coord.nombre || ""} ${coord.apellido || ""} (CI ${coord.ci})`,
-          14,
-          y
-        );
-        y += 4;
-
-        const subs = estructura.subcoordinadores.filter(
-          (s) => normalizeCI(s.coordinador_ci) === normalizeCI(coord.ci)
-        );
-
-        if (subs.length > 0) {
-          autoTable(doc, {
-            startY: y,
-            head: [[
-              "CI","Nombre","Seccional","Local","Mesa","Orden","Dirección","Teléfono",
-            ]],
-            body: subs.map((s) => personaToRow(s)),
-            theme: "striped",
-            headStyles: { fillColor: colorRojo },
-            bodyStyles: { fontSize: 9 },
-          });
-          y = doc.lastAutoTable.finalY + 4;
-        }
-
-        subs.forEach((sub) => {
-          const votantesSub = getVotantesDeSubcoord(sub.ci);
-          if (votantesSub.length === 0) return;
-
-          doc.setFont("helvetica", "bold");
-          doc.text(
-            `Votantes de ${sub.nombre || ""} ${sub.apellido || ""} (CI ${sub.ci})`,
-            18,
-            y
-          );
-          y += 4;
-
-          autoTable(doc, {
-            startY: y,
-            head: [[
-              "CI","Nombre","Seccional","Local","Mesa","Orden","Dirección","Teléfono",
-            ]],
-            body: votantesSub.map((v) => personaToRow(v)),
-            theme: "striped",
-            headStyles: { fillColor: colorRojo },
-            bodyStyles: { fontSize: 9 },
-          });
-          y = doc.lastAutoTable.finalY + 4;
-        });
-
-        const directosCoord = getVotantesDirectosCoord(coord.ci);
-
-        if (directosCoord.length > 0) {
-          doc.setFont("helvetica", "bold");
-          doc.text("Votantes directos del coordinador", 18, y);
-          y += 4;
-
-          autoTable(doc, {
-            startY: y,
-            head: [[
-              "CI","Nombre","Seccional","Local","Mesa","Orden","Dirección","Teléfono",
-            ]],
-            body: directosCoord.map((v) => personaToRow(v)),
-            theme: "striped",
-            headStyles: { fillColor: colorRojo },
-            bodyStyles: { fontSize: 9 },
-          });
-          y = doc.lastAutoTable.finalY + 6;
-        }
-      });
-
-      doc.setFont("helvetica", "italic");
-      doc.setFontSize(10);
-      doc.text(
-        "Generado automáticamente por el Sistema Electoral — Uso privado y estratégico",
-        14,
-        y
-      );
-      doc.save("informe_estructura_general.pdf");
-      return;
-    }
-
-    // ----- COORDINADOR / SUBCOORDINADOR: ESTRUCTURA PROPIA -----
-    const { isCoord, misSubcoords, misVotantes, votantesIndirectos, totalVotos } =
-      getEstructuraPropia();
-
-    autoTable(doc, {
-      startY: y,
-      head: [["Indicador", "Cantidad"]],
-      body: [
-        isCoord && ["Subcoordinadores", misSubcoords.length],
-        isCoord && ["Votantes directos", misVotantes.length],
-        isCoord && ["Votantes de subcoordinadores", votantesIndirectos],
-        !isCoord && ["Votantes", misVotantes.length],
-        ["Total de votantes", totalVotos],
-      ].filter(Boolean),
-      theme: "grid",
-      headStyles: { fillColor: colorRojo },
-    });
-
-    y = doc.lastAutoTable.finalY + 10;
-
-    if (isCoord) {
-      doc.setFont("helvetica", "bold");
-      doc.text("Subcoordinadores", 14, y);
-      y += 4;
-
-      if (misSubcoords.length > 0) {
-        autoTable(doc, {
-          startY: y,
-          head: [[
-            "CI","Nombre","Seccional","Local","Mesa","Orden","Dirección","Teléfono",
-          ]],
-          body: misSubcoords.map((s) => personaToRow(s)),
-          theme: "striped",
-          headStyles: { fillColor: colorRojo },
-          bodyStyles: { fontSize: 9 },
-        });
-        y = doc.lastAutoTable.finalY + 6;
-      }
-
-      misSubcoords.forEach((sub) => {
-        const votantesSub = getVotantesDeSubcoord(sub.ci);
-        if (votantesSub.length === 0) return;
-
-        doc.setFont("helvetica", "bold");
-        doc.text(
-          `Votantes de ${sub.nombre || ""} ${sub.apellido || ""} (CI ${sub.ci})`,
-          14,
-          y
-        );
-        y += 4;
-
-        autoTable(doc, {
-          startY: y,
-          head: [[
-            "CI","Nombre","Seccional","Local","Mesa","Orden","Dirección","Teléfono",
-          ]],
-          body: votantesSub.map((v) => personaToRow(v)),
-          theme: "striped",
-          headStyles: { fillColor: colorRojo },
-          bodyStyles: { fontSize: 9 },
-        });
-        y = doc.lastAutoTable.finalY + 6;
-      });
-
-      if (misVotantes.length > 0) {
-        doc.setFont("helvetica", "bold");
-        doc.text("Votantes directos del coordinador", 14, y);
-        y += 4;
-
-        autoTable(doc, {
-          startY: y,
-          head: [[
-            "CI","Nombre","Seccional","Local","Mesa","Orden","Dirección","Teléfono",
-          ]],
-          body: misVotantes.map((v) => personaToRow(v)),
-          theme: "striped",
-          headStyles: { fillColor: colorRojo },
-          bodyStyles: { fontSize: 9 },
-        });
-        y = doc.lastAutoTable.finalY + 6;
-      }
-    } else {
-      // SUBCOORDINADOR
-      doc.setFont("helvetica", "bold");
-      doc.text("Mis votantes", 14, y);
-      y += 4;
-
-      autoTable(doc, {
-        startY: y,
-        head: [[
-          "CI","Nombre","Seccional","Local","Mesa","Orden","Dirección","Teléfono",
-        ]],
-        body: misVotantes.map((v) => personaToRow(v)),
-        theme: "striped",
-        headStyles: { fillColor: colorRojo },
-        bodyStyles: { fontSize: 9 },
-      });
-      y = doc.lastAutoTable.finalY + 6;
-    }
-
-    doc.setFont("helvetica", "italic");
-    doc.setFontSize(10);
-    doc.text(`Total de votantes: ${totalVotos}`, 14, y);
-    y += 6;
-    doc.text(
-      "Generado automáticamente por el Sistema Electoral — Uso privado y estratégico",
-      14,
-      y
-    );
-
-    doc.save("informe_mi_estructura.pdf");
-  };
-  // ======================= PANTALLA LOGIN =======================
+  // ======================= LOGIN VIEW =======================
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center p-4">
-        <div className="bg-white/95 backdrop-blur-sm p-8 rounded-2xl shadow-xl w-full max-w-md">
-          <div className="text-center mb-8">
-            <Users className="w-16 h-16 text-red-600 mx-auto" />
-            <h1 className="text-3xl font-bold text-gray-800 mt-3">
-              Sistema Electoral
-            </h1>
-            <p className="text-gray-600">Gestión de Votantes</p>
-          </div>
-
-          <label className="text-sm font-medium text-gray-700">
-            CI o Código de Acceso
-          </label>
+      <div className="min-h-screen flex items-center justify-center bg-gray-100">
+        <div className="bg-white p-6 rounded shadow w-full max-w-md">
           <input
-            type="text"
             value={loginID}
             onChange={(e) => setLoginID(e.target.value)}
-            className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 mb-4"
-            placeholder="Ej: 1234567 o ABC123"
+            placeholder="Código de acceso"
+            className="w-full border p-2 mb-3"
           />
-
           {loginID === "4630621" && (
-            <div className="mb-4">
-              <label className="text-sm font-medium text-gray-700">
-                Contraseña Superadmin
-              </label>
-              <input
-                type="password"
-                value={loginPass}
-                onChange={(e) => setLoginPass(e.target.value)}
-                className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500"
-                placeholder="Ingrese contraseña"
-              />
-            </div>
+            <input
+              type="password"
+              value={loginPass}
+              onChange={(e) => setLoginPass(e.target.value)}
+              placeholder="Contraseña"
+              className="w-full border p-2 mb-3"
+            />
           )}
-
           <button
             onClick={handleLogin}
-            className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-semibold mb-3"
+            className="w-full bg-red-600 text-white p-2 rounded"
           >
-            Iniciar Sesión
+            Ingresar
           </button>
-
-          <div className="mt-6 bg-red-50 p-4 rounded-lg border border-red-200 text-sm text-red-700">
-            <p className="font-semibold mb-2">📋 Instrucciones:</p>
-            <ol className="list-decimal ml-5 space-y-1">
-              <li>Ingrese el código proporcionado.</li>
-              <li>Si es coordinador o sub, cuide su acceso.</li>
-              <li>Ante dudas, comuníquese con el administrador.</li>
-            </ol>
-          </div>
         </div>
       </div>
     );
   }
 
-  // ======================= DASHBOARD LOGUEADO =======================
-  const stats = getEstadisticas();
-
+  // ======================= DASHBOARD =======================
   return (
     <div className="min-h-screen bg-gray-100">
       {/* HEADER */}
-      <div className="bg-red-600 text-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold">Sistema Electoral</h1>
-            <p className="text-red-200 text-sm mt-1">
-              {currentUser.nombre} {currentUser.apellido} —{" "}
-              {currentUser.role === "superadmin"
-                ? "⭐ Superadmin"
-                : currentUser.role === "coordinador"
-                ? "Coordinador"
-                : "Sub-coordinador"}
-            </p>
-          </div>
-
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 bg-red-700 hover:bg-red-800 px-4 py-2 rounded-lg transition"
-          >
-            <LogOut className="w-4 h-4" />
-            Salir
-          </button>
+      <header className="bg-red-600 text-white p-4 flex justify-between">
+        <div>
+          {currentUser.nombre} {currentUser.apellido} — {currentUser.role}
         </div>
-      </div>
-
-      {/* TARJETAS ESTADÍSTICAS */}
-      <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-        {currentUser.role === "superadmin" && (
-          <>
-            <div className="bg-white rounded-lg shadow p-6">
-              <p className="text-gray-600 text-sm">Coordinadores</p>
-              <p className="text-4xl font-bold text-red-600">
-                {stats.coordinadores}
-              </p>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6">
-              <p className="text-gray-600 text-sm">Subcoordinadores</p>
-              <p className="text-4xl font-bold text-red-600">
-                {stats.subcoordinadores}
-              </p>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6">
-              <p className="text-gray-600 text-sm">Votantes</p>
-              <p className="text-4xl font-bold text-red-600">{stats.votantes}</p>
-            </div>
-          </>
-        )}
-
-        {currentUser.role === "coordinador" && (
-          <>
-            <div className="bg-white rounded-lg shadow p-6">
-              <p className="text-gray-600 text-sm">Subcoordinadores</p>
-              <p className="text-4xl font-bold text-red-600">
-                {stats.subcoordinadores}
-              </p>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6">
-              <p className="text-gray-600 text-sm">Votantes directos</p>
-              <p className="text-4xl font-bold text-red-600">
-                {stats.votantesDirectos}
-              </p>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6">
-              <p className="text-gray-600 text-sm">Total en red</p>
-              <p className="text-4xl font-bold text-red-600">{stats.total}</p>
-            </div>
-          </>
-        )}
-
-        {currentUser.role === "subcoordinador" && (
-          <div className="bg-white rounded-lg shadow p-6">
-            <p className="text-gray-600 text-sm">Mis votantes</p>
-            <p className="text-4xl font-bold text-red-600">{stats.votantes}</p>
-          </div>
-        )}
-      </div>
+        <button onClick={handleLogout}>
+          <LogOut />
+        </button>
+      </header>
 
       {/* ACCIONES */}
-      <div className="max-w-7xl mx-auto px-4 mb-6 flex flex-wrap gap-3 items-center">
-        {currentUser.role === "superadmin" && (
-          <button
-            onClick={() => {
-              setModalType("coordinador");
-              setShowAddModal(true);
-            }}
-            className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
-          >
-            <UserPlus className="w-4 h-4" />
-            Agregar Coordinador
-          </button>
-        )}
+      <div className="p-4 flex gap-2">
+        <button
+          onClick={() => {
+            setModalType("votante");
+            setShowAddModal(true);
+          }}
+          className="bg-red-600 text-white px-4 py-2 rounded flex gap-2"
+        >
+          <UserPlus /> Agregar
+        </button>
 
-        {currentUser.role === "coordinador" && (
-          <button
-            onClick={() => {
-              setModalType("subcoordinador");
-              setShowAddModal(true);
-            }}
-            className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
-          >
-            <UserPlus className="w-4 h-4" />
-            Agregar Subcoordinador
-          </button>
-        )}
-
-        {(currentUser.role === "coordinador" ||
-          currentUser.role === "subcoordinador") && (
-          <button
-            onClick={() => {
-              setModalType("votante");
-              setShowAddModal(true);
-            }}
-            className="flex items-center gap-2 border-2 border-red-600 text-red-600 px-4 py-2 rounded-lg hover:bg-red-50"
-          >
-            <UserPlus className="w-4 h-4" />
-            Agregar Votante
-          </button>
-        )}
-
-        {/* MENÚ PDF */}
-        <div className="relative inline-block">
-          <button
-            className="flex items-center gap-2 border-2 border-red-600 text-red-600 px-4 py-2 rounded-lg hover:bg-red-50"
-            onClick={(e) => {
-              const menu = e.currentTarget.nextSibling;
-              if (menu) menu.classList.toggle("hidden");
-            }}
-          >
-            <BarChart3 className="w-4 h-4" />
-            Descargar PDF
-          </button>
-
-          <div className="absolute mt-1 bg-white border rounded-lg shadow-lg hidden z-20 min-w-[220px]">
-            {currentUser.role === "superadmin" && (
-              <>
-                <button
-                  className="block w-full text-left px-4 py-2 text-sm hover:bg-red-50"
-                  onClick={() => generarPDF("ranking")}
-                >
-                  Ranking Global
-                </button>
-                <button
-                  className="block w-full text-left px-4 py-2 text-sm hover:bg-red-50"
-                  onClick={() => generarPDF("estructura")}
-                >
-                  Estructura Completa
-                </button>
-              </>
-            )}
-            {currentUser.role !== "superadmin" && (
-              <button
-                className="block w-full text-left px-4 py-2 text-sm hover:bg-red-50"
-                onClick={() => generarPDF("estructura")}
-              >
-                Mi Estructura
-              </button>
-            )}
-          </div>
-        </div>
+        <button
+          onClick={() =>
+            generarPDF({
+              tipo: "estructura",
+              estructura,
+              padron,
+              currentUser,
+            })
+          }
+          className="border px-4 py-2 rounded flex gap-2"
+        >
+          <BarChart3 /> PDF
+        </button>
       </div>
 
-      {/* BUSCADOR GLOBAL POR CI */}
-      <div className="max-w-7xl mx-auto px-4 mb-6">
-        <div className="bg-white p-4 rounded-lg shadow">
-          <label className="font-semibold">Buscar por CI</label>
-          <input
-            type="text"
-            value={searchCI}
-            onChange={(e) => {
-              const value = e.target.value.replace(/\D/g, "");
-              setSearchCI(value);
-              buscarPorCI(value);
-            }}
-            placeholder="Ingrese CI (solo números)"
-            className="w-full mt-2 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
-            inputMode="numeric"
-            pattern="[0-9]*"
-          />
+      {/* BUSCADOR */}
+      <BuscadorCI
+        value={searchCI}
+        onChange={setSearchCI}
+        onBuscar={setSearchResult}
+        resultado={searchResult}
+        onEditarTelefono={handleEditarTelefono}
+        onEliminar={handleEliminar}
+      />
 
-          {searchResult && (
-            <div className="mt-4 p-4 border rounded bg-gray-50 text-sm">
-              <p className="font-bold text-red-700 mb-2">
-                {searchResult.tipo === "coordinador"
-                  ? "Coordinador encontrado"
-                  : searchResult.tipo === "subcoordinador"
-                  ? "Subcoordinador encontrado"
-                  : searchResult.tipo === "votante"
-                  ? "Votante encontrado"
-                  : searchResult.tipo === "padron"
-                  ? "Persona en padrón (no asignada)"
-                  : "No existe en el padrón"}
-              </p>
+      {/* ESTRUCTURA */}
+      <MiEstructura
+        estructura={estructura}
+        currentUser={currentUser}
+        expanded={{}}
+        toggleExpand={() => {}}
+        abrirTelefono={handleEditarTelefono}
+        quitarPersona={handleEliminar}
+      />
 
-              {searchResult.data && searchResult.tipo !== "noExiste" && (
-                <>
-                  <p>
-                    <b>Nombre:</b> {searchResult.data.nombre}{" "}
-                    {searchResult.data.apellido}
-                  </p>
-                  <p>
-                    <b>CI:</b> {searchResult.data.ci}
-                  </p>
-                  {searchResult.data.seccional && (
-                    <p>
-                      <b>Seccional:</b> {searchResult.data.seccional}
-                    </p>
-                  )}
-                  {searchResult.data.local_votacion && (
-                    <p>
-                      <b>Local de votación:</b>{" "}
-                      {searchResult.data.local_votacion}
-                    </p>
-                  )}
-                  {searchResult.data.mesa && (
-                    <p>
-                      <b>Mesa:</b> {searchResult.data.mesa}
-                    </p>
-                  )}
-                  {searchResult.data.orden && (
-                    <p>
-                      <b>Orden:</b> {searchResult.data.orden}
-                    </p>
-                  )}
-                  {searchResult.data.direccion && (
-                    <p>
-                      <b>Dirección:</b> {searchResult.data.direccion}
-                    </p>
-                  )}
-                  <p>
-                    <b>Teléfono:</b> {searchResult.data.telefono || "-"}
-                  </p>
-                </>
-              )}
-
-              {searchResult.tipo === "noExiste" && (
-                <p>
-                  Este CI <b>{searchResult.data.ci}</b> no pertenece al padrón.
-                </p>
-              )}
-
-              {(searchResult.tipo === "coordinador" ||
-                searchResult.tipo === "subcoordinador" ||
-                searchResult.tipo === "votante") && (
-                <div className="mt-4 flex gap-2 flex-wrap">
-                  <button
-                    onClick={() =>
-                      abrirTelefono(searchResult.tipo, searchResult.data)
-                    }
-                    className="px-3 py-1 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
-                  >
-                    Teléfono
-                  </button>
-                  <button
-                    onClick={() =>
-                      quitarPersona(searchResult.data.ci, searchResult.tipo)
-                    }
-                    className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-1"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Borrar
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* MI ESTRUCTURA */}
-      <div className="max-w-7xl mx-auto px-4 mb-10">
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b">
-            <h2 className="text-xl font-bold text-gray-800">Mi Estructura</h2>
-          </div>
-
-          <div className="p-6">
-            {/* SUPERADMIN: VER TODA LA RED */}
-            {currentUser.role === "superadmin" && (
-              <>
-                {estructura.coordinadores.map((coord) => (
-                  <div
-                    key={coord.ci}
-                    className="border rounded-lg mb-3 bg-red-50/40"
-                  >
-                    <div
-                      className="flex items-start justify-between p-4 cursor-pointer gap-4"
-                      onClick={() => toggleExpand(coord.ci)}
-                    >
-                      <div className="flex items-start gap-3 flex-1">
-                        {expandedCoords[normalizeCI(coord.ci)] ? (
-                          <ChevronDown className="w-5 h-5 text-red-600" />
-                        ) : (
-                          <ChevronRight className="w-5 h-5 text-red-600" />
-                        )}
-                        <DatosPersona
-                          persona={coord}
-                          rol="Coordinador"
-                          loginCode={coord.login_code}
-                        />
-                      </div>
-
-                      <div className="flex flex-col md:flex-row gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            abrirTelefono("coordinador", coord);
-                          }}
-                          className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
-                        >
-                          <Phone className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            quitarPersona(coord.ci, "coordinador");
-                          }}
-                          className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {expandedCoords[normalizeCI(coord.ci)] && (
-                      <div className="bg-white px-4 pb-4">
-                        {/* SUBCOORDINADORES DEL COORD */}
-                        {estructura.subcoordinadores
-                          .filter(
-                            (s) =>
-                              normalizeCI(s.coordinador_ci) ===
-                              normalizeCI(coord.ci)
-                          )
-                          .map((sub) => (
-                            <div
-                              key={sub.ci}
-                              className="border rounded p-3 mb-2 bg-red-50/40 flex flex-col gap-3"
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <DatosPersona
-                                  persona={sub}
-                                  rol="Sub-coordinador"
-                                  loginCode={sub.login_code}
-                                />
-                                <div className="flex gap-2">
-                                  <button
-                                    onClick={() =>
-                                      abrirTelefono("subcoordinador", sub)
-                                    }
-                                    className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
-                                  >
-                                    <Phone className="w-5 h-5" />
-                                  </button>
-                                  <button
-                                    onClick={() =>
-                                      quitarPersona(sub.ci, "subcoordinador")
-                                    }
-                                    className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                                  >
-                                    <Trash2 className="w-5 h-5" />
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* Votantes de ese sub */}
-                              {getVotantesDeSubcoord(sub.ci).map((v) => (
-                                <div
-                                  key={v.ci}
-                                  className="bg-white border p-3 mt-2 rounded flex justify-between items-start gap-3"
-                                >
-                                  <DatosPersona persona={v} rol="Votante" />
-                                  <div className="flex gap-2">
-                                    <button
-                                      onClick={() => abrirTelefono("votante", v)}
-                                      className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
-                                    >
-                                      <Phone className="w-5 h-5" />
-                                    </button>
-                                    <button
-                                      onClick={() => quitarPersona(v.ci, "votante")}
-                                      className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                                    >
-                                      <Trash2 className="w-5 h-5" />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-
-                              {getVotantesDeSubcoord(sub.ci).length === 0 && (
-                                <p className="text-gray-500 text-sm">
-                                  Sin votantes asignados.
-                                </p>
-                              )}
-                            </div>
-                          ))}
-
-                        {/* VOTANTES DIRECTOS DEL COORD */}
-                        {getVotantesDirectosCoord(coord.ci).map((v) => (
-
-                            <div
-                              key={v.ci}
-                              className="bg-white border p-3 mt-2 rounded flex justify-between items-start gap-3"
-                            >
-                              <DatosPersona persona={v} rol="Votante" />
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => abrirTelefono("votante", v)}
-                                  className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
-                                >
-                                  <Phone className="w-5 h-5" />
-                                </button>
-                                <button
-                                  onClick={() => quitarPersona(v.ci, "votante")}
-                                  className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                                >
-                                  <Trash2 className="w-5 h-5" />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                {estructura.coordinadores.length === 0 && (
-                  <p className="text-center text-gray-500 py-8">
-                    No hay coordinadores aún.
-                  </p>
-                )}
-              </>
-            )}
-
-            {/* COORDINADOR */}
-            {currentUser.role === "coordinador" && (
-              <>
-                {getMisSubcoordinadores().map((sub) => (
-                  <div
-                    key={sub.ci}
-                    className="border rounded-lg mb-3 bg-red-50/40"
-                  >
-                    <div
-                      className="flex items-start justify-between p-4 cursor-pointer gap-4"
-                      onClick={() => toggleExpand(sub.ci)}
-                    >
-                      <div className="flex items-start gap-3 flex-1">
-                        {expandedCoords[normalizeCI(sub.ci)] ? (
-                          <ChevronDown className="w-5 h-5 text-red-600" />
-                        ) : (
-                          <ChevronRight className="w-5 h-5 text-red-600" />
-                        )}
-                        <DatosPersona
-                          persona={sub}
-                          rol="Sub-coordinador"
-                          loginCode={sub.login_code}
-                        />
-                      </div>
-                      <div className="flex flex-col md:flex-row gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            abrirTelefono("subcoordinador", sub);
-                          }}
-                          className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
-                        >
-                          <Phone className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            quitarPersona(sub.ci, "subcoordinador");
-                          }}
-                          className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {expandedCoords[normalizeCI(sub.ci)] && (
-                      <div className="bg-white px-4 pb-4">
-                        <p className="text-sm font-semibold mt-2">Votantes</p>
-
-                        {getVotantesDeSubcoord(sub.ci).map((v) => (
-                          <div
-                            key={v.ci}
-                            className="bg-white border p-3 mt-2 rounded flex justify-between items-start gap-3"
-                          >
-                            <DatosPersona persona={v} rol="Votante" />
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => abrirTelefono("votante", v)}
-                                className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
-                              >
-                                <Phone className="w-5 h-5" />
-                              </button>
-                              <button
-                                onClick={() => quitarPersona(v.ci, "votante")}
-                                className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                              >
-                                <Trash2 className="w-5 h-5" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-
-                        {getVotantesDeSubcoord(sub.ci).length === 0 && (
-                          <p className="text-gray-500 text-sm mt-2">
-                            Sin votantes asignados.
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-
-                {getMisVotantes().length > 0 && (
-                  <div className="border rounded-lg mb-3 p-4">
-                    <p className="font-semibold text-gray-700 mb-3">
-                      Mis votantes directos
-                    </p>
-                    {getMisVotantes().map((v) => (
-                      <div
-                        key={v.ci}
-                        className="bg-white border p-3 mt-2 rounded flex justify-between items-start gap-3"
-                      >
-                        <DatosPersona persona={v} rol="Votante" />
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => abrirTelefono("votante", v)}
-                            className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
-                          >
-                            <Phone className="w-5 h-5" />
-                          </button>
-                          <button
-                            onClick={() => quitarPersona(v.ci, "votante")}
-                            className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {getMisSubcoordinadores().length === 0 &&
-                  getMisVotantes().length === 0 && (
-                    <p className="text-gray-500 py-6">
-                      Aún no tiene subcoordinadores ni votantes asignados.
-                    </p>
-                  )}
-              </>
-            )}
-
-            {/* SUBCOORDINADOR */}
-            {currentUser.role === "subcoordinador" && (
-              <>
-                {getMisVotantes().map((v) => (
-                  <div
-                    key={v.ci}
-                    className="bg-white border p-3 mt-2 rounded flex justify-between items-start gap-3"
-                  >
-                    <DatosPersona persona={v} rol="Votante" />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => abrirTelefono("votante", v)}
-                        className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
-                      >
-                        <Phone className="w-5 h-5" />
-                      </button>
-                      <button
-                        onClick={() => quitarPersona(v.ci, "votante")}
-                        className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-
-                {getMisVotantes().length === 0 && (
-                  <p className="text-gray-500 py-6">
-                    No tiene votantes asignados.
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* MODAL TELÉFONO */}
-      {phoneModalOpen && phoneTarget && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl w-full max-w-sm shadow-xl p-6">
-            <h3 className="text-lg font-bold mb-2">Editar teléfono</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              {phoneTarget.nombre} {phoneTarget.apellido} — CI:{" "}
-              {phoneTarget.ci}
-            </p>
-            <label className="text-sm font-medium text-gray-700">
-              Número (formato +595…)
-            </label>
-            <input
-              type="tel"
-              value={phoneValue}
-              onChange={(e) => setPhoneValue(e.target.value)}
-              className="w-full mt-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
-              placeholder="+595..."
-            />
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={() => {
-                  setPhoneModalOpen(false);
-                  setPhoneTarget(null);
-                  setPhoneValue("+595");
-                }}
-                className="px-4 py-2 rounded-lg border"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={guardarTelefono}
-                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700"
-              >
-                Guardar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL AGREGAR PERSONA */}
+      {/* MODALES */}
       <AddPersonModal
         show={showAddModal}
         onClose={() => setShowAddModal(false)}
         tipo={modalType}
         onAdd={handleAgregarPersona}
-        disponibles={getPersonasDisponibles()}
+        disponibles={getPersonasDisponibles(padron, estructura)}
+      />
+
+      <ModalTelefono
+        open={phoneModalOpen}
+        persona={phoneTarget}
+        value={phoneValue}
+        onChange={setPhoneValue}
+        onCancel={() => setPhoneModalOpen(false)}
+        onSave={handleGuardarTelefono}
       />
     </div>
   );
