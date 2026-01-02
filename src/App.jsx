@@ -1,108 +1,101 @@
 // ======================= APP SISTEMA ELECTORAL =======================
 // Orquestador principal
-// Estado + Supabase + lógica
-// UI delegada a Dashboard.jsx
+// - Maneja sesión
+// - Carga datos
+// - Llama services
+// - Renderiza Dashboard
 
 import React, { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 
-import Dashboard from "./pages/Dashboard";
+// DASHBOARD (UI completa)
+import Dashboard from "./components/Dashboard";
 
-// helpers
+// SERVICES
 import {
-  normalizeCI,
-  getPersonasDisponibles,
-} from "./utils/estructuraHelpers";
+  cargarEstructuraCompleta,
+  agregarPersonaService,
+  eliminarPersonaService,
+  actualizarTelefonoService,
+} from "./services/estructuraService";
 
-// services
-import { getEstadisticas } from "./services/estadisticasService";
-import { generarPDF } from "./services/pdfService";
+// HELPERS
+import { normalizeCI } from "./utils/estructuraHelpers";
 
 // ======================= COMPONENTE =======================
 const App = () => {
   // ======================= ESTADO GLOBAL =======================
-  const [padron, setPadron] = useState([]);
   const [estructura, setEstructura] = useState({
     coordinadores: [],
     subcoordinadores: [],
     votantes: [],
   });
 
+  const [padron, setPadron] = useState([]);
+
   // ======================= SESIÓN =======================
   const [currentUser, setCurrentUser] = useState(null);
   const [loginID, setLoginID] = useState("");
   const [loginPass, setLoginPass] = useState("");
 
-  // ======================= UI =======================
-  const [expandedCoords, setExpandedCoords] = useState({});
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [modalType, setModalType] = useState("");
-
-  const [searchCI, setSearchCI] = useState("");
-  const [searchResult, setSearchResult] = useState(null);
-
-  const [phoneModalOpen, setPhoneModalOpen] = useState(false);
-  const [phoneTarget, setPhoneTarget] = useState(null);
-  const [phoneValue, setPhoneValue] = useState("+595");
-
-  // ======================= CARGA PADRÓN =======================
+  // ======================= CARGA INICIAL =======================
   useEffect(() => {
     const loadPadron = async () => {
-      const { data } = await supabase.from("padron").select("*");
+      const { data, error } = await supabase.from("padron").select("*");
+      if (error) {
+        console.error("Error cargando padrón:", error);
+        return;
+      }
       setPadron(data || []);
     };
+
     loadPadron();
   }, []);
 
-  // ======================= SESIÓN PERSISTENTE =======================
   useEffect(() => {
     const saved = localStorage.getItem("currentUser");
     if (saved) setCurrentUser(JSON.parse(saved));
   }, []);
 
   useEffect(() => {
-    if (currentUser) recargarEstructura();
+    if (!currentUser) return;
+    recargar();
   }, [currentUser]);
 
-  // ======================= CARGAR ESTRUCTURA =======================
-  const recargarEstructura = async () => {
-    const { data: padronData } = await supabase.from("padron").select("*");
-    const { data: coords } = await supabase.from("coordinadores").select("*");
-    const { data: subs } = await supabase.from("subcoordinadores").select("*");
-    const { data: votos } = await supabase.from("votantes").select("*");
-
-    const mapPersona = (p) =>
-      padronData.find((x) => normalizeCI(x.ci) === normalizeCI(p.ci));
-
-    setEstructura({
-      coordinadores: (coords || []).map((c) => ({ ...c, ...mapPersona(c) })),
-      subcoordinadores: (subs || []).map((s) => ({ ...s, ...mapPersona(s) })),
-      votantes: (votos || []).map((v) => ({ ...v, ...mapPersona(v) })),
-    });
+  // ======================= RECARGAR ESTRUCTURA =======================
+  const recargar = async () => {
+    const data = await cargarEstructuraCompleta();
+    setEstructura(data);
   };
 
   // ======================= LOGIN =======================
   const handleLogin = async () => {
-    if (!loginID) return alert("Ingrese código");
+    if (!loginID.trim()) return alert("Ingrese código de acceso");
 
+    // ======================= SUPERADMIN =======================
     if (loginID === "4630621") {
       if (loginPass !== "12345") return alert("Contraseña incorrecta");
+
       const u = {
-        ci: 4630621,
+        ci: "4630621",
         nombre: "Denis",
         apellido: "Ramos",
         role: "superadmin",
       };
+
       setCurrentUser(u);
       localStorage.setItem("currentUser", JSON.stringify(u));
       return;
     }
 
-    const { data: coord } = await supabase
+    // ======================= COORDINADOR =======================
+    const { data: coord, error: coordErr } = await supabase
       .from("coordinadores")
-      .select("*,padron(*)")
+      .select("*, padron(*)")
       .eq("login_code", loginID)
       .maybeSingle();
+
+    if (coordErr) console.error(coordErr);
 
     if (coord?.padron) {
       const u = {
@@ -116,11 +109,14 @@ const App = () => {
       return;
     }
 
-    const { data: sub } = await supabase
+    // ======================= SUBCOORDINADOR =======================
+    const { data: sub, error: subErr } = await supabase
       .from("subcoordinadores")
-      .select("*,padron(*)")
+      .select("*, padron(*)")
       .eq("login_code", loginID)
       .maybeSingle();
+
+    if (subErr) console.error(subErr);
 
     if (sub?.padron) {
       const u = {
@@ -140,41 +136,32 @@ const App = () => {
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem("currentUser");
-    setExpandedCoords({});
   };
 
-  // ======================= BUSCADOR =======================
-  const buscarPorCI = (value) => {
-    if (!value) return setSearchResult(null);
+  // ======================= SERVICES WRAPPERS =======================
+  // Estos se pasan al Dashboard
 
-    const ci = value.replace(/\D/g, "");
-    const persona = padron.find((p) => String(p.ci).includes(ci));
-
-    if (!persona)
-      return setSearchResult({ tipo: "noExiste", data: { ci } });
-
-    const realCI = normalizeCI(persona.ci);
-
-    const coord = estructura.coordinadores.find(
-      (c) => normalizeCI(c.ci) === realCI
-    );
-    if (coord) return setSearchResult({ tipo: "coordinador", data: coord });
-
-    const sub = estructura.subcoordinadores.find(
-      (s) => normalizeCI(s.ci) === realCI
-    );
-    if (sub) return setSearchResult({ tipo: "subcoordinador", data: sub });
-
-    const vot = estructura.votantes.find(
-      (v) => normalizeCI(v.ci) === realCI
-    );
-    if (vot) return setSearchResult({ tipo: "votante", data: vot });
-
-    setSearchResult({ tipo: "padron", data: persona });
+  const handleAgregarPersonaService = async ({
+    persona,
+    modalType,
+    currentUser,
+    estructura,
+  }) => {
+    return agregarPersonaService({
+      persona,
+      modalType,
+      currentUser,
+      estructura,
+    });
   };
 
-  // ======================= ESTADÍSTICAS =======================
-  const stats = getEstadisticas(estructura, currentUser);
+  const handleEliminarPersonaService = async (ci, tipo) => {
+    return eliminarPersonaService(ci, tipo);
+  };
+
+  const handleActualizarTelefonoService = async (tipo, ci, telefono) => {
+    return actualizarTelefonoService(tipo, ci, telefono);
+  };
 
   // ======================= LOGIN VIEW =======================
   if (!currentUser) {
@@ -185,20 +172,22 @@ const App = () => {
             value={loginID}
             onChange={(e) => setLoginID(e.target.value)}
             placeholder="Código de acceso"
-            className="w-full border p-2 mb-3"
+            className="w-full border p-2 mb-3 rounded"
           />
+
           {loginID === "4630621" && (
             <input
               type="password"
               value={loginPass}
               onChange={(e) => setLoginPass(e.target.value)}
               placeholder="Contraseña"
-              className="w-full border p-2 mb-3"
+              className="w-full border p-2 mb-3 rounded"
             />
           )}
+
           <button
             onClick={handleLogin}
-            className="w-full bg-red-600 text-white p-2 rounded"
+            className="w-full bg-red-600 text-white p-2 rounded hover:bg-red-700"
           >
             Ingresar
           </button>
@@ -213,22 +202,11 @@ const App = () => {
       currentUser={currentUser}
       estructura={estructura}
       padron={padron}
-      stats={stats}
-      expandedCoords={expandedCoords}
-      setExpandedCoords={setExpandedCoords}
-      showAddModal={showAddModal}
-      setShowAddModal={setShowAddModal}
-      modalType={modalType}
-      setModalType={setModalType}
-      searchCI={searchCI}
-      setSearchCI={setSearchCI}
-      searchResult={searchResult}
-      buscarPorCI={buscarPorCI}
-      handleLogout={handleLogout}
-      generarPDF={(tipo) =>
-        generarPDF({ tipo, estructura, padron, currentUser })
-      }
-      normalizeCI={normalizeCI}
+      onLogout={handleLogout}
+      onRecargar={recargar}
+      onAgregarPersonaService={handleAgregarPersonaService}
+      onEliminarPersonaService={handleEliminarPersonaService}
+      onActualizarTelefonoService={handleActualizarTelefonoService}
     />
   );
 };
