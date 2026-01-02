@@ -144,10 +144,22 @@ const App = () => {
 
 
       setEstructura({
-        coordinadores: coords?.map(x => ({ ...x.padron, ...x })) || [],
-        subcoordinadores: subs?.map(x => ({ ...x.padron, ...x })) || [],
-        votantes: votos?.map(x => ({ ...x.padron, ...x })) || [],
-      });
+  coordinadores: coords?.map(x => ({
+    ...(x.padron || {}),
+    ...x,
+  })) || [],
+
+  subcoordinadores: subs?.map(x => ({
+    ...(x.padron || {}),
+    ...x,
+  })) || [],
+
+  votantes: votos?.map(x => ({
+    ...(x.padron || {}),
+    ...x,
+  })) || [],
+});
+
     } catch {}
   };
 
