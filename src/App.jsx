@@ -1,22 +1,16 @@
 // ======================= APP SISTEMA ELECTORAL =======================
-// Orquestador principal
-// - Mantiene la UI original de LOGIN (pantalla roja con instrucciones)
-// - Renderiza Dashboard luego del login
-// - No rompe Supabase ni servicios
+// Opción A: App maneja SOLO sesión/login.
+// Dashboard maneja TODO lo demás (estado + UI del sistema).
 
 import React, { useEffect, useState } from "react";
-import { Users } from "lucide-react";
 import { supabase } from "./supabaseClient";
-
-// DASHBOARD (UI completa post-login)
+import { Users } from "lucide-react";
 import Dashboard from "./components/Dashboard";
+import { normalizeCI } from "./utils/estructuraHelpers";
 
-// ======================= COMPONENTE =======================
 const App = () => {
   // ======================= SESIÓN =======================
   const [currentUser, setCurrentUser] = useState(null);
-
-  // ======================= LOGIN =======================
   const [loginID, setLoginID] = useState("");
   const [loginPass, setLoginPass] = useState("");
 
@@ -26,95 +20,88 @@ const App = () => {
     if (!saved) return;
 
     try {
-      const parsed = JSON.parse(saved);
-      if (parsed?.ci && parsed?.role) {
-        setCurrentUser(parsed);
-      }
-    } catch {
-      localStorage.removeItem("currentUser");
+      const u = JSON.parse(saved);
+      if (u && u.ci && u.role) setCurrentUser(u);
+    } catch (e) {
+      console.error("Error leyendo sesión local:", e);
     }
   }, []);
 
   // ======================= LOGIN =======================
   const handleLogin = async () => {
-    if (!loginID.trim()) {
-      alert("Ingrese el código de acceso");
-      return;
-    }
+    if (!loginID.trim()) return alert("Ingrese código.");
 
-    // ===== SUPERADMIN =====
+    // SUPERADMIN
     if (loginID === "4630621") {
-      if (loginPass !== "12345") {
-        alert("Contraseña incorrecta");
-        return;
-      }
+      if (loginPass !== "12345") return alert("Contraseña incorrecta.");
 
-      const user = {
-        ci: 4630621,
+      const u = {
+        ci: "4630621",
         nombre: "Denis",
         apellido: "Ramos",
         role: "superadmin",
       };
 
-      localStorage.setItem("currentUser", JSON.stringify(user));
-      setCurrentUser(user);
+      setCurrentUser(u);
+      localStorage.setItem("currentUser", JSON.stringify(u));
       return;
     }
 
-    // ===== COORDINADOR =====
+    // COORDINADOR
     const { data: coord, error: coordErr } = await supabase
       .from("coordinadores")
-      .select("ci,login_code,padron(*)")
+      .select("ci,login_code,telefono,padron(*)")
       .eq("login_code", loginID)
       .maybeSingle();
 
-    if (coordErr) console.error("Login coord error:", coordErr);
+    if (coordErr) console.error("Error login coord:", coordErr);
 
     if (coord?.padron) {
-      const user = {
-        ci: Number(coord.ci),
+      const u = {
+        ci: normalizeCI(coord.ci),
         nombre: coord.padron.nombre,
         apellido: coord.padron.apellido,
+        telefono: coord.telefono || "",
         role: "coordinador",
       };
-      localStorage.setItem("currentUser", JSON.stringify(user));
-      setCurrentUser(user);
+      setCurrentUser(u);
+      localStorage.setItem("currentUser", JSON.stringify(u));
       return;
     }
 
-    // ===== SUBCOORDINADOR =====
+    // SUBCOORDINADOR
     const { data: sub, error: subErr } = await supabase
       .from("subcoordinadores")
-      .select("ci,login_code,padron(*)")
+      .select("ci,login_code,telefono,coordinador_ci,padron(*)")
       .eq("login_code", loginID)
       .maybeSingle();
 
-    if (subErr) console.error("Login sub error:", subErr);
+    if (subErr) console.error("Error login sub:", subErr);
 
     if (sub?.padron) {
-      const user = {
-        ci: Number(sub.ci),
+      const u = {
+        ci: normalizeCI(sub.ci),
         nombre: sub.padron.nombre,
         apellido: sub.padron.apellido,
+        telefono: sub.telefono || "",
         role: "subcoordinador",
       };
-      localStorage.setItem("currentUser", JSON.stringify(user));
-      setCurrentUser(user);
+      setCurrentUser(u);
+      localStorage.setItem("currentUser", JSON.stringify(u));
       return;
     }
 
-    alert("Usuario no encontrado");
+    alert("Usuario no encontrado.");
   };
 
-  // ======================= LOGOUT =======================
   const handleLogout = () => {
-    localStorage.removeItem("currentUser");
     setCurrentUser(null);
+    localStorage.removeItem("currentUser");
     setLoginID("");
     setLoginPass("");
   };
 
-  // ======================= LOGIN UI (PANTALLA ROJA ORIGINAL) =======================
+  // ======================= LOGIN VIEW (UI REAL) =======================
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center p-4">
@@ -139,7 +126,7 @@ const App = () => {
           />
 
           {loginID === "4630621" && (
-            <>
+            <div className="mb-4">
               <label className="text-sm font-medium text-gray-700">
                 Contraseña Superadmin
               </label>
@@ -147,25 +134,25 @@ const App = () => {
                 type="password"
                 value={loginPass}
                 onChange={(e) => setLoginPass(e.target.value)}
-                className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 mb-4"
+                className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500"
                 placeholder="Ingrese contraseña"
               />
-            </>
+            </div>
           )}
 
           <button
             onClick={handleLogin}
-            className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-semibold"
+            className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-semibold mb-3"
           >
-            Ingresar
+            Iniciar Sesión
           </button>
 
           <div className="mt-6 bg-red-50 p-4 rounded-lg border border-red-200 text-sm text-red-700">
-            <p className="font-semibold mb-2">📋 Instrucciones</p>
+            <p className="font-semibold mb-2">Instrucciones:</p>
             <ol className="list-decimal ml-5 space-y-1">
-              <li>Ingrese el código de acceso proporcionado.</li>
-              <li>No comparta su código con terceros.</li>
-              <li>Si tiene problemas, contacte al administrador.</li>
+              <li>Ingrese el código proporcionado.</li>
+              <li>Si es coordinador o sub, cuide su acceso.</li>
+              <li>Ante dudas, comuníquese con el administrador.</li>
             </ol>
           </div>
         </div>
@@ -174,12 +161,7 @@ const App = () => {
   }
 
   // ======================= DASHBOARD =======================
-  return (
-    <Dashboard
-      currentUser={currentUser}
-      onLogout={handleLogout}
-    />
-  );
+  return <Dashboard currentUser={currentUser} onLogout={handleLogout} />;
 };
 
 export default App;
