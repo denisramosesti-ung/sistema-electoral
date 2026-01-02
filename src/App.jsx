@@ -124,69 +124,58 @@ const App = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
 
-  // ======================= CARGAR ESTRUCTURA (ROBUSTO) =======================
-  const recargarEstructura = async () => {
-    try {
-      const { data: coords, error: coordsErr } = await supabase
-        .from("coordinadores")
-        .select(`
-          ci,
-          login_code,
-          asignado_por_nombre,
-          telefono,
-          padron (
-            ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
-          )
-        `);
+  // ======================= CARGAR ESTRUCTURA (BASE REAL DESDE SUPABASE) =======================
+const recargarEstructura = async () => {
+  try {
+    const { data: coords } = await supabase
+      .from("coordinadores")
+      .select(`
+        ci,
+        login_code,
+        asignado_por_nombre,
+        telefono,
+        padron (
+          ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
+        )
+      `);
 
-      if (coordsErr) console.error("Error coords:", coordsErr);
+    const { data: subs } = await supabase
+      .from("subcoordinadores")
+      .select(`
+        ci,
+        coordinador_ci,
+        login_code,
+        asignado_por_nombre,
+        telefono,
+        padron (
+          ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
+        )
+      `);
 
-      const { data: subs, error: subsErr } = await supabase
-        .from("subcoordinadores")
-        .select(`
-          ci,
-          coordinador_ci,
-          login_code,
-          asignado_por_nombre,
-          telefono,
-          padron (
-            ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
-          )
-        `);
+    const { data: votos } = await supabase
+      .from("votantes")
+      .select(`
+        ci,
+        asignado_por,
+        coordinador_ci,
+        asignado_por_nombre,
+        telefono,
+        padron (
+          ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
+        )
+      `);
 
-      if (subsErr) console.error("Error subs:", subsErr);
+    setEstructura({
+      coordinadores: coords?.map(x => ({ ...x.padron, ...x })) || [],
+      subcoordinadores: subs?.map(x => ({ ...x.padron, ...x })) || [],
+      votantes: votos?.map(x => ({ ...x.padron, ...x })) || [],
+    });
 
-      const { data: votos, error: votosErr } = await supabase
-        .from("votantes")
-        .select(`
-          ci,
-          asignado_por,
-          coordinador_ci,
-          asignado_por_nombre,
-          telefono,
-          padron (
-            ci, nombre, apellido, seccional, local_votacion, mesa, orden, direccion
-          )
-        `);
+  } catch (e) {
+    console.error("Error recargando estructura", e);
+  }
+};
 
-      if (votosErr) console.error("Error votos:", votosErr);
-
-      // IMPORTANTE:
-      // - padron puede venir null por FK/relación o por RLS.
-      // - si es null y vos hacés x.padron.nombre -> crashea la app (pantalla blanca).
-      // Por eso usamos fallback {}.
-      setEstructura({
-        coordinadores:
-          coords?.map((x) => ({ ...(x?.padron || {}), ...x })) || [],
-        subcoordinadores:
-          subs?.map((x) => ({ ...(x?.padron || {}), ...x })) || [],
-        votantes:
-          votos?.map((x) => ({ ...(x?.padron || {}), ...x })) || [],
-      });
-    } catch (e) {
-      console.error("Error recargando estructura:", e);
-    }
-  };
 
   // ======================= BUSCADOR GLOBAL POR CI =======================
   const buscarPorCI = (input) => {
@@ -444,39 +433,53 @@ const App = () => {
   };
 
   // ======================= SUBCOORDINADORES DEL COORDINADOR =======================
-  const getMisSubcoordinadores = () => {
-    if (!currentUser || currentUser.role !== "coordinador") return [];
-    return estructura.subcoordinadores.filter(
-      (s) => normalizeCI(s.coordinador_ci) === normalizeCI(currentUser.ci)
-    );
-  };
+const getMisSubcoordinadores = () => {
+  if (!currentUser || currentUser.role !== "coordinador") return [];
 
-  // ======================= VOTANTES POR SUBCOORD =======================
-  const getVotantesDeSubcoord = (ci) => {
+  return estructura.subcoordinadores.filter(
+    (s) => normalizeCI(s.coordinador_ci) === normalizeCI(currentUser.ci)
+  );
+};
+
+
+ // ======================= VOTANTES DE UN SUBCOORDINADOR =======================
+// Devuelve SOLO los votantes cargados por ese sub
+const getVotantesDeSubcoord = (subCi) => {
+  return estructura.votantes.filter(
+    (v) => normalizeCI(v.asignado_por) === normalizeCI(subCi)
+  );
+};
+
+
+  // ======================= MIS VOTANTES =======================
+const getMisVotantes = () => {
+  if (!currentUser) return [];
+
+  // SUBCOORDINADOR → solo los que él cargó
+  if (currentUser.role === "subcoordinador") {
     return estructura.votantes.filter(
-      (v) => normalizeCI(v.asignado_por) === normalizeCI(ci)
+      (v) => normalizeCI(v.asignado_por) === normalizeCI(currentUser.ci)
     );
-  };
+  }
 
-  // ======================= MIS VOTANTES (según rol) =======================
-  const getMisVotantes = () => {
-    if (!currentUser) return [];
+  // COORDINADOR → solo sus votantes directos
+  if (currentUser.role === "coordinador") {
+    return estructura.votantes.filter(
+      (v) => normalizeCI(v.asignado_por) === normalizeCI(currentUser.ci)
+    );
+  }
 
-    if (currentUser.role === "subcoordinador") {
-      return estructura.votantes.filter(
-        (v) => normalizeCI(v.asignado_por) === normalizeCI(currentUser.ci)
-      );
-    }
+  return [];
+};
 
-    if (currentUser.role === "coordinador") {
-      // votantes DIRECTOS del coordinador (asignado_por=ci coord)
-      return estructura.votantes.filter(
-        (v) => normalizeCI(v.asignado_por) === normalizeCI(currentUser.ci)
-      );
-    }
+// ======================= VOTANTES DIRECTOS DEL COORDINADOR =======================
+const getVotantesDirectosCoord = (coordCi) => {
+  return estructura.votantes.filter(
+    (v) => normalizeCI(v.asignado_por) === normalizeCI(coordCi)
+  );
+};
 
-    return [];
-  };
+
 
   // ======================= COMPONENTE DATOS PERSONA =======================
   const DatosPersona = ({ persona, rol, loginCode }) => {
@@ -577,37 +580,50 @@ const App = () => {
     return { isCoord, misSubcoords, misVotantes, votantesIndirectos, totalVotos };
   };
 
-  // ======================= ESTADÍSTICAS PARA CARDS =======================
-  const getEstadisticas = () => {
-    if (!currentUser) return {};
+  // ======================= ESTADÍSTICAS (ALINEADAS A SUPABASE) =======================
+const getEstadisticas = () => {
+  if (!currentUser) return {};
 
-    if (currentUser.role === "superadmin") {
-      return {
-        coordinadores: estructura.coordinadores.length,
-        subcoordinadores: estructura.subcoordinadores.length,
-        votantes: estructura.votantes.length,
-      };
-    }
+  // SUPERADMIN
+  if (currentUser.role === "superadmin") {
+    return {
+      coordinadores: estructura.coordinadores.length,
+      subcoordinadores: estructura.subcoordinadores.length,
+      votantes: estructura.votantes.length,
+    };
+  }
 
-    const { isCoord, misSubcoords, misVotantes, votantesIndirectos, totalVotos } =
-      getEstructuraPropia();
+  // COORDINADOR
+  if (currentUser.role === "coordinador") {
+    const misSubs = getMisSubcoordinadores();
+    const votantesDirectos = getMisVotantes();
 
-    if (isCoord) {
-      return {
-        subcoordinadores: misSubcoords.length,
-        votantesDirectos: misVotantes.length,
-        total: totalVotos,
-      };
-    }
+    const votantesDeSubs = misSubs.reduce(
+      (acc, sub) =>
+        acc +
+        estructura.votantes.filter(
+          (v) => normalizeCI(v.asignado_por) === normalizeCI(sub.ci)
+        ).length,
+      0
+    );
 
-    if (currentUser.role === "subcoordinador") {
-      return {
-        votantes: misVotantes.length,
-      };
-    }
+    return {
+      subcoordinadores: misSubs.length,
+      votantesDirectos: votantesDirectos.length,
+      total: votantesDirectos.length + votantesDeSubs,
+    };
+  }
 
-    return {};
-  };
+  // SUBCOORDINADOR
+  if (currentUser.role === "subcoordinador") {
+    return {
+      votantes: getMisVotantes().length,
+    };
+  }
+
+  return {};
+};
+
 
   // ======================= PDF (MENÚ: RANKING / ESTRUCTURA) =======================
   const generarPDF = (tipo = "estructura") => {
@@ -794,9 +810,7 @@ const App = () => {
           y = doc.lastAutoTable.finalY + 4;
         });
 
-        const directosCoord = estructura.votantes.filter(
-          (v) => normalizeCI(v.asignado_por) === normalizeCI(coord.ci)
-        );
+        const directosCoord = getVotantesDirectosCoord(coord.ci);
 
         if (directosCoord.length > 0) {
           doc.setFont("helvetica", "bold");
@@ -1400,13 +1414,8 @@ const App = () => {
                           ))}
 
                         {/* VOTANTES DIRECTOS DEL COORD */}
-                        {estructura.votantes
-                          .filter(
-                            (v) =>
-                              normalizeCI(v.asignado_por) ===
-                              normalizeCI(coord.ci)
-                          )
-                          .map((v) => (
+                        {getVotantesDirectosCoord(coord.ci).map((v) => (
+
                             <div
                               key={v.ci}
                               className="bg-white border p-3 mt-2 rounded flex justify-between items-start gap-3"
