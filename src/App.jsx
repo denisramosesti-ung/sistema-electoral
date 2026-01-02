@@ -1,46 +1,32 @@
 // ======================= APP SISTEMA ELECTORAL =======================
-// Orquestador principal (estado + UI)
-// Toda la lógica pesada vive en services/ y utils/
+// Orquestador principal
+// Estado + Supabase + lógica
+// UI delegada a Dashboard.jsx
 
 import React, { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
 
-// ICONOS
-import { LogOut, UserPlus, BarChart3 } from "lucide-react";
+import Dashboard from "./pages/Dashboard";
 
-// COMPONENTES
-import AddPersonModal from "./AddPersonModal";
-import MiEstructura from "./components/MiEstructura";
-import BuscadorCI from "./components/BuscadorCI";
-import ModalTelefono from "./components/ModalTelefono";
-
-// SERVICES
-import {
-  cargarEstructuraCompleta,
-  agregarPersonaService,
-  eliminarPersonaService,
-  actualizarTelefonoService,
-} from "./services/estructuraService";
-
-import { getEstadisticas } from "./services/estadisticasService";
-import { generarPDF } from "./services/pdfService";
-
-// HELPERS
+// helpers
 import {
   normalizeCI,
   getPersonasDisponibles,
 } from "./utils/estructuraHelpers";
 
+// services
+import { getEstadisticas } from "./services/estadisticasService";
+import { generarPDF } from "./services/pdfService";
+
 // ======================= COMPONENTE =======================
 const App = () => {
   // ======================= ESTADO GLOBAL =======================
+  const [padron, setPadron] = useState([]);
   const [estructura, setEstructura] = useState({
     coordinadores: [],
     subcoordinadores: [],
     votantes: [],
   });
-
-  const [padron, setPadron] = useState([]);
 
   // ======================= SESIÓN =======================
   const [currentUser, setCurrentUser] = useState(null);
@@ -48,6 +34,7 @@ const App = () => {
   const [loginPass, setLoginPass] = useState("");
 
   // ======================= UI =======================
+  const [expandedCoords, setExpandedCoords] = useState({});
   const [showAddModal, setShowAddModal] = useState(false);
   const [modalType, setModalType] = useState("");
 
@@ -58,7 +45,7 @@ const App = () => {
   const [phoneTarget, setPhoneTarget] = useState(null);
   const [phoneValue, setPhoneValue] = useState("+595");
 
-  // ======================= CARGA INICIAL =======================
+  // ======================= CARGA PADRÓN =======================
   useEffect(() => {
     const loadPadron = async () => {
       const { data } = await supabase.from("padron").select("*");
@@ -67,42 +54,50 @@ const App = () => {
     loadPadron();
   }, []);
 
+  // ======================= SESIÓN PERSISTENTE =======================
   useEffect(() => {
     const saved = localStorage.getItem("currentUser");
     if (saved) setCurrentUser(JSON.parse(saved));
   }, []);
 
   useEffect(() => {
-    if (!currentUser) return;
-    recargar();
+    if (currentUser) recargarEstructura();
   }, [currentUser]);
 
-  const recargar = async () => {
-    const data = await cargarEstructuraCompleta();
-    setEstructura(data);
+  // ======================= CARGAR ESTRUCTURA =======================
+  const recargarEstructura = async () => {
+    const { data: padronData } = await supabase.from("padron").select("*");
+    const { data: coords } = await supabase.from("coordinadores").select("*");
+    const { data: subs } = await supabase.from("subcoordinadores").select("*");
+    const { data: votos } = await supabase.from("votantes").select("*");
+
+    const mapPersona = (p) =>
+      padronData.find((x) => normalizeCI(x.ci) === normalizeCI(p.ci));
+
+    setEstructura({
+      coordinadores: (coords || []).map((c) => ({ ...c, ...mapPersona(c) })),
+      subcoordinadores: (subs || []).map((s) => ({ ...s, ...mapPersona(s) })),
+      votantes: (votos || []).map((v) => ({ ...v, ...mapPersona(v) })),
+    });
   };
 
   // ======================= LOGIN =======================
   const handleLogin = async () => {
-    if (!loginID.trim()) return alert("Ingrese código");
+    if (!loginID) return alert("Ingrese código");
 
-    // SUPERADMIN
     if (loginID === "4630621") {
       if (loginPass !== "12345") return alert("Contraseña incorrecta");
-
       const u = {
         ci: 4630621,
         nombre: "Denis",
         apellido: "Ramos",
         role: "superadmin",
       };
-
       setCurrentUser(u);
       localStorage.setItem("currentUser", JSON.stringify(u));
       return;
     }
 
-    // COORDINADOR
     const { data: coord } = await supabase
       .from("coordinadores")
       .select("*,padron(*)")
@@ -121,7 +116,6 @@ const App = () => {
       return;
     }
 
-    // SUBCOORDINADOR
     const { data: sub } = await supabase
       .from("subcoordinadores")
       .select("*,padron(*)")
@@ -146,37 +140,37 @@ const App = () => {
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem("currentUser");
+    setExpandedCoords({});
   };
 
-  // ======================= CALLBACKS =======================
-  const handleAgregarPersona = async (persona) => {
-    await agregarPersonaService({
-      persona,
-      modalType,
-      currentUser,
-      estructura,
-    });
-    setShowAddModal(false);
-    recargar();
-  };
+  // ======================= BUSCADOR =======================
+  const buscarPorCI = (value) => {
+    if (!value) return setSearchResult(null);
 
-  const handleEliminar = async (ci, tipo) => {
-    await eliminarPersonaService(ci, tipo, currentUser);
-    recargar();
-  };
+    const ci = value.replace(/\D/g, "");
+    const persona = padron.find((p) => String(p.ci).includes(ci));
 
-  const handleEditarTelefono = (tipo, persona) => {
-    setPhoneTarget({ tipo, ...persona });
-    setPhoneValue(persona.telefono || "+595");
-    setPhoneModalOpen(true);
-  };
+    if (!persona)
+      return setSearchResult({ tipo: "noExiste", data: { ci } });
 
-  const handleGuardarTelefono = async () => {
-    await actualizarTelefonoService(phoneTarget, phoneValue);
-    setPhoneModalOpen(false);
-    setPhoneTarget(null);
-    setPhoneValue("+595");
-    recargar();
+    const realCI = normalizeCI(persona.ci);
+
+    const coord = estructura.coordinadores.find(
+      (c) => normalizeCI(c.ci) === realCI
+    );
+    if (coord) return setSearchResult({ tipo: "coordinador", data: coord });
+
+    const sub = estructura.subcoordinadores.find(
+      (s) => normalizeCI(s.ci) === realCI
+    );
+    if (sub) return setSearchResult({ tipo: "subcoordinador", data: sub });
+
+    const vot = estructura.votantes.find(
+      (v) => normalizeCI(v.ci) === realCI
+    );
+    if (vot) return setSearchResult({ tipo: "votante", data: vot });
+
+    setSearchResult({ tipo: "padron", data: persona });
   };
 
   // ======================= ESTADÍSTICAS =======================
@@ -215,80 +209,27 @@ const App = () => {
 
   // ======================= DASHBOARD =======================
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* HEADER */}
-      <header className="bg-red-600 text-white p-4 flex justify-between">
-        <div>
-          {currentUser.nombre} {currentUser.apellido} — {currentUser.role}
-        </div>
-        <button onClick={handleLogout}>
-          <LogOut />
-        </button>
-      </header>
-
-      {/* ACCIONES */}
-      <div className="p-4 flex gap-2">
-        <button
-          onClick={() => {
-            setModalType("votante");
-            setShowAddModal(true);
-          }}
-          className="bg-red-600 text-white px-4 py-2 rounded flex gap-2"
-        >
-          <UserPlus /> Agregar
-        </button>
-
-        <button
-          onClick={() =>
-            generarPDF({
-              tipo: "estructura",
-              estructura,
-              padron,
-              currentUser,
-            })
-          }
-          className="border px-4 py-2 rounded flex gap-2"
-        >
-          <BarChart3 /> PDF
-        </button>
-      </div>
-
-      {/* BUSCADOR */}
-      <BuscadorCI
-        value={searchCI}
-        onChange={setSearchCI}
-        onBuscar={setSearchResult}
-        resultado={searchResult}
-        onEditarTelefono={handleEditarTelefono}
-        onEliminar={handleEliminar}
-      />
-
-      {/* ESTRUCTURA */}
-      <MiEstructura
-        estructura={estructura}
-        currentUser={currentUser}
-        abrirTelefono={handleEditarTelefono}
-        quitarPersona={handleEliminar}
-      />
-
-      {/* MODALES */}
-      <AddPersonModal
-        show={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        tipo={modalType}
-        onAdd={handleAgregarPersona}
-        disponibles={getPersonasDisponibles(padron, estructura)}
-      />
-
-      <ModalTelefono
-        open={phoneModalOpen}
-        persona={phoneTarget}
-        value={phoneValue}
-        onChange={setPhoneValue}
-        onCancel={() => setPhoneModalOpen(false)}
-        onSave={handleGuardarTelefono}
-      />
-    </div>
+    <Dashboard
+      currentUser={currentUser}
+      estructura={estructura}
+      padron={padron}
+      stats={stats}
+      expandedCoords={expandedCoords}
+      setExpandedCoords={setExpandedCoords}
+      showAddModal={showAddModal}
+      setShowAddModal={setShowAddModal}
+      modalType={modalType}
+      setModalType={setModalType}
+      searchCI={searchCI}
+      setSearchCI={setSearchCI}
+      searchResult={searchResult}
+      buscarPorCI={buscarPorCI}
+      handleLogout={handleLogout}
+      generarPDF={(tipo) =>
+        generarPDF({ tipo, estructura, padron, currentUser })
+      }
+      normalizeCI={normalizeCI}
+    />
   );
 };
 
