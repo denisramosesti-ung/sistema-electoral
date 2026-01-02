@@ -283,7 +283,7 @@ const recargarEstructura = async () => {
 const handleAgregarPersona = async (persona) => {
   if (!modalType) return alert("Seleccione tipo.");
 
-  const ci = normalizeCI(persona.ci); // Siempre número
+  const ci = normalizeCI(persona.ci);
   let tabla = "";
   let data = {};
 
@@ -307,44 +307,38 @@ const handleAgregarPersona = async (persona) => {
   }
 
   if (modalType === "votante") {
-  tabla = "votantes";
+    tabla = "votantes";
 
-  let asignadorCI;
-  let coordinadorCI;
+    let coordinador_ci;
 
-  if (currentUser.role === "subcoordinador") {
-    asignadorCI = normalizeCI(currentUser.ci);
+    if (currentUser.role === "coordinador") {
+      coordinador_ci = normalizeCI(currentUser.ci);
+    }
 
-    const sub = estructura.subcoordinadores.find(
-      (s) => normalizeCI(s.ci) === asignadorCI
-    );
+    if (currentUser.role === "subcoordinador") {
+      const sub = estructura.subcoordinadores.find(
+        (s) => normalizeCI(s.ci) === normalizeCI(currentUser.ci)
+      );
+      coordinador_ci = normalizeCI(sub?.coordinador_ci);
+    }
 
-    coordinadorCI = normalizeCI(sub?.coordinador_ci);
+    if (!coordinador_ci) {
+      alert("Error interno: no se pudo resolver coordinador");
+      return;
+    }
+
+    data = {
+      ci,
+      asignado_por: normalizeCI(currentUser.ci),
+      asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+      coordinador_ci, // 🔒 NUNCA MÁS NULL
+    };
   }
-
-  if (currentUser.role === "coordinador") {
-    // el coordinador actúa como su propio subcoordinador
-    asignadorCI = normalizeCI(currentUser.ci);
-    coordinadorCI = normalizeCI(currentUser.ci);
-  }
-
-  if (!asignadorCI || !coordinadorCI) {
-    return alert("No se pudo determinar la estructura del votante.");
-  }
-
-  data = {
-    ci,
-    asignado_por: asignadorCI,          // SIEMPRE quien lo gestiona directo
-    asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
-    coordinador_ci: coordinadorCI,      // SIEMPRE el coordinador
-  };
-}
-
 
   const { error } = await supabase.from(tabla).insert([data]);
   if (error) {
-    console.error("Supabase error:", error);
-    alert(error.message || "Error desconocido");
+    console.error(error);
+    alert(error.message);
     return;
   }
 
@@ -352,6 +346,7 @@ const handleAgregarPersona = async (persona) => {
   setShowAddModal(false);
   recargarEstructura();
 };
+
 
   // ======================= QUITAR PERSONA =======================
   const quitarPersona = async (ci, tipo) => {
