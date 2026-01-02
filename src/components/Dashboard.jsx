@@ -494,6 +494,15 @@ const handleAgregarPersona = async (persona) => {
               <p className="text-gray-600 text-sm">Votantes</p>
               <p className="text-4xl font-bold text-red-600">
                 {stats?.votantes ?? 0}
+            <div className="bg-white rounded-lg shadow p-6 border-2 border-red-200">
+              <p className="text-gray-600 text-sm font-semibold">
+                            Votantes totales
+            </p>
+            <p className="text-4xl font-bold text-red-700">
+                {stats?.votantesTotales ?? 0}
+        </p>
+    </div>
+
               </p>
             </div>
           </>

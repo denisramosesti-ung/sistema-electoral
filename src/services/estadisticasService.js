@@ -6,13 +6,19 @@ export const getEstadisticas = (estructura, currentUser) => {
   if (!currentUser) return {};
 
   // SUPERADMIN
-  if (currentUser.role === "superadmin") {
-    return {
-      coordinadores: estructura.coordinadores.length,
-      subcoordinadores: estructura.subcoordinadores.length,
-      votantes: estructura.votantes.length,
-    };
-  }
+if (currentUser.role === "superadmin") {
+  const coordinadores = estructura.coordinadores.length;
+  const subcoordinadores = estructura.subcoordinadores.length;
+  const votantes = estructura.votantes.length;
+
+  return {
+    coordinadores,
+    subcoordinadores,
+    votantes,
+    votantesTotales:
+      coordinadores + subcoordinadores + votantes,
+  };
+}
 
   // COORDINADOR
   if (currentUser.role === "coordinador") {
