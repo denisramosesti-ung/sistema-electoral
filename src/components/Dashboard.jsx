@@ -475,38 +475,45 @@ const handleAgregarPersona = async (persona) => {
       </div>
 
       {/* TARJETAS ESTADÍSTICAS */}
-      <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {currentUser.role === "superadmin" && (
-          <>
-            <div className="bg-white rounded-lg shadow p-6">
-              <p className="text-gray-600 text-sm">Coordinadores</p>
-              <p className="text-4xl font-bold text-red-600">
-                {stats?.coordinadores ?? 0}
-              </p>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6">
-              <p className="text-gray-600 text-sm">Subcoordinadores</p>
-              <p className="text-4xl font-bold text-red-600">
-                {stats?.subcoordinadores ?? 0}
-              </p>
-            </div>
-            <div className="bg-white rounded-lg shadow p-6">
-              <p className="text-gray-600 text-sm">Votantes</p>
-              <p className="text-4xl font-bold text-red-600">
-                {stats?.votantes ?? 0}
-            <div className="bg-white rounded-lg shadow p-6 border-2 border-red-200">
-              <p className="text-gray-600 text-sm font-semibold">
-                            Votantes totales
-            </p>
-            <p className="text-4xl font-bold text-red-700">
-                {stats?.votantesTotales ?? 0}
-        </p>
+  <>
+    {/* COORDINADORES */}
+    <div className="bg-white rounded-lg shadow p-6">
+      <p className="text-gray-600 text-sm">Coordinadores</p>
+      <p className="text-4xl font-bold text-red-600">
+        {stats?.coordinadores ?? 0}
+      </p>
     </div>
 
-              </p>
-            </div>
-          </>
-        )}
+    {/* SUBCOORDINADORES */}
+    <div className="bg-white rounded-lg shadow p-6">
+      <p className="text-gray-600 text-sm">Subcoordinadores</p>
+      <p className="text-4xl font-bold text-red-600">
+        {stats?.subcoordinadores ?? 0}
+      </p>
+    </div>
+
+    {/* VOTANTES */}
+    <div className="bg-white rounded-lg shadow p-6">
+      <p className="text-gray-600 text-sm">Votantes</p>
+      <p className="text-4xl font-bold text-red-600">
+        {stats?.votantes ?? 0}
+      </p>
+    </div>
+
+    {/* VOTANTES TOTALES (DESTACADO) */}
+    <div className="bg-red-50 border-2 border-red-500 rounded-lg shadow p-6">
+      <p className="text-red-700 text-sm font-semibold uppercase tracking-wide">
+        Votantes totales
+      </p>
+      <p className="text-4xl font-extrabold text-red-700 mt-1">
+        {stats?.votantesTotales ?? 0}
+      </p>
+    </div>
+  </>
+)}
+
 
         {currentUser.role === "coordinador" && (
           <>
