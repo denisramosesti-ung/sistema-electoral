@@ -163,6 +163,85 @@ const Dashboard = ({ currentUser, onLogout }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser]);
 
+// ======================= PERMISOS (RBAC) =======================
+const getMiCoordinadorCI = () => {
+  // Si soy coordinador, mi coordinador_ci soy yo
+  if (currentUser?.role === "coordinador") return normalizeCI(currentUser.ci);
+
+  // Si soy subcoordinador, tengo que mirar mi fila en subcoordinadores
+  if (currentUser?.role === "subcoordinador") {
+    const sub = (estructura.subcoordinadores || []).find(
+      (s) => normalizeCI(s.ci) === normalizeCI(currentUser.ci)
+    );
+    return normalizeCI(sub?.coordinador_ci);
+  }
+
+  return null;
+};
+
+// Puede editar teléfono?
+const canEditarTelefono = (tipo, persona) => {
+  const role = currentUser?.role;
+  if (!role || !persona) return false;
+
+  if (role === "superadmin") return true;
+
+  // Coordinador: puede editar teléfono de su red (subs + votantes de su coordinador_ci)
+  if (role === "coordinador") {
+    const miCoordCI = normalizeCI(currentUser.ci);
+
+    if (tipo === "subcoordinador") {
+      return normalizeCI(persona.coordinador_ci) === miCoordCI;
+    }
+    if (tipo === "votante") {
+      return normalizeCI(persona.coordinador_ci) === miCoordCI;
+    }
+    // coordinador editando otro coordinador: NO
+    return false;
+  }
+
+  // Subcoordinador: solo sus votantes directos
+  if (role === "subcoordinador") {
+    if (tipo !== "votante") return false;
+    return normalizeCI(persona.asignado_por) === normalizeCI(currentUser.ci);
+  }
+
+  return false;
+};
+
+// Puede eliminar?
+const canEliminar = (tipo, persona) => {
+  const role = currentUser?.role;
+  if (!role || !persona) return false;
+
+  if (role === "superadmin") return true;
+
+  if (role === "coordinador") {
+    const miCoordCI = normalizeCI(currentUser.ci);
+
+    // puede eliminar sus subcoordinadores
+    if (tipo === "subcoordinador") {
+      return normalizeCI(persona.coordinador_ci) === miCoordCI;
+    }
+
+    // puede eliminar votantes de su red
+    if (tipo === "votante") {
+      return normalizeCI(persona.coordinador_ci) === miCoordCI;
+    }
+
+    // no puede eliminar coordinadores
+    return false;
+  }
+
+  if (role === "subcoordinador") {
+    // solo puede eliminar sus votantes directos
+    if (tipo !== "votante") return false;
+    return normalizeCI(persona.asignado_por) === normalizeCI(currentUser.ci);
+  }
+
+  return false;
+};
+
   // ======================= BUSCADOR GLOBAL POR CI =======================
   const buscarPorCI = (input) => {
     const clean = String(input || "").replace(/\D/g, "");
@@ -208,38 +287,96 @@ const Dashboard = ({ currentUser, onLogout }) => {
   };
 
   // ======================= TELÉFONO =======================
-  const abrirTelefono = (tipo, p) => {
-    setPhoneTarget({ tipo, ...p });
-    setPhoneValue(p.telefono || "+595");
-    setPhoneModalOpen(true);
-  };
 
-  const guardarTelefono = async () => {
-    if (!phoneTarget) return;
+// Abre el modal de teléfono
+// OJO: acá NO validamos permisos, solo abrimos.
+// La validación REAL se hace al guardar (backend lógico).
+const abrirTelefono = (tipo, p) => {
+  setPhoneTarget({ tipo, ...p });
+  setPhoneValue(p.telefono || "+595");
+  setPhoneModalOpen(true);
+};
 
-    const telefono = String(phoneValue || "").trim();
-    if (!telefono) return alert("Ingrese número");
+// Guarda el teléfono con VALIDACIÓN DE PERMISOS
+const guardarTelefono = async () => {
+  if (!phoneTarget) return;
 
-    let tabla = "votantes";
-    if (phoneTarget.tipo === "coordinador") tabla = "coordinadores";
-    if (phoneTarget.tipo === "subcoordinador") tabla = "subcoordinadores";
+  // ======================= VALIDACIÓN DE PERMISOS =======================
+  // Superadmin: siempre permitido
+  if (currentUser.role !== "superadmin") {
+    // COORDINADOR
+    if (currentUser.role === "coordinador") {
+      const miCI = normalizeCI(currentUser.ci);
 
-    const { error } = await supabase
-      .from(tabla)
-      .update({ telefono })
-      .eq("ci", phoneTarget.ci);
+      // Puede editar:
+      // - subcoordinadores de su red
+      // - votantes de su red
+      const perteneceAMiRed =
+        normalizeCI(phoneTarget.coordinador_ci) === miCI;
 
-    if (error) {
-      console.error("Error guardando teléfono:", error);
-      alert(error.message || "Error guardando teléfono");
-      return;
+      if (!perteneceAMiRed) {
+        alert("No tiene permiso para editar el teléfono de esta persona.");
+        return;
+      }
+
+      // Un coordinador NO puede editar otro coordinador
+      if (phoneTarget.tipo === "coordinador") {
+        alert("No tiene permiso para editar el teléfono de otro coordinador.");
+        return;
+      }
     }
 
-    setPhoneModalOpen(false);
-    setPhoneTarget(null);
-    setPhoneValue("+595");
-    recargarEstructura();
-  };
+    // SUBCOORDINADOR
+    if (currentUser.role === "subcoordinador") {
+      // Solo puede editar votantes
+      if (phoneTarget.tipo !== "votante") {
+        alert("No tiene permiso para editar esta persona.");
+        return;
+      }
+
+      // Solo sus votantes directos
+      const esMiVotante =
+        normalizeCI(phoneTarget.asignado_por) ===
+        normalizeCI(currentUser.ci);
+
+      if (!esMiVotante) {
+        alert("No tiene permiso para editar el teléfono de este votante.");
+        return;
+      }
+    }
+  }
+
+  // ======================= VALIDACIÓN DE TELÉFONO =======================
+  const telefono = String(phoneValue || "").trim();
+  if (!telefono) {
+    alert("Ingrese número de teléfono.");
+    return;
+  }
+
+  // ======================= RESOLVER TABLA =======================
+  let tabla = "votantes";
+  if (phoneTarget.tipo === "coordinador") tabla = "coordinadores";
+  if (phoneTarget.tipo === "subcoordinador") tabla = "subcoordinadores";
+
+  // ======================= UPDATE EN SUPABASE =======================
+  const { error } = await supabase
+    .from(tabla)
+    .update({ telefono })
+    .eq("ci", phoneTarget.ci);
+
+  if (error) {
+    console.error("Error guardando teléfono:", error);
+    alert(error.message || "Error guardando teléfono");
+    return;
+  }
+
+  // ======================= LIMPIEZA Y RECARGA =======================
+  setPhoneModalOpen(false);
+  setPhoneTarget(null);
+  setPhoneValue("+595");
+  recargarEstructura();
+};
+
 
   // ======================= AGREGAR PERSONA =======================
 const handleAgregarPersona = async (persona) => {
@@ -663,13 +800,15 @@ const handleAgregarPersona = async (persona) => {
 
       {/* BUSCADOR (tu componente) */}
       <BuscadorCI
-        value={searchCI}
-        onChange={setSearchCI}
-        onBuscar={buscarPorCI}
-        resultado={searchResult}
-        onEditarTelefono={abrirTelefono}
-        onEliminar={quitarPersona}
-      />
+            value={searchCI}
+             onChange={setSearchCI}
+            onBuscar={buscarPorCI}
+            resultado={searchResult}
+            onEditarTelefono={abrirTelefono}
+            onEliminar={quitarPersona}
+             currentUser={currentUser}
+        />
+
 
       {/* MI ESTRUCTURA (UI REAL) */}
       <div className="max-w-7xl mx-auto px-4 mb-10">

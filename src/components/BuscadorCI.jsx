@@ -1,8 +1,9 @@
 // ======================= BUSCADOR GLOBAL POR CI =======================
 // Busca en padrón + estructura
-// Devuelve resultado al componente padre vía callback
+// MUESTRA acciones SOLO si el usuario tiene permisos reales
 
-import React, { useState } from "react";
+import React from "react";
+import { normalizeCI } from "../utils/estructuraHelpers";
 
 const BuscadorCI = ({
   value,
@@ -11,6 +12,7 @@ const BuscadorCI = ({
   resultado,
   onEditarTelefono,
   onEliminar,
+  currentUser,
 }) => {
   const handleChange = (e) => {
     const val = e.target.value.replace(/\D/g, "");
@@ -18,6 +20,62 @@ const BuscadorCI = ({
     onBuscar(val);
   };
 
+  // ======================= PERMISOS =======================
+  const puedeEditar = () => {
+    if (!resultado || !resultado.data) return false;
+
+    const tipo = resultado.tipo;
+    const p = resultado.data;
+
+    // SUPERADMIN: todo
+    if (currentUser.role === "superadmin") return true;
+
+    // COORDINADOR
+    if (currentUser.role === "coordinador") {
+      const miCI = normalizeCI(currentUser.ci);
+
+      // No puede tocar otros coordinadores
+      if (tipo === "coordinador") return false;
+
+      // Subcoordinador o votante SOLO si es de su red
+      return normalizeCI(p.coordinador_ci) === miCI;
+    }
+
+    // SUBCOORDINADOR
+    if (currentUser.role === "subcoordinador") {
+      // SOLO votantes directos
+      if (tipo !== "votante") return false;
+      return normalizeCI(p.asignado_por) === normalizeCI(currentUser.ci);
+    }
+
+    return false;
+  };
+
+  const puedeEliminar = () => {
+    if (!resultado || !resultado.data) return false;
+
+    const tipo = resultado.tipo;
+    const p = resultado.data;
+
+    // SUPERADMIN
+    if (currentUser.role === "superadmin") return true;
+
+    // COORDINADOR
+    if (currentUser.role === "coordinador") {
+      if (tipo === "coordinador") return false;
+      return normalizeCI(p.coordinador_ci) === normalizeCI(currentUser.ci);
+    }
+
+    // SUBCOORDINADOR
+    if (currentUser.role === "subcoordinador") {
+      if (tipo !== "votante") return false;
+      return normalizeCI(p.asignado_por) === normalizeCI(currentUser.ci);
+    }
+
+    return false;
+  };
+
+  // ======================= UI =======================
   return (
     <div className="max-w-7xl mx-auto px-4 mb-6">
       <div className="bg-white p-4 rounded-lg shadow">
@@ -85,26 +143,29 @@ const BuscadorCI = ({
               </>
             )}
 
-            {(resultado.tipo === "coordinador" ||
-              resultado.tipo === "subcoordinador" ||
-              resultado.tipo === "votante") && (
+            {(puedeEditar() || puedeEliminar()) && (
               <div className="mt-4 flex gap-2 flex-wrap">
-                <button
-                  onClick={() =>
-                    onEditarTelefono(resultado.tipo, resultado.data)
-                  }
-                  className="px-3 py-1 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
-                >
-                  Teléfono
-                </button>
-                <button
-                  onClick={() =>
-                    onEliminar(resultado.data.ci, resultado.tipo)
-                  }
-                  className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                >
-                  Eliminar
-                </button>
+                {puedeEditar() && (
+                  <button
+                    onClick={() =>
+                      onEditarTelefono(resultado.tipo, resultado.data)
+                    }
+                    className="px-3 py-1 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
+                  >
+                    Teléfono
+                  </button>
+                )}
+
+                {puedeEliminar() && (
+                  <button
+                    onClick={() =>
+                      onEliminar(resultado.data.ci, resultado.tipo)
+                    }
+                    className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                  >
+                    Eliminar
+                  </button>
+                )}
               </div>
             )}
 
