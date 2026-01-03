@@ -932,7 +932,7 @@ const handleAgregarPersona = async (persona) => {
 
             {/* SUBCOORDINADOR */}
             {currentUser.role === "subcoordinador" && (
-  <>
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
     {/* VOTANTES DIRECTOS */}
     <div className="bg-white rounded-lg shadow p-6">
       <p className="text-gray-600 text-sm">Votantes directos</p>
@@ -940,10 +940,6 @@ const handleAgregarPersona = async (persona) => {
         {stats?.votantes ?? 0}
       </p>
     </div>
-
-    {/* ESPACIADORES VISUALES */}
-    <div className="hidden lg:block" />
-    <div className="hidden lg:block" />
 
     {/* VOTANTES TOTALES (DESTACADO) */}
     <div className="bg-red-50 border-2 border-red-500 rounded-lg shadow p-6">
@@ -954,8 +950,9 @@ const handleAgregarPersona = async (persona) => {
         {stats?.votantes ?? 0}
       </p>
     </div>
-  </>
+  </div>
 )}
+
 
           </div>
         </div>
