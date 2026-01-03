@@ -553,6 +553,29 @@ const handleAgregarPersona = async (persona) => {
   </>
         )}
 
+        {currentUser.role === "subcoordinador" && (
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {/* VOTANTES DIRECTOS */}
+    <div className="bg-white rounded-lg shadow p-6">
+      <p className="text-gray-600 text-sm">Votantes directos</p>
+      <p className="text-4xl font-bold text-red-600">
+        {stats?.votantes ?? 0}
+      </p>
+    </div>
+
+    {/* VOTANTES TOTALES (DESTACADO) */}
+    <div className="bg-red-50 border-2 border-red-500 rounded-lg shadow p-6">
+      <p className="text-red-700 text-sm font-semibold uppercase tracking-wide">
+        Votantes totales
+      </p>
+      <p className="text-4xl font-extrabold text-red-700 mt-1">
+        {stats?.votantes ?? 0}
+      </p>
+    </div>
+  </div>
+)}
+
+
       </div>
 
       {/* ACCIONES */}
@@ -929,30 +952,39 @@ const handleAgregarPersona = async (persona) => {
                   )}
               </>
             )}
+{/* SUBCOORDINADOR */}
+{currentUser.role === "subcoordinador" && (
+  <>
+    {getMisVotantes(estructura, currentUser).map((v) => (
+      <div
+        key={v.ci}
+        className="bg-white border p-3 mt-2 rounded flex justify-between items-start gap-3"
+      >
+        <DatosPersona persona={v} rol="Votante" />
+        <div className="flex gap-2">
+          <button
+            onClick={() => abrirTelefono("votante", v)}
+            className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
+          >
+            <Phone className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => quitarPersona(v.ci, "votante")}
+            className="inline-flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-lg hover:bg-red-700"
+          >
+            <Trash2 className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+    ))}
 
-            {/* SUBCOORDINADOR */}
-            {currentUser.role === "subcoordinador" && (
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-    {/* VOTANTES DIRECTOS */}
-    <div className="bg-white rounded-lg shadow p-6">
-      <p className="text-gray-600 text-sm">Votantes directos</p>
-      <p className="text-4xl font-bold text-red-600">
-        {stats?.votantes ?? 0}
+    {getMisVotantes(estructura, currentUser).length === 0 && (
+      <p className="text-gray-500 py-6">
+        No tiene votantes asignados.
       </p>
-    </div>
-
-    {/* VOTANTES TOTALES (DESTACADO) */}
-    <div className="bg-red-50 border-2 border-red-500 rounded-lg shadow p-6">
-      <p className="text-red-700 text-sm font-semibold uppercase tracking-wide">
-        Votantes totales
-      </p>
-      <p className="text-4xl font-extrabold text-red-700 mt-1">
-        {stats?.votantes ?? 0}
-      </p>
-    </div>
-  </div>
+    )}
+  </>
 )}
-
 
           </div>
         </div>
