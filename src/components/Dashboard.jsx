@@ -21,9 +21,10 @@ import {
 import AddPersonModal from "../AddPersonModal";
 import BuscadorCI from "./BuscadorCI";
 import ModalTelefono from "./ModalTelefono";
-
-import { generarPDF } from "../services/pdfService";
 import { getEstadisticas } from "../services/estadisticasService";
+import { openReportWindow } from "../utils/openReportWindow";
+import { buildSuperadminReportHTML } from "../reports/ReportSuperadmin";
+
 
 import {
   normalizeCI,
@@ -573,21 +574,20 @@ const handleAgregarPersona = async (persona) => {
   // ======================= PDF MENU =======================
   const [pdfMenuOpen, setPdfMenuOpen] = useState(false);
 
-  const descargarPDF = async (tipo) => {
-  try {
-    setPdfMenuOpen(false);
-
-    await generarPDF({
-      tipo,
+ const descargarPDF = () => {
+  if (currentUser.role === "superadmin") {
+    const html = buildSuperadminReportHTML({
       estructura,
-      padron,
       currentUser,
     });
-  } catch (e) {
-    console.error("Error generando PDF:", e);
-    alert("Error al generar el PDF");
+
+    openReportWindow({
+      title: "Reporte Superadmin",
+      html,
+    });
   }
 };
+
 
 
   // ======================= UI =======================
