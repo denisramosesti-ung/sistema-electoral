@@ -18,7 +18,7 @@ import BuscadorCI from "./BuscadorCI";
 import ModalTelefono from "./ModalTelefono";
 
 import { getEstadisticas } from "../services/estadisticasService";
-import { openReportWindow } from "../utils/openReportWindow";
+import { openReportWindow } from "../utils/openReportWindow.js";
 
 import {
   normalizeCI,
