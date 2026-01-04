@@ -18,7 +18,6 @@ import BuscadorCI from "./BuscadorCI";
 import ModalTelefono from "./ModalTelefono";
 
 import { getEstadisticas } from "../services/estadisticasService";
-import { openReportWindow } from "../utils/openReportWindow.js";
 
 import {
   normalizeCI,
@@ -572,37 +571,77 @@ const descargarPDF = () => {
     return;
   }
 
+  let html = "";
+  let title = "Reporte";
+
   // SUPERADMIN
   if (currentUser.role === "superadmin") {
-    const html = ReportSuperadmin({ estructura, currentUser });
-    openReportWindow({
-      title: "Reporte General – Superadmin",
-      html,
-    });
-    return;
+    html = ReportSuperadmin({ estructura, currentUser });
+    title = "Reporte General – Superadmin";
   }
 
   // COORDINADOR
-  if (currentUser.role === "coordinador") {
-    const html = ReportCoordinador({ estructura, currentUser });
-    openReportWindow({
-      title: "Reporte de Coordinador",
-      html,
-    });
-    return;
+  else if (currentUser.role === "coordinador") {
+    html = ReportCoordinador({ estructura, currentUser });
+    title = "Reporte de Coordinador";
   }
 
   // SUBCOORDINADOR
-  if (currentUser.role === "subcoordinador") {
-    const html = ReportSubcoordinador({ estructura, currentUser });
-    openReportWindow({
-      title: "Reporte de Subcoordinador",
-      html,
-    });
+  else if (currentUser.role === "subcoordinador") {
+    html = ReportSubcoordinador({ estructura, currentUser });
+    title = "Reporte de Subcoordinador";
+  } else {
+    alert("Rol no soportado para reportes");
     return;
   }
 
-  alert("Rol no soportado para reportes");
+  // ======================= ABRIR VENTANA DE IMPRESIÓN =======================
+  const win = window.open("", "_blank");
+  if (!win) {
+    alert("El navegador bloqueó la ventana emergente");
+    return;
+  }
+
+  win.document.open();
+  win.document.write(`
+    <html>
+      <head>
+        <title>${title}</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            padding: 30px;
+          }
+          h1, h2, h3 {
+            color: #b91c1c;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+          }
+          th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+            font-size: 12px;
+          }
+          th {
+            background: #fee2e2;
+          }
+        </style>
+      </head>
+      <body>
+        ${html}
+        <script>
+          window.onload = function () {
+            window.print();
+          };
+        </script>
+      </body>
+    </html>
+  `);
+  win.document.close();
 };
 
   // ======================= UI =======================
