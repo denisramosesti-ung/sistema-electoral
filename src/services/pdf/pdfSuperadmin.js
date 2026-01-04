@@ -1,7 +1,7 @@
 // ======================= PDF SUPERADMIN =======================
 // Import dinámico compatible con Vite + Vercel
 
-export const generarPdfSuperadmin = async ({ estructura }) => {
+export const generarPDFSuperadmin = async ({ estructura }) => {
   // ⬇️ IMPORT DINÁMICO (CLAVE)
   const pdfMakeModule = await import("pdfmake/build/pdfmake");
   const pdfFontsModule = await import("pdfmake/build/vfs_fonts");

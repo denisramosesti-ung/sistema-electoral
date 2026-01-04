@@ -1,7 +1,7 @@
 // ======================= PDF SUBCOORDINADOR =======================
 // Reporte de votantes asignados a un subcoordinador
 
-export const generarPdfSubcoordinador = async ({ estructura, currentUser }) => {
+export const generarPDFSubcoordinador = async ({ estructura, currentUser }) => {
   // IMPORT DINÁMICO (OBLIGATORIO EN VITE)
   const pdfMakeModule = await import("pdfmake/build/pdfmake");
   const pdfFontsModule = await import("pdfmake/build/vfs_fonts");

@@ -1,7 +1,7 @@
 // ======================= PDF COORDINADOR =======================
 // Reporte de red de un coordinador (subcoordinadores + votantes)
 
-export const generarPdfCoordinador = async ({ estructura, currentUser }) => {
+export const generarPDFCoordinador = async ({ estructura, currentUser }) => {
   // IMPORT DINÁMICO (OBLIGATORIO EN VITE)
   const pdfMakeModule = await import("pdfmake/build/pdfmake");
   const pdfFontsModule = await import("pdfmake/build/vfs_fonts");
