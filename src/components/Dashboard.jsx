@@ -573,15 +573,22 @@ const handleAgregarPersona = async (persona) => {
   // ======================= PDF MENU =======================
   const [pdfMenuOpen, setPdfMenuOpen] = useState(false);
 
-  const descargarPDF = (tipo) => {
+  const descargarPDF = async (tipo) => {
+  try {
     setPdfMenuOpen(false);
-    generarPDF({
+
+    await generarPDF({
       tipo,
       estructura,
       padron,
       currentUser,
     });
-  };
+  } catch (e) {
+    console.error("Error generando PDF:", e);
+    alert("Error al generar el PDF");
+  }
+};
+
 
   // ======================= UI =======================
   return (

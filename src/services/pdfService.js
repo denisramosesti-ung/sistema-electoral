@@ -4,7 +4,7 @@ import { generarPDFSuperadmin } from "./pdf/pdfSuperadmin";
 import { generarPDFCoordinador } from "./pdf/pdfCoordinador";
 import { generarPDFSubcoordinador } from "./pdf/pdfSubcoordinador";
 
-export const generarPDF = (params) => {
+export const generarPDF = async (params) => {
   const { currentUser } = params;
 
   if (!currentUser || !currentUser.role) {
@@ -12,19 +12,16 @@ export const generarPDF = (params) => {
     return;
   }
 
-  // ================= SUPERADMIN =================
   if (currentUser.role === "superadmin") {
-    return generarPDFSuperadmin(params);
+    return await generarPDFSuperadmin(params);
   }
 
-  // ================= COORDINADOR =================
   if (currentUser.role === "coordinador") {
-    return generarPDFCoordinador(params);
+    return await generarPDFCoordinador(params);
   }
 
-  // ================= SUBCOORDINADOR =================
   if (currentUser.role === "subcoordinador") {
-    return generarPDFSubcoordinador(params);
+    return await generarPDFSubcoordinador(params);
   }
 
   console.error("Rol no reconocido para PDF:", currentUser.role);
