@@ -1,28 +1,76 @@
 // src/services/pdfService.js
 
-import { generarPDFSuperadmin } from "./pdf/pdfSuperadmin";
-import { generarPDFCoordinador } from "./pdf/pdfCoordinador";
-import { generarPDFSubcoordinador } from "./pdf/pdfSubcoordinador";
-
-export const generarPDF = async (params) => {
-  const { currentUser } = params;
-
-  if (!currentUser || !currentUser.role) {
-    console.error("Usuario no válido para generar PDF");
+export const generarPDF = ({ estructura, currentUser }) => {
+  if (!currentUser) {
+    alert("Usuario inválido");
     return;
   }
 
+  let html = "";
+
+  // ================= SUPERADMIN =================
   if (currentUser.role === "superadmin") {
-    return await generarPDFSuperadmin(params);
+    html = `
+      <h1>Reporte General – Superadmin</h1>
+      <p>${currentUser.nombre} ${currentUser.apellido}</p>
+      <hr/>
+      <ul>
+        <li>Coordinadores: ${estructura.coordinadores.length}</li>
+        <li>Subcoordinadores: ${estructura.subcoordinadores.length}</li>
+        <li>Votantes: ${estructura.votantes.length}</li>
+        <li><b>Votantes totales:</b> ${
+          estructura.coordinadores.length +
+          estructura.subcoordinadores.length +
+          estructura.votantes.length
+        }</li>
+      </ul>
+    `;
   }
 
+  // ================= COORDINADOR =================
   if (currentUser.role === "coordinador") {
-    return await generarPDFCoordinador(params);
+    html = `
+      <h1>Reporte de Coordinador</h1>
+      <p>${currentUser.nombre} ${currentUser.apellido}</p>
+      <hr/>
+      <ul>
+        <li>Subcoordinadores: ${
+          estructura.subcoordinadores.filter(
+            s => s.coordinador_ci === currentUser.ci
+          ).length
+        }</li>
+        <li>Votantes totales en red</li>
+      </ul>
+    `;
   }
 
+  // ================= SUBCOORDINADOR =================
   if (currentUser.role === "subcoordinador") {
-    return await generarPDFSubcoordinador(params);
+    html = `
+      <h1>Reporte de Subcoordinador</h1>
+      <p>${currentUser.nombre} ${currentUser.apellido}</p>
+      <hr/>
+      <p>Total de votantes asignados</p>
+    `;
   }
 
-  console.error("Rol no reconocido para PDF:", currentUser.role);
+  const win = window.open("", "_blank");
+  win.document.write(`
+    <html>
+      <head>
+        <title>Reporte</title>
+        <style>
+          body { font-family: Arial; padding: 40px; }
+          h1 { color: #b91c1c; }
+        </style>
+      </head>
+      <body>
+        ${html}
+        <script>
+          window.onload = () => window.print();
+        </script>
+      </body>
+    </html>
+  `);
+  win.document.close();
 };
