@@ -1,121 +1,72 @@
-// services/pdf/pdfSubcoordinador.js
-import pdfMake from "pdfmake/build/pdfmake.min";
-import pdfFonts from "pdfmake/build/vfs_fonts";
-import { styles } from "./pdfStyles";
+// ======================= PDF SUBCOORDINADOR =======================
+// Reporte de votantes asignados a un subcoordinador
 
-pdfMake.vfs = pdfFonts.pdfMake.vfs;
+export const generarPdfSubcoordinador = async ({ estructura, currentUser }) => {
+  // IMPORT DINÁMICO (OBLIGATORIO EN VITE)
+  const pdfMakeModule = await import("pdfmake/build/pdfmake");
+  const pdfFontsModule = await import("pdfmake/build/vfs_fonts");
 
-import { normalizeCI } from "../../utils/estructuraHelpers";
+  const pdfMake = pdfMakeModule.default || pdfMakeModule;
+  pdfMake.vfs = pdfFontsModule.pdfMake.vfs;
 
-pdfMake.vfs = pdfFonts.pdfMake.vfs;
-
-export const generarPDFSubcoordinador = ({
-  estructura,
-  padron,
-  currentUser,
-}) => {
-  const miCI = normalizeCI(currentUser.ci);
-
-  // ======================= DATOS BASE =======================
   const misVotantes = estructura.votantes.filter(
-    (v) => normalizeCI(v.asignado_por) === miCI
+    (v) => v.asignado_por === currentUser.ci
   );
 
-  const miSub = estructura.subcoordinadores.find(
-    (s) => normalizeCI(s.ci) === miCI
-  );
-
-  const coordinador = estructura.coordinadores.find(
-    (c) =>
-      normalizeCI(c.ci) === normalizeCI(miSub?.coordinador_ci)
-  );
-
-  // ======================= CALIDAD DE DATOS =======================
-  const sinTelefono = misVotantes.filter((v) => !v.telefono);
-  const conDatosIncompletos = misVotantes.filter(
-    (v) => !v.direccion || !v.mesa || !v.orden
-  );
-
-  // ======================= DOCUMENTO PDF =======================
   const docDefinition = {
+    pageSize: "A4",
+    pageMargins: [40, 60, 40, 60],
+
     content: [
-      { text: "REPORTE DE SUBCOORDINADOR", style: "title" },
+      { text: "REPORTE DE SUBCOORDINADOR", style: "header" },
 
       {
-        text: `Subcoordinador: ${currentUser.nombre} ${currentUser.apellido}`,
-        style: "text",
-      },
-      { text: `CI: ${currentUser.ci}`, style: "text" },
-
-      coordinador && {
-        text: `Coordinador a cargo: ${coordinador.nombre} ${coordinador.apellido}`,
-        style: "text",
+        text: `${currentUser.nombre} ${currentUser.apellido} (CI: ${currentUser.ci})`,
+        style: "subheader",
       },
 
-      { text: new Date().toLocaleString(), style: "text" },
-
-      { text: "Resumen Operativo", style: "subtitle" },
       {
         ul: [
-          `Total de votantes asignados: ${misVotantes.length}`,
-          `Votantes con teléfono: ${
-            misVotantes.length - sinTelefono.length
-          }`,
-          `Votantes con datos completos: ${
-            misVotantes.length - conDatosIncompletos.length
-          }`,
+          `Votantes asignados: ${misVotantes.length}`,
         ],
       },
 
-      { text: "Listado de Votantes", style: "subtitle" },
+      { text: "\nListado de votantes", style: "section" },
 
-      misVotantes.length > 0
-        ? {
-            table: {
-              widths: ["*", "auto", "auto"],
-              body: [
-                [
-                  { text: "Nombre", style: "tableHeader" },
-                  { text: "CI", style: "tableHeader" },
-                  { text: "Teléfono", style: "tableHeader" },
-                ],
-                ...misVotantes.map((v) => [
-                  `${v.nombre} ${v.apellido}`,
-                  v.ci,
-                  v.telefono || "—",
-                ]),
-              ],
-            },
-          }
-        : { text: "No tiene votantes asignados.", style: "text" },
-
-      { text: "Alertas", style: "subtitle" },
-
-      sinTelefono.length > 0
-        ? {
-            text: `⚠ ${sinTelefono.length} votantes no tienen teléfono registrado.`,
-            style: "alert",
-          }
-        : { text: "Todos los votantes tienen teléfono.", style: "text" },
-
-      conDatosIncompletos.length > 0
-        ? {
-            text: `⚠ ${conDatosIncompletos.length} votantes tienen datos incompletos.`,
-            style: "alert",
-          }
-        : { text: "Datos completos en todos los votantes.", style: "text" },
+      ...misVotantes.map((v, idx) => ({
+        margin: [0, 4, 0, 4],
+        stack: [
+          {
+            text: `${idx + 1}. ${v.nombre} ${v.apellido}`,
+            bold: true,
+          },
+          {
+            text: `CI: ${v.ci}`,
+          },
+          v.telefono ? { text: `Tel: ${v.telefono}` } : {},
+        ],
+      })),
     ],
 
-    styles,
-
-    footer: (currentPage, pageCount) => ({
-      text: `Página ${currentPage} de ${pageCount}`,
-      alignment: "center",
-      fontSize: 8,
-    }),
+    styles: {
+      header: {
+        fontSize: 18,
+        bold: true,
+        color: "#b91c1c",
+        margin: [0, 0, 0, 15],
+      },
+      subheader: {
+        fontSize: 14,
+        bold: true,
+        margin: [0, 0, 0, 10],
+      },
+      section: {
+        fontSize: 13,
+        bold: true,
+        margin: [0, 15, 0, 6],
+      },
+    },
   };
 
-  pdfMake.createPdf(docDefinition).download(
-    `reporte-subcoordinador-${currentUser.ci}.pdf`
-  );
+  pdfMake.createPdf(docDefinition).download("reporte-subcoordinador.pdf");
 };

@@ -1,75 +1,75 @@
-// services/pdf/pdfSuperadmin.js
-import pdfMake from "pdfmake/build/pdfmake.min";
-import pdfFonts from "pdfmake/build/vfs_fonts";
+// ======================= PDF SUPERADMIN =======================
+// Import dinámico compatible con Vite + Vercel
 
-pdfMake.vfs = pdfFonts.pdfMake.vfs;
-import { styles } from "./pdfStyles";
-import {
-  calcularResumenGlobal,
-  rankingCoordinadores,
-  detectarAlertas,
-} from "./pdfUtils";
+export const generarPdfSuperadmin = async ({ estructura }) => {
+  // ⬇️ IMPORT DINÁMICO (CLAVE)
+  const pdfMakeModule = await import("pdfmake/build/pdfmake");
+  const pdfFontsModule = await import("pdfmake/build/vfs_fonts");
 
-pdfMake.vfs = pdfFonts.pdfMake.vfs;
-
-export const generarPDFSuperadmin = ({ estructura, currentUser }) => {
-  const resumen = calcularResumenGlobal(estructura);
-  const ranking = rankingCoordinadores(estructura);
-  const alertas = detectarAlertas(estructura);
+  const pdfMake = pdfMakeModule.default || pdfMakeModule;
+  pdfMake.vfs = pdfFontsModule.pdfMake.vfs;
 
   const docDefinition = {
-    content: [
-      { text: "INFORME GENERAL DE CAPTACIÓN ELECTORAL", style: "title" },
-      {
-        text: `Generado por: ${currentUser.nombre} ${currentUser.apellido}`,
-        style: "text",
-      },
-      { text: new Date().toLocaleString(), style: "text" },
+    pageSize: "A4",
+    pageMargins: [40, 60, 40, 60],
 
-      { text: "Resumen Ejecutivo", style: "subtitle" },
+    content: [
+      { text: "REPORTE GENERAL – SUPERADMIN", style: "header" },
+
+      { text: "Resumen global", style: "subheader" },
       {
         ul: [
-          `Coordinadores: ${resumen.coordinadores}`,
-          `Subcoordinadores: ${resumen.subcoordinadores}`,
-          `Votantes: ${resumen.votantes}`,
-          `Votantes Totales: ${resumen.votantesTotales}`,
+          `Coordinadores: ${estructura.coordinadores.length}`,
+          `Subcoordinadores: ${estructura.subcoordinadores.length}`,
+          `Votantes cargados: ${estructura.votantes.length}`,
+          `Votantes totales (red): ${
+            estructura.coordinadores.length +
+            estructura.subcoordinadores.length +
+            estructura.votantes.length
+          }`,
         ],
       },
 
-      { text: "Ranking Nacional de Coordinadores", style: "subtitle" },
-      {
-        table: {
-          widths: ["*", 50, 50, 50, 50],
-          body: [
-            [
-              { text: "Coordinador", style: "tableHeader" },
-              { text: "Subs", style: "tableHeader" },
-              { text: "Directos", style: "tableHeader" },
-              { text: "Indirectos", style: "tableHeader" },
-              { text: "Total", style: "tableHeader" },
-            ],
-            ...ranking.map((r) => [
-              `${r.nombre} ${r.apellido}`,
-              r.subcoordinadores,
-              r.directos,
-              r.indirectos,
-              r.total,
-            ]),
-          ],
-        },
-      },
+      { text: "\nDetalle por coordinador", style: "subheader" },
 
-      { text: "Alertas del Sistema", style: "subtitle" },
-      ...(alertas.length
-        ? alertas.map((a) => ({ text: a, style: "alert" }))
-        : [{ text: "Sin alertas detectadas.", style: "text" }]),
+      ...estructura.coordinadores.map((c) => ({
+        margin: [0, 5, 0, 5],
+        stack: [
+          {
+            text: `${c.nombre} ${c.apellido} (CI: ${c.ci})`,
+            bold: true,
+          },
+          {
+            text: `Subcoordinadores: ${
+              estructura.subcoordinadores.filter(
+                (s) => s.coordinador_ci === c.ci
+              ).length
+            }`,
+          },
+          {
+            text: `Votantes totales en red: ${
+              estructura.votantes.filter(
+                (v) => v.coordinador_ci === c.ci
+              ).length
+            }`,
+          },
+        ],
+      })),
     ],
-    styles,
-    footer: (currentPage, pageCount) => ({
-      text: `Página ${currentPage} de ${pageCount}`,
-      alignment: "center",
-      fontSize: 8,
-    }),
+
+    styles: {
+      header: {
+        fontSize: 18,
+        bold: true,
+        color: "#b91c1c",
+        margin: [0, 0, 0, 15],
+      },
+      subheader: {
+        fontSize: 14,
+        bold: true,
+        margin: [0, 15, 0, 8],
+      },
+    },
   };
 
   pdfMake.createPdf(docDefinition).download("reporte-superadmin.pdf");
