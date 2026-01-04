@@ -23,6 +23,12 @@ import BuscadorCI from "./BuscadorCI";
 import ModalTelefono from "./ModalTelefono";
 import { getEstadisticas } from "../services/estadisticasService";
 import { openReportWindow } from "../utils/openReportWindow";
+
+import ReportSuperadmin from "../reports/ReportSuperadmin";
+import ReportCoordinador from "../reports/ReportCoordinador";
+import ReportSubcoordinador from "../reports/ReportSubcoordinador";
+
+
 import { buildSuperadminReportHTML } from "../reports/ReportSuperadmin";
 
 
@@ -571,24 +577,45 @@ const handleAgregarPersona = async (persona) => {
     [padron, estructura]
   );
 
-  // ======================= PDF MENU =======================
-  const [pdfMenuOpen, setPdfMenuOpen] = useState(false);
+  // ======================= DESCARGAR REPORTE (HTML → PDF) =======================
+const descargarPDF = () => {
+  if (!currentUser) {
+    alert("Usuario no válido");
+    return;
+  }
 
- const descargarPDF = () => {
+  // SUPERADMIN
   if (currentUser.role === "superadmin") {
-    const html = buildSuperadminReportHTML({
-      estructura,
-      currentUser,
-    });
-
+    const html = ReportSuperadmin({ estructura, currentUser });
     openReportWindow({
-      title: "Reporte Superadmin",
+      title: "Reporte General – Superadmin",
       html,
     });
+    return;
   }
+
+  // COORDINADOR
+  if (currentUser.role === "coordinador") {
+    const html = ReportCoordinador({ estructura, currentUser });
+    openReportWindow({
+      title: "Reporte de Coordinador",
+      html,
+    });
+    return;
+  }
+
+  // SUBCOORDINADOR
+  if (currentUser.role === "subcoordinador") {
+    const html = ReportSubcoordinador({ estructura, currentUser });
+    openReportWindow({
+      title: "Reporte de Subcoordinador",
+      html,
+    });
+    return;
+  }
+
+  alert("Rol no soportado para reportes");
 };
-
-
 
   // ======================= UI =======================
   return (
@@ -766,13 +793,14 @@ const handleAgregarPersona = async (persona) => {
 
         {/* MENÚ PDF */}
         <div className="relative inline-block">
-          <button
+            <button
             className="flex items-center gap-2 border-2 border-red-600 text-red-600 px-4 py-2 rounded-lg hover:bg-red-50"
-            onClick={() => setPdfMenuOpen((v) => !v)}
-          >
+            onClick={descargarPDF}
+>
             <BarChart3 className="w-4 h-4" />
             Descargar PDF
-          </button>
+            </button>
+
 
           {pdfMenuOpen && (
             <div className="absolute mt-1 bg-white border rounded-lg shadow-lg z-20 min-w-[220px] overflow-hidden">
