@@ -1,7 +1,10 @@
 // services/pdf/pdfCoordinador.js
-import pdfMake from "pdfmake/build/pdfmake";
+import pdfMake from "pdfmake/build/pdfmake.min";
 import pdfFonts from "pdfmake/build/vfs_fonts";
 import { styles } from "./pdfStyles";
+
+pdfMake.vfs = pdfFonts.pdfMake.vfs;
+
 import { normalizeCI } from "../../utils/estructuraHelpers";
 
 pdfMake.vfs = pdfFonts.pdfMake.vfs;

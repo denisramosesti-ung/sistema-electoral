@@ -1,6 +1,8 @@
 // services/pdf/pdfSuperadmin.js
-import pdfMake from "pdfmake/build/pdfmake";
+import pdfMake from "pdfmake/build/pdfmake.min";
 import pdfFonts from "pdfmake/build/vfs_fonts";
+
+pdfMake.vfs = pdfFonts.pdfMake.vfs;
 import { styles } from "./pdfStyles";
 import {
   calcularResumenGlobal,
