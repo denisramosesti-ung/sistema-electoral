@@ -1,20 +1,14 @@
 // src/services/pdf/pdfSuperadmin.js
+import pdfMake from "pdfmake/build/pdfmake";
+import pdfFonts from "pdfmake/build/vfs_fonts";
 import { styles } from "./pdfStyles";
-import { normalizeCI } from "../../utils/estructuraHelpers";
+
+pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
 export const generarPDFSuperadmin = async ({
   estructura,
   currentUser,
 }) => {
-  // ⬇️ IMPORT DINÁMICO (CLAVE)
-  const pdfMakeModule = await import("pdfmake/build/pdfmake");
-  const pdfFontsModule = await import("pdfmake/build/vfs_fonts");
-
-  const pdfMake = pdfMakeModule.default;
-  const pdfFonts = pdfFontsModule.default;
-
-  pdfMake.vfs = pdfFonts.pdfMake.vfs;
-
   const totalVotantes =
     estructura.votantes.length +
     estructura.subcoordinadores.length +
