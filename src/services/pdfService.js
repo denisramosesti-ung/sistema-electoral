@@ -4,48 +4,28 @@ import { generarPDFSuperadmin } from "./pdf/pdfSuperadmin";
 import { generarPDFCoordinador } from "./pdf/pdfCoordinador";
 import { generarPDFSubcoordinador } from "./pdf/pdfSubcoordinador";
 
-/**
- * Punto único de generación de PDFs
- * Decide automáticamente qué reporte generar según rol
- */
-export const generarPDF = ({
-  tipo,          // usado solo por superadmin (ranking / estructura)
-  estructura,
-  padron,
-  currentUser,
-}) => {
+export const generarPDF = (params) => {
+  const { currentUser } = params;
+
   if (!currentUser || !currentUser.role) {
-    alert("Sesión inválida para generar PDF");
+    console.error("Usuario no válido para generar PDF");
     return;
   }
 
-  switch (currentUser.role) {
-    case "superadmin":
-      generarPDFSuperadmin({
-        tipo,
-        estructura,
-        padron,
-        currentUser,
-      });
-      break;
-
-    case "coordinador":
-      generarPDFCoordinador({
-        estructura,
-        padron,
-        currentUser,
-      });
-      break;
-
-    case "subcoordinador":
-      generarPDFSubcoordinador({
-        estructura,
-        padron,
-        currentUser,
-      });
-      break;
-
-    default:
-      alert("Rol no soportado para generación de PDF");
+  // ================= SUPERADMIN =================
+  if (currentUser.role === "superadmin") {
+    return generarPDFSuperadmin(params);
   }
+
+  // ================= COORDINADOR =================
+  if (currentUser.role === "coordinador") {
+    return generarPDFCoordinador(params);
+  }
+
+  // ================= SUBCOORDINADOR =================
+  if (currentUser.role === "subcoordinador") {
+    return generarPDFSubcoordinador(params);
+  }
+
+  console.error("Rol no reconocido para PDF:", currentUser.role);
 };

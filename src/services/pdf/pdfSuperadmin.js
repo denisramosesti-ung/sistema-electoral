@@ -1,76 +1,162 @@
-// ======================= PDF SUPERADMIN =======================
-// Import dinámico compatible con Vite + Vercel
+// src/services/pdf/pdfSuperadmin.js
 
-export const generarPDFSuperadmin = async ({ estructura }) => {
-  // ⬇️ IMPORT DINÁMICO (CLAVE)
-  const pdfMakeModule = await import("pdfmake/build/pdfmake");
-  const pdfFontsModule = await import("pdfmake/build/vfs_fonts");
+import pdfMake from "pdfmake/build/pdfmake.min";
+import pdfFonts from "pdfmake/build/vfs_fonts";
+import { styles } from "./pdfStyles";
+import { normalizeCI } from "../../utils/estructuraHelpers";
 
-  const pdfMake = pdfMakeModule.default || pdfMakeModule;
-  pdfMake.vfs = pdfFontsModule.pdfMake.vfs;
+pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
-  const docDefinition = {
-    pageSize: "A4",
-    pageMargins: [40, 60, 40, 60],
+export const generarPDFSuperadmin = ({
+  estructura,
+  padron,
+  currentUser,
+  tipo, // 👈 ESTE ES CLAVE
+}) => {
+  // ================= VALIDACIÓN =================
+  if (!tipo) {
+    alert("Error: tipo de reporte no definido");
+    return;
+  }
 
-    content: [
-      { text: "REPORTE GENERAL – SUPERADMIN", style: "header" },
+  // =========================================================
+  // ================= RANKING GLOBAL ========================
+  // =========================================================
+  if (tipo === "ranking") {
+    const ranking = estructura.coordinadores.map((coord) => {
+      const ciCoord = normalizeCI(coord.ci);
 
-      { text: "Resumen global", style: "subheader" },
-      {
-        ul: [
-          `Coordinadores: ${estructura.coordinadores.length}`,
-          `Subcoordinadores: ${estructura.subcoordinadores.length}`,
-          `Votantes cargados: ${estructura.votantes.length}`,
-          `Votantes totales (red): ${
-            estructura.coordinadores.length +
-            estructura.subcoordinadores.length +
-            estructura.votantes.length
-          }`,
-        ],
-      },
+      const subs = estructura.subcoordinadores.filter(
+        (s) => normalizeCI(s.coordinador_ci) === ciCoord
+      );
 
-      { text: "\nDetalle por coordinador", style: "subheader" },
+      const votantesDirectos = estructura.votantes.filter(
+        (v) => normalizeCI(v.asignado_por) === ciCoord
+      );
 
-      ...estructura.coordinadores.map((c) => ({
-        margin: [0, 5, 0, 5],
-        stack: [
-          {
-            text: `${c.nombre} ${c.apellido} (CI: ${c.ci})`,
-            bold: true,
+      const votantesIndirectos = estructura.votantes.filter((v) =>
+        subs.some((s) => normalizeCI(v.asignado_por) === normalizeCI(s.ci))
+      );
+
+      return {
+        nombre: `${coord.nombre} ${coord.apellido}`,
+        subcoordinadores: subs.length,
+        directos: votantesDirectos.length,
+        indirectos: votantesIndirectos.length,
+        total: votantesDirectos.length + votantesIndirectos.length,
+      };
+    });
+
+    ranking.sort((a, b) => b.total - a.total);
+
+    const docDefinition = {
+      content: [
+        { text: "RANKING GLOBAL DE COORDINADORES", style: "title" },
+        { text: new Date().toLocaleString(), style: "text" },
+
+        {
+          table: {
+            widths: ["*", "auto", "auto", "auto", "auto"],
+            body: [
+              [
+                { text: "Coordinador", style: "tableHeader" },
+                { text: "Subcoord.", style: "tableHeader" },
+                { text: "Directos", style: "tableHeader" },
+                { text: "Indirectos", style: "tableHeader" },
+                { text: "Total", style: "tableHeader" },
+              ],
+              ...ranking.map((r) => [
+                r.nombre,
+                r.subcoordinadores,
+                r.directos,
+                r.indirectos,
+                r.total,
+              ]),
+            ],
           },
-          {
-            text: `Subcoordinadores: ${
-              estructura.subcoordinadores.filter(
-                (s) => s.coordinador_ci === c.ci
-              ).length
-            }`,
-          },
-          {
-            text: `Votantes totales en red: ${
-              estructura.votantes.filter(
-                (v) => v.coordinador_ci === c.ci
-              ).length
-            }`,
-          },
-        ],
-      })),
-    ],
+        },
+      ],
+      styles,
+      footer: (currentPage, pageCount) => ({
+        text: `Página ${currentPage} de ${pageCount}`,
+        alignment: "center",
+        fontSize: 8,
+      }),
+    };
 
-    styles: {
-      header: {
-        fontSize: 18,
-        bold: true,
-        color: "#b91c1c",
-        margin: [0, 0, 0, 15],
-      },
-      subheader: {
-        fontSize: 14,
-        bold: true,
-        margin: [0, 15, 0, 8],
-      },
-    },
-  };
+    pdfMake.createPdf(docDefinition).download(
+      "ranking-global-coordinadores.pdf"
+    );
+    return;
+  }
 
-  pdfMake.createPdf(docDefinition).download("reporte-superadmin.pdf");
+  // =========================================================
+  // ================= ESTRUCTURA COMPLETA ===================
+  // =========================================================
+  if (tipo === "estructura") {
+    const content = [
+      { text: "ESTRUCTURA COMPLETA DEL SISTEMA", style: "title" },
+      { text: new Date().toLocaleString(), style: "text" },
+    ];
+
+    estructura.coordinadores.forEach((coord) => {
+      content.push({
+        text: `\nCOORDINADOR: ${coord.nombre} ${coord.apellido} (CI ${coord.ci})`,
+        style: "subtitle",
+      });
+
+      const subs = estructura.subcoordinadores.filter(
+        (s) => normalizeCI(s.coordinador_ci) === normalizeCI(coord.ci)
+      );
+
+      if (subs.length === 0) {
+        content.push({ text: "Sin subcoordinadores.", style: "text" });
+      }
+
+      subs.forEach((sub) => {
+        content.push({
+          text: `Subcoordinador: ${sub.nombre} ${sub.apellido} (CI ${sub.ci})`,
+          margin: [20, 5, 0, 0],
+        });
+
+        const votantes = estructura.votantes.filter(
+          (v) => normalizeCI(v.asignado_por) === normalizeCI(sub.ci)
+        );
+
+        if (votantes.length === 0) {
+          content.push({
+            text: "Sin votantes.",
+            margin: [40, 0, 0, 5],
+            fontSize: 9,
+          });
+        }
+
+        votantes.forEach((v) => {
+          content.push({
+            text: `• ${v.nombre} ${v.apellido} — CI ${v.ci}`,
+            margin: [40, 0, 0, 0],
+            fontSize: 9,
+          });
+        });
+      });
+    });
+
+    const docDefinition = {
+      content,
+      styles,
+      footer: (currentPage, pageCount) => ({
+        text: `Página ${currentPage} de ${pageCount}`,
+        alignment: "center",
+        fontSize: 8,
+      }),
+    };
+
+    pdfMake.createPdf(docDefinition).download(
+      "estructura-completa-sistema.pdf"
+    );
+    return;
+  }
+
+  // ================= FALLBACK =================
+  alert("Tipo de reporte no reconocido: " + tipo);
 };

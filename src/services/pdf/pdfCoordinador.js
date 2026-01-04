@@ -1,94 +1,121 @@
-// ======================= PDF COORDINADOR =======================
-// Reporte de red de un coordinador (subcoordinadores + votantes)
+// src/services/pdf/pdfCoordinador.js
 
-export const generarPDFCoordinador = async ({ estructura, currentUser }) => {
-  // IMPORT DINÁMICO (OBLIGATORIO EN VITE)
-  const pdfMakeModule = await import("pdfmake/build/pdfmake");
-  const pdfFontsModule = await import("pdfmake/build/vfs_fonts");
+import pdfMake from "pdfmake/build/pdfmake.min";
+import pdfFonts from "pdfmake/build/vfs_fonts";
+import { styles } from "./pdfStyles";
+import { normalizeCI } from "../../utils/estructuraHelpers";
 
-  const pdfMake = pdfMakeModule.default || pdfMakeModule;
-  pdfMake.vfs = pdfFontsModule.pdfMake.vfs;
+pdfMake.vfs = pdfFonts.pdfMake.vfs;
 
-  const misSubs = estructura.subcoordinadores.filter(
-    (s) => s.coordinador_ci === currentUser.ci
+export const generarPDFCoordinador = ({
+  estructura,
+  padron,
+  currentUser,
+}) => {
+  const miCI = normalizeCI(currentUser.ci);
+
+  // ================= DATOS BASE =================
+  const misSubcoordinadores = estructura.subcoordinadores.filter(
+    (s) => normalizeCI(s.coordinador_ci) === miCI
   );
 
   const votantesDirectos = estructura.votantes.filter(
-    (v) => v.asignado_por === currentUser.ci
+    (v) => normalizeCI(v.asignado_por) === miCI
   );
 
-  const votantesIndirectos = estructura.votantes.filter(
-    (v) =>
-      misSubs.some((s) => s.ci === v.asignado_por)
+  const votantesIndirectos = estructura.votantes.filter((v) =>
+    misSubcoordinadores.some(
+      (s) => normalizeCI(v.asignado_por) === normalizeCI(s.ci)
+    )
   );
 
+  const totalVotantes =
+    votantesDirectos.length + votantesIndirectos.length;
+
+  // ================= RENDIMIENTO SUBS =================
+  const rendimientoSubs = misSubcoordinadores.map((sub) => {
+    const votos = estructura.votantes.filter(
+      (v) => normalizeCI(v.asignado_por) === normalizeCI(sub.ci)
+    );
+
+    return {
+      nombre: `${sub.nombre} ${sub.apellido}`,
+      votantes: votos.length,
+    };
+  });
+
+  // ================= ALERTAS =================
+  const alertas = [];
+
+  if (misSubcoordinadores.length === 0) {
+    alertas.push("No registra subcoordinadores asignados.");
+  }
+
+  rendimientoSubs.forEach((s) => {
+    if (s.votantes === 0) {
+      alertas.push(
+        `El subcoordinador ${s.nombre} no registra votantes.`
+      );
+    }
+  });
+
+  // ================= DOCUMENTO =================
   const docDefinition = {
-    pageSize: "A4",
-    pageMargins: [40, 60, 40, 60],
-
     content: [
-      { text: "REPORTE DE COORDINADOR", style: "header" },
+      { text: "REPORTE DE COORDINADOR", style: "title" },
 
       {
-        text: `${currentUser.nombre} ${currentUser.apellido} (CI: ${currentUser.ci})`,
-        style: "subheader",
+        text: `Coordinador: ${currentUser.nombre} ${currentUser.apellido}`,
+        style: "text",
       },
+      { text: `CI: ${currentUser.ci}`, style: "text" },
+      { text: new Date().toLocaleString(), style: "text" },
 
+      { text: "Resumen General", style: "subtitle" },
       {
         ul: [
-          `Subcoordinadores: ${misSubs.length}`,
+          `Subcoordinadores: ${misSubcoordinadores.length}`,
           `Votantes directos: ${votantesDirectos.length}`,
           `Votantes indirectos: ${votantesIndirectos.length}`,
-          `Votantes totales en red: ${
-            votantesDirectos.length + votantesIndirectos.length
-          }`,
+          `Total de votantes: ${totalVotantes}`,
         ],
       },
 
-      { text: "\nSubcoordinadores", style: "section" },
+      { text: "Rendimiento de Subcoordinadores", style: "subtitle" },
+      rendimientoSubs.length > 0
+        ? {
+            table: {
+              widths: ["*", "auto"],
+              body: [
+                [
+                  { text: "Subcoordinador", style: "tableHeader" },
+                  { text: "Votantes", style: "tableHeader" },
+                ],
+                ...rendimientoSubs.map((s) => [
+                  s.nombre,
+                  s.votantes,
+                ]),
+              ],
+            },
+          }
+        : { text: "Sin subcoordinadores.", style: "text" },
 
-      ...misSubs.map((s) => ({
-        margin: [0, 5, 0, 5],
-        stack: [
-          {
-            text: `${s.nombre} ${s.apellido} (CI: ${s.ci})`,
-            bold: true,
-          },
-          {
-            text: `Votantes asignados: ${
-              estructura.votantes.filter((v) => v.asignado_por === s.ci).length
-            }`,
-          },
-        ],
-      })),
-
-      { text: "\nVotantes directos", style: "section" },
-
-      ...votantesDirectos.map((v) => ({
-        text: `${v.nombre} ${v.apellido} – CI: ${v.ci}`,
-        margin: [0, 2, 0, 2],
-      })),
+      { text: "Alertas de Gestión", style: "subtitle" },
+      alertas.length > 0
+        ? alertas.map((a) => ({ text: `⚠ ${a}`, style: "alert" }))
+        : { text: "Sin alertas.", style: "text" },
     ],
 
-    styles: {
-      header: {
-        fontSize: 18,
-        bold: true,
-        color: "#b91c1c",
-        margin: [0, 0, 0, 15],
-      },
-      subheader: {
-        fontSize: 14,
-        bold: true,
-        margin: [0, 0, 0, 10],
-      },
-      section: {
-        fontSize: 13,
-        bold: true,
-        margin: [0, 15, 0, 6],
-      },
-    },
+    styles,
+
+    footer: (currentPage, pageCount) => ({
+      text: `Página ${currentPage} de ${pageCount}`,
+      alignment: "center",
+      fontSize: 8,
+    }),
   };
 
-  pdfMake.createPdf(docDefinition).download("reporte-coordinador.pdf");
+  pdfMake.createPdf(docDefinition).download(
+    `reporte-coordinador-${currentUser.ci}.pdf`
+  );
 };
