@@ -1,58 +1,52 @@
-import pdfMake from "pdfmake/build/pdfmake";
-import pdfFonts from "pdfmake/build/vfs_fonts";
+// src/services/pdf/pdfCoordinador.js
 import { styles } from "./pdfStyles";
 import { normalizeCI } from "../../utils/estructuraHelpers";
 
-/* ======================= FIX CRÍTICO VFS ======================= */
-if (!pdfMake.vfs) {
-  pdfMake.vfs = pdfFonts.pdfMake.vfs;
-}
-
-export const generarPDFCoordinador = ({
+export const generarPDFCoordinador = async ({
   estructura,
-  padron,
   currentUser,
 }) => {
+  const pdfMakeModule = await import("pdfmake/build/pdfmake");
+  const pdfFontsModule = await import("pdfmake/build/vfs_fonts");
+
+  const pdfMake = pdfMakeModule.default;
+  const pdfFonts = pdfFontsModule.default;
+  pdfMake.vfs = pdfFonts.pdfMake.vfs;
+
   const miCI = normalizeCI(currentUser.ci);
 
-  const misSubcoordinadores = estructura.subcoordinadores.filter(
+  const subs = estructura.subcoordinadores.filter(
     (s) => normalizeCI(s.coordinador_ci) === miCI
   );
 
-  const votantesDirectos = estructura.votantes.filter(
+  const directos = estructura.votantes.filter(
     (v) => normalizeCI(v.asignado_por) === miCI
   );
 
-  const votantesIndirectos = estructura.votantes.filter((v) =>
-    misSubcoordinadores.some(
-      (s) => normalizeCI(v.asignado_por) === normalizeCI(s.ci)
-    )
+  const indirectos = estructura.votantes.filter((v) =>
+    subs.some((s) => normalizeCI(v.asignado_por) === normalizeCI(s.ci))
   );
 
   const docDefinition = {
     content: [
       { text: "REPORTE DE COORDINADOR", style: "title" },
-      {
-        text: `${currentUser.nombre} ${currentUser.apellido}`,
-        style: "text",
-      },
+      { text: `${currentUser.nombre} ${currentUser.apellido}`, style: "text" },
+      { text: new Date().toLocaleString(), style: "text" },
 
       { text: "Resumen", style: "subtitle" },
       {
         ul: [
-          `Subcoordinadores: ${misSubcoordinadores.length}`,
-          `Votantes directos: ${votantesDirectos.length}`,
-          `Votantes indirectos: ${votantesIndirectos.length}`,
-          `Total en red: ${
-            votantesDirectos.length + votantesIndirectos.length
-          }`,
+          `Subcoordinadores: ${subs.length}`,
+          `Votantes directos: ${directos.length}`,
+          `Votantes indirectos: ${indirectos.length}`,
+          `Total votantes: ${directos.length + indirectos.length}`,
         ],
       },
     ],
     styles,
   };
 
-  pdfMake
-    .createPdf(docDefinition)
-    .download(`reporte-coordinador-${currentUser.ci}.pdf`);
+  pdfMake.createPdf(docDefinition).download(
+    `reporte-coordinador-${currentUser.ci}.pdf`
+  );
 };

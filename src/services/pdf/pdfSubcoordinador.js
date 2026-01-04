@@ -1,18 +1,18 @@
-import pdfMake from "pdfmake/build/pdfmake";
-import pdfFonts from "pdfmake/build/vfs_fonts";
+// src/services/pdf/pdfSubcoordinador.js
 import { styles } from "./pdfStyles";
 import { normalizeCI } from "../../utils/estructuraHelpers";
 
-/* ======================= FIX CRÍTICO VFS ======================= */
-if (!pdfMake.vfs) {
-  pdfMake.vfs = pdfFonts.pdfMake.vfs;
-}
-
-export const generarPDFSubcoordinador = ({
+export const generarPDFSubcoordinador = async ({
   estructura,
-  padron,
   currentUser,
 }) => {
+  const pdfMakeModule = await import("pdfmake/build/pdfmake");
+  const pdfFontsModule = await import("pdfmake/build/vfs_fonts");
+
+  const pdfMake = pdfMakeModule.default;
+  const pdfFonts = pdfFontsModule.default;
+  pdfMake.vfs = pdfFonts.pdfMake.vfs;
+
   const miCI = normalizeCI(currentUser.ci);
 
   const misVotantes = estructura.votantes.filter(
@@ -22,20 +22,20 @@ export const generarPDFSubcoordinador = ({
   const docDefinition = {
     content: [
       { text: "REPORTE DE SUBCOORDINADOR", style: "title" },
-      {
-        text: `${currentUser.nombre} ${currentUser.apellido}`,
-        style: "text",
-      },
+      { text: `${currentUser.nombre} ${currentUser.apellido}`, style: "text" },
+      { text: new Date().toLocaleString(), style: "text" },
 
-      { text: "Resumen", style: "subtitle" },
+      { text: "Votantes asignados", style: "subtitle" },
       {
-        ul: [`Votantes asignados: ${misVotantes.length}`],
+        ul: misVotantes.map(
+          (v) => `${v.nombre} ${v.apellido} — CI ${v.ci}`
+        ),
       },
     ],
     styles,
   };
 
-  pdfMake
-    .createPdf(docDefinition)
-    .download(`reporte-subcoordinador-${currentUser.ci}.pdf`);
+  pdfMake.createPdf(docDefinition).download(
+    `reporte-subcoordinador-${currentUser.ci}.pdf`
+  );
 };
