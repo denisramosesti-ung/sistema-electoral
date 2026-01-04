@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { generarAccessCode } from "../utils/accessCode";
+import ReportSuperadmin from "../reports/ReportSuperadmin";
+import ReportCoordinador from "../reports/ReportCoordinador";
+import ReportSubcoordinador from "../reports/ReportSubcoordinador";
+
 
 import {
   UserPlus,
