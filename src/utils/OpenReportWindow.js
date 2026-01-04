@@ -4,65 +4,61 @@ export const openReportWindow = ({ title, html }) => {
   const win = window.open("", "_blank");
 
   if (!win) {
-    alert("Bloqueador de ventanas emergentes activo.");
+    alert("No se pudo abrir la ventana del reporte");
     return;
   }
 
+  win.document.open();
   win.document.write(`
-    <html>
+    <!DOCTYPE html>
+    <html lang="es">
       <head>
-        <title>${title}</title>
         <meta charset="UTF-8" />
+        <title>${title}</title>
         <style>
           body {
             font-family: Arial, sans-serif;
-            padding: 24px;
+            margin: 40px;
             color: #111;
           }
-
-          h1, h2, h3 {
+          h1 {
             color: #b91c1c;
-            margin-bottom: 8px;
+            border-bottom: 2px solid #b91c1c;
+            padding-bottom: 8px;
           }
-
+          h2 {
+            margin-top: 30px;
+            color: #7f1d1d;
+          }
           table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 12px;
+            margin-top: 10px;
           }
-
           th, td {
-            border: 1px solid #ccc;
-            padding: 8px;
+            border: 1px solid #ddd;
+            padding: 6px;
             font-size: 12px;
           }
-
           th {
             background: #fee2e2;
             text-align: left;
           }
-
-          .box {
-            border: 2px solid #b91c1c;
-            padding: 12px;
-            margin: 12px 0;
-            background: #fef2f2;
-          }
-
-          @media print {
-            button {
-              display: none;
-            }
+          .muted {
+            color: #666;
+            font-size: 12px;
           }
         </style>
       </head>
       <body>
         ${html}
-        <br />
-        <button onclick="window.print()">Descargar / Imprimir PDF</button>
+        <script>
+          window.onload = () => {
+            setTimeout(() => window.print(), 300);
+          };
+        </script>
       </body>
     </html>
   `);
-
   win.document.close();
 };

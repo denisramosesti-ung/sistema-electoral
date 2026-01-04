@@ -1,11 +1,6 @@
-// ======================= DASHBOARD (UI REAL + ESTADO TOTAL) =======================
-// Opción A: este archivo maneja TODO lo del sistema logueado.
-// App solo hace login / logout.
-
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { generarAccessCode } from "../utils/accessCode";
-
 
 import {
   UserPlus,
@@ -21,16 +16,9 @@ import {
 import AddPersonModal from "../AddPersonModal";
 import BuscadorCI from "./BuscadorCI";
 import ModalTelefono from "./ModalTelefono";
+
 import { getEstadisticas } from "../services/estadisticasService";
 import { openReportWindow } from "../utils/openReportWindow";
-
-import ReportSuperadmin from "../reports/ReportSuperadmin";
-import ReportCoordinador from "../reports/ReportCoordinador";
-import ReportSubcoordinador from "../reports/ReportSubcoordinador";
-
-
-import { buildSuperadminReportHTML } from "../reports/ReportSuperadmin";
-
 
 import {
   normalizeCI,
