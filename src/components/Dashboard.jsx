@@ -5,7 +5,7 @@ import { generarAccessCode } from "../utils/accessCode";
 import ReportSuperadmin from "../reports/ReportSuperadmin";
 import ReportCoordinador from "../reports/ReportCoordinador";
 import ReportSubcoordinador from "../reports/ReportSubcoordinador";
-
+import { REPORT_CSS } from "../reports/reportStyles";
 
 
 import {
@@ -584,20 +584,13 @@ const descargarPDF = () => {
   let html = "";
   let title = "Reporte";
 
-  // SUPERADMIN
   if (currentUser.role === "superadmin") {
     html = ReportSuperadmin({ estructura, currentUser });
     title = "Reporte General – Superadmin";
-  }
-
-  // COORDINADOR
-  else if (currentUser.role === "coordinador") {
+  } else if (currentUser.role === "coordinador") {
     html = ReportCoordinador({ estructura, currentUser });
     title = "Reporte de Coordinador";
-  }
-
-  // SUBCOORDINADOR
-  else if (currentUser.role === "subcoordinador") {
+  } else if (currentUser.role === "subcoordinador") {
     html = ReportSubcoordinador({ estructura, currentUser });
     title = "Reporte de Subcoordinador";
   } else {
@@ -605,10 +598,9 @@ const descargarPDF = () => {
     return;
   }
 
-  // ======================= ABRIR VENTANA DE IMPRESIÓN =======================
   const win = window.open("", "_blank");
   if (!win) {
-    alert("El navegador bloqueó la ventana emergente");
+    alert("El navegador bloqueó la ventana emergente (pop-up).");
     return;
   }
 
@@ -617,34 +609,35 @@ const descargarPDF = () => {
     <html>
       <head>
         <title>${title}</title>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            padding: 30px;
-          }
-          h1, h2, h3 {
-            color: #b91c1c;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-          }
-          th, td {
-            border: 1px solid #ccc;
-            padding: 8px;
-            text-align: left;
-            font-size: 12px;
-          }
-          th {
-            background: #fee2e2;
-          }
-        </style>
+        <style>${REPORT_CSS}</style>
       </head>
       <body>
-        ${html}
+        <header class="report-header">
+          <div class="brand">
+            <div>
+              <h1 class="title">${title}</h1>
+              <div class="small muted">Sistema Electoral</div>
+            </div>
+            <div class="meta">
+              <div><b>Usuario:</b> ${currentUser.nombre} ${currentUser.apellido}</div>
+              <div><b>CI:</b> ${currentUser.ci}</div>
+              <div><b>Generado:</b> ${new Date().toLocaleString("es-PY")}</div>
+            </div>
+          </div>
+        </header>
+
+        <footer class="report-footer">
+          <div>Documento interno</div>
+          <div class="muted">Imprimir / Guardar como PDF</div>
+        </footer>
+
+        <main class="report-body">
+          ${html}
+        </main>
+
         <script>
           window.onload = function () {
+            window.focus();
             window.print();
           };
         </script>
@@ -653,6 +646,7 @@ const descargarPDF = () => {
   `);
   win.document.close();
 };
+
 
   // ======================= UI =======================
   return (
