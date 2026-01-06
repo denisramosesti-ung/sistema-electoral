@@ -143,7 +143,7 @@ const App = () => {
             value={loginID}
             onChange={(e) => setLoginID(e.target.value)}
             className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 mb-4"
-            placeholder="Ej: 4630621"
+            placeholder="Ej: A1B2C3D4"
           />
 
           {/* CONTRASEÑA SOLO PARA SUPERADMINS */}
