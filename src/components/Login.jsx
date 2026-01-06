@@ -29,20 +29,21 @@ export default function Login({
           placeholder="Ej: 1234567 o ABC123"
         />
 
-        {loginID === "4630621" && (
-          <div className="mb-4">
-            <label className="text-sm font-medium text-gray-700">
-              Contraseña Superadmin
-            </label>
-            <input
-              type="password"
-              value={loginPass}
-              onChange={(e) => setLoginPass(e.target.value)}
-              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500"
-              placeholder="Ingrese contraseña"
-            />
-          </div>
-        )}
+        {loginID && (
+  <div className="mb-4">
+    <label className="text-sm font-medium text-gray-700">
+      Contraseña
+    </label>
+    <input
+      type="password"
+      value={loginPass}
+      onChange={(e) => setLoginPass(e.target.value)}
+      className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500"
+      placeholder="Ingrese contraseña"
+    />
+  </div>
+)}
+
 
         <button
           onClick={onLogin}

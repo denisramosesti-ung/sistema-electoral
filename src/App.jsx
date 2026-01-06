@@ -1,13 +1,28 @@
 // ======================= APP SISTEMA ELECTORAL =======================
-// Opción A: App maneja SOLO sesión/login.
-// Dashboard maneja TODO lo demás (estado + UI del sistema).
+// App maneja SOLO sesión/login.
+// Dashboard maneja TODO lo demás.
 
 import React, { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
-import { generarCodigoAcceso } from "./utils/accessCode";
 import { Users } from "lucide-react";
 import Dashboard from "./components/Dashboard";
 import { normalizeCI } from "./utils/estructuraHelpers";
+
+// ======================= SUPERADMINS LOCALES =======================
+const SUPERADMINS = [
+  {
+    ci: "4630621",
+    pass: "16052018",
+    nombre: "Denis",
+    apellido: "Ramos",
+  },
+  {
+    ci: "4291234",
+    pass: "112233",
+    nombre: "Victor",
+    apellido: "Urunaga",
+  },
+];
 
 const App = () => {
   // ======================= SESIÓN =======================
@@ -30,18 +45,21 @@ const App = () => {
 
   // ======================= LOGIN =======================
   const handleLogin = async () => {
-    const code = loginID.trim().toUpperCase();
-    if (!code) return alert("Ingrese código.");
+    const code = loginID.trim();
+    if (!code) return alert("Ingrese CI o código.");
 
+    // ======================= SUPERADMIN LOCAL =======================
+    const superadmin = SUPERADMINS.find((s) => s.ci === code);
 
-    // SUPERADMIN
-    if (loginID === "4630621") {
-      if (loginPass !== "12345") return alert("Contraseña incorrecta.");
+    if (superadmin) {
+      if (loginPass !== superadmin.pass) {
+        return alert("Contraseña incorrecta.");
+      }
 
       const u = {
-        ci: "4630621",
-        nombre: "Denis",
-        apellido: "Ramos",
+        ci: superadmin.ci,
+        nombre: superadmin.nombre,
+        apellido: superadmin.apellido,
         role: "superadmin",
       };
 
@@ -50,7 +68,7 @@ const App = () => {
       return;
     }
 
-    // COORDINADOR
+    // ======================= COORDINADOR =======================
     const { data: coord, error: coordErr } = await supabase
       .from("coordinadores")
       .select("ci,login_code,telefono,padron(*)")
@@ -72,7 +90,7 @@ const App = () => {
       return;
     }
 
-    // SUBCOORDINADOR
+    // ======================= SUBCOORDINADOR =======================
     const { data: sub, error: subErr } = await supabase
       .from("subcoordinadores")
       .select("ci,login_code,telefono,coordinador_ci,padron(*)")
@@ -104,7 +122,7 @@ const App = () => {
     setLoginPass("");
   };
 
-  // ======================= LOGIN VIEW (UI REAL) =======================
+  // ======================= LOGIN VIEW =======================
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center p-4">
@@ -125,23 +143,19 @@ const App = () => {
             value={loginID}
             onChange={(e) => setLoginID(e.target.value)}
             className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 mb-4"
-            placeholder="Ej: 1234567"
+            placeholder="Ej: 4630621"
           />
 
-          {loginID === "4630621" && (
-            <div className="mb-4">
-              <label className="text-sm font-medium text-gray-700">
-                Contraseña Superadmin
-              </label>
-              <input
-                type="password"
-                value={loginPass}
-                onChange={(e) => setLoginPass(e.target.value)}
-                className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500"
-                placeholder="Ingrese contraseña"
-              />
-            </div>
-          )}
+          <label className="text-sm font-medium text-gray-700">
+            Contraseña
+          </label>
+          <input
+            type="password"
+            value={loginPass}
+            onChange={(e) => setLoginPass(e.target.value)}
+            className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 mb-4"
+            placeholder="Ingrese contraseña"
+          />
 
           <button
             onClick={handleLogin}
@@ -153,8 +167,8 @@ const App = () => {
           <div className="mt-6 bg-red-50 p-4 rounded-lg border border-red-200 text-sm text-red-700">
             <p className="font-semibold mb-2">Instrucciones:</p>
             <ol className="list-decimal ml-5 space-y-1">
-              <li>Ingrese el código proporcionado.</li>
-              <li>Si es coordinador o sub, cuide su acceso.</li>
+              <li>Ingrese CI o código.</li>
+              <li>Ingrese su contraseña.</li>
               <li>Ante dudas, comuníquese con el administrador.</li>
             </ol>
           </div>
