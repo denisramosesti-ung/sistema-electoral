@@ -146,16 +146,22 @@ const App = () => {
             placeholder="Ej: 4630621"
           />
 
-          <label className="text-sm font-medium text-gray-700">
-            Contraseña
-          </label>
-          <input
-            type="password"
-            value={loginPass}
-            onChange={(e) => setLoginPass(e.target.value)}
-            className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 mb-4"
-            placeholder="Ingrese contraseña"
-          />
+          {/* CONTRASEÑA SOLO PARA SUPERADMINS */}
+{SUPERADMINS.some((s) => s.ci === loginID.trim()) && (
+  <>
+    <label className="text-sm font-medium text-gray-700">
+      Contraseña Superadmin
+    </label>
+    <input
+      type="password"
+      value={loginPass}
+      onChange={(e) => setLoginPass(e.target.value)}
+      className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-red-500 mb-4"
+      placeholder="Ingrese contraseña"
+    />
+  </>
+)}
+
 
           <button
             onClick={handleLogin}
