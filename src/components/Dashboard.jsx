@@ -809,8 +809,9 @@ const descargarPDF = () => {
     <div className="bg-white rounded-lg shadow p-6">
       <p className="text-gray-600 text-sm">Votantes indirectos</p>
       <p className="text-4xl font-bold text-red-600">
-        {(stats?.total ?? 0) - (stats?.votantesDirectos ?? 0)}
-      </p>
+  {stats?.votantesIndirectos ?? 0}
+</p>
+
     </div>
 
     {/* VOTANTES TOTALES (DESTACADO) */}
