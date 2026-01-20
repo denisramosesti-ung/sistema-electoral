@@ -43,6 +43,63 @@ const App = () => {
     }
   }, []);
 
+<<<<<<< HEAD
+=======
+  const getPersonasBuscables = () => {
+  if (!currentUser || !estructura) return [];
+
+  // SUPERADMIN: toda la estructura
+  if (currentUser.role === "superadmin") {
+    return [
+      ...estructura.coordinadores.map((c) => ({
+        ...c,
+        tipo: "coordinador",
+      })),
+      ...estructura.subcoordinadores.map((s) => ({
+        ...s,
+        tipo: "subcoordinador",
+      })),
+      ...estructura.votantes.map((v) => ({
+        ...v,
+        tipo: "votante",
+      })),
+    ];
+  }
+
+  // COORDINADOR
+  if (currentUser.role === "coordinador") {
+    return [
+      {
+        ...currentUser,
+        tipo: "coordinador",
+      },
+      ...estructura.subcoordinadores
+        .filter((s) => s.coordinadorCI === currentUser.ci)
+        .map((s) => ({ ...s, tipo: "subcoordinador" })),
+      ...estructura.votantes
+        .filter((v) => v.asignadoPor === currentUser.ci)
+        .map((v) => ({ ...v, tipo: "votante" })),
+    ];
+  }
+
+  // SUBCOORDINADOR
+  if (currentUser.role === "subcoordinador") {
+    return [
+      {
+        ...currentUser,
+        tipo: "subcoordinador",
+      },
+      ...estructura.votantes
+        .filter((v) => v.asignadoPor === currentUser.ci)
+        .map((v) => ({ ...v, tipo: "votante" })),
+    ];
+  }
+
+  return [];
+};
+
+
+>>>>>>> b767552 (Busqueda interna por rol y limpieza buscador CI)
   // ======================= LOGIN =======================
   const handleLogin = async () => {
     const code = loginID.trim();

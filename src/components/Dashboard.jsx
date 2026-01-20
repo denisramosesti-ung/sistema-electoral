@@ -20,7 +20,6 @@ import {
 } from "lucide-react";
 
 import AddPersonModal from "../AddPersonModal";
-import BuscadorCI from "./BuscadorCI";
 import ModalTelefono from "./ModalTelefono";
 
 import { getEstadisticas } from "../services/estadisticasService";
@@ -48,7 +47,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
   const [modalType, setModalType] = useState("");
   const [expandedCoords, setExpandedCoords] = useState({});
   const [searchCI, setSearchCI] = useState("");
-  const [searchResult, setSearchResult] = useState(null);
 
   // Teléfono
   const [phoneModalOpen, setPhoneModalOpen] = useState(false);
@@ -246,41 +244,10 @@ const canEliminar = (tipo, persona) => {
   return false;
 };
 
-  // ======================= BUSCADOR GLOBAL POR CI =======================
-  const buscarPorCI = (input) => {
-    const clean = String(input || "").replace(/\D/g, "");
-    if (!clean) {
-      setSearchResult(null);
-      return;
-    }
-
-    const persona = (padron || []).find((p) => {
-      const raw = String(p.ci || "");
-      return raw.includes(clean);
-    });
-
-    if (!persona) {
-      setSearchResult({ tipo: "noExiste", data: { ci: clean } });
-      return;
-    }
-
-    const ci = normalizeCI(persona.ci);
-
-    const coord = (estructura.coordinadores || []).find(
-      (c) => normalizeCI(c.ci) === ci
-    );
-    if (coord) return setSearchResult({ tipo: "coordinador", data: coord });
-
-    const sub = (estructura.subcoordinadores || []).find(
-      (s) => normalizeCI(s.ci) === ci
-    );
-    if (sub) return setSearchResult({ tipo: "subcoordinador", data: sub });
-
-    const vot = (estructura.votantes || []).find((v) => normalizeCI(v.ci) === ci);
-    if (vot) return setSearchResult({ tipo: "votante", data: vot });
-
-    return setSearchResult({ tipo: "padron", data: { ...persona, ci } });
-  };
+ // ======================= BUSCADOR INTERNO POR CI (SEGÚN ROL) =======================
+// - Superadmin: busca en toda la estructura (coords + subs + votantes). Si no está, muestra "padron" como fallback.
+// - Coordinador: busca SOLO dentro de su red (sus subcoordinadores + votantes directos + votantes de sus subcoordinadores).
+// - Subcoordinador: busca SOLO sus votantes directos.
 
   // ======================= LOGOUT =======================
   const handleLogout = () => {
@@ -574,6 +541,109 @@ const handleAgregarPersona = async (persona) => {
     [padron, estructura]
   );
 
+  // ======================= BUSCADOR INTERNO (SEGÚN ROL) =======================
+// Busca SOLO dentro de lo que el rol puede ver (estructura).
+// Soporta CI, nombre, apellido, nombre+apellido (en cualquier orden), y acentos.
+
+const normalizeText = (v) =>
+  (v ?? "")
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // quita acentos
+    .replace(/\s+/g, " ")
+    .trim();
+
+const personasVisibles = useMemo(() => {
+  const role = currentUser?.role;
+  const miCI = normalizeCI(currentUser?.ci);
+
+  const coords = estructura.coordinadores || [];
+  const subs = estructura.subcoordinadores || [];
+  const vots = estructura.votantes || [];
+
+  // Vamos a devolver una lista plana con objetos { tipo, persona }
+  // tipo: "coordinador" | "subcoordinador" | "votante"
+  const out = [];
+  const pushUnique = (tipo, persona) => {
+    const key = `${tipo}:${normalizeCI(persona?.ci)}`;
+    if (!pushUnique._set) pushUnique._set = new Set();
+    if (pushUnique._set.has(key)) return;
+    pushUnique._set.add(key);
+    out.push({ tipo, persona });
+  };
+
+  // SUPERADMIN: ve todo
+  if (role === "superadmin") {
+    coords.forEach((p) => pushUnique("coordinador", p));
+    subs.forEach((p) => pushUnique("subcoordinador", p));
+    vots.forEach((p) => pushUnique("votante", p));
+    return out;
+  }
+
+  // COORDINADOR: ve sus subcoordinadores + sus votantes directos + votantes de sus subcoordinadores
+  if (role === "coordinador") {
+    const misSubs = subs.filter((s) => normalizeCI(s.coordinador_ci) === miCI);
+    const misSubsSet = new Set(misSubs.map((s) => normalizeCI(s.ci)));
+
+    misSubs.forEach((p) => pushUnique("subcoordinador", p));
+
+    // votantes directos del coordinador
+    vots
+      .filter((v) => normalizeCI(v.asignado_por) === miCI)
+      .forEach((p) => pushUnique("votante", p));
+
+    // votantes de mis subcoordinadores
+    vots
+      .filter((v) => misSubsSet.has(normalizeCI(v.asignado_por)))
+      .forEach((p) => pushUnique("votante", p));
+
+    return out;
+  }
+
+  // SUBCOORDINADOR: ve solo sus votantes directos
+  if (role === "subcoordinador") {
+    vots
+      .filter((v) => normalizeCI(v.asignado_por) === miCI)
+      .forEach((p) => pushUnique("votante", p));
+
+    return out;
+  }
+
+  // Otros roles: por defecto nada
+  return [];
+}, [estructura, currentUser]);
+
+const resultadosBusqueda = useMemo(() => {
+  const qRaw = normalizeText(searchCI);
+
+  if (!qRaw) return personasVisibles;
+
+  // tokens permite buscar "juan perez" y que encuentre aunque esté como "Perez Juan"
+  const tokens = qRaw.split(" ").filter(Boolean);
+
+  return personasVisibles.filter(({ persona }) => {
+    const ci = normalizeText(persona?.ci);
+    const nombre = normalizeText(persona?.nombre);
+    const apellido = normalizeText(persona?.apellido);
+
+    const full1 = `${nombre} ${apellido}`.trim();
+    const full2 = `${apellido} ${nombre}`.trim();
+
+    // Si el usuario puso varios tokens, exigimos que TODOS estén contenidos
+    return tokens.every((t) => {
+      return (
+        ci.includes(t) ||
+        nombre.includes(t) ||
+        apellido.includes(t) ||
+        full1.includes(t) ||
+        full2.includes(t)
+      );
+    });
+  });
+}, [searchCI, personasVisibles]);
+
+
   // ======================= DESCARGAR REPORTE (HTML → PDF) =======================
 const descargarPDF = () => {
   if (!currentUser) {
@@ -832,17 +902,99 @@ const descargarPDF = () => {
 </button>
 
       </div>
+{/* BUSCADOR INTERNO (solo dentro de la estructura visible por rol) */}
+<div className="max-w-7xl mx-auto px-4 mb-4">
+  <div className="bg-white rounded-lg shadow p-4">
+    <label className="block text-sm font-semibold text-gray-700 mb-2">
+      Buscar dentro de mi estructura
+    </label>
 
-      {/* BUSCADOR (tu componente) */}
-      <BuscadorCI
-            value={searchCI}
-             onChange={setSearchCI}
-            onBuscar={buscarPorCI}
-            resultado={searchResult}
-            onEditarTelefono={abrirTelefono}
-            onEliminar={quitarPersona}
-             currentUser={currentUser}
-        />
+    <input
+      value={searchCI}
+      onChange={(e) => setSearchCI(e.target.value)}
+      placeholder="Buscar por CI, nombre, apellido o combinación"
+      className="w-full border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-red-300"
+    />
+
+    {normalizeText(searchCI) && (
+      <p className="text-xs text-gray-500 mt-2">
+        Resultados: <b>{resultadosBusqueda.length}</b>
+      </p>
+    )}
+  </div>
+</div>
+
+{/* RESULTADOS (solo si hay búsqueda escrita) */}
+{normalizeText(searchCI) && (
+  <div className="max-w-7xl mx-auto px-4 mb-6">
+    <div className="bg-white rounded-lg shadow">
+      <div className="p-4 border-b">
+        <h3 className="font-bold text-gray-800">Resultados de búsqueda</h3>
+        <p className="text-xs text-gray-500">
+          Solo dentro de la estructura permitida para tu rol.
+        </p>
+      </div>
+
+      <div className="p-4 space-y-3">
+        {resultadosBusqueda.length === 0 ? (
+          <div className="text-sm text-gray-600">
+            No se encontraron coincidencias en tu estructura.
+          </div>
+        ) : (
+          resultadosBusqueda.slice(0, 50).map(({ tipo, persona }) => (
+            <div
+              key={`${tipo}-${persona.ci}`}
+              className="border rounded-lg p-3 hover:bg-gray-50"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-semibold text-sm">
+                    {persona.nombre || "-"} {persona.apellido || ""}
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    <b>CI:</b> {persona.ci}{" "}
+                    <span className="ml-2">
+                      <b>Tipo:</b>{" "}
+                      {tipo === "coordinador"
+                        ? "Coordinador"
+                        : tipo === "subcoordinador"
+                        ? "Subcoordinador"
+                        : "Votante"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => abrirTelefono(tipo, persona)}
+                    className="inline-flex items-center justify-center w-10 h-10 border-2 border-green-600 text-green-700 rounded-lg hover:bg-green-50"
+                    title="Editar teléfono"
+                  >
+                    <Phone className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    onClick={() => quitarPersona(tipo, persona)}
+                    className="inline-flex items-center justify-center w-10 h-10 border-2 border-red-600 text-red-700 rounded-lg hover:bg-red-50"
+                    title="Eliminar"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+
+        {resultadosBusqueda.length > 50 && (
+          <div className="text-xs text-gray-500">
+            Mostrando 50 resultados. Refiná la búsqueda para acotar.
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+)}
 
 
       {/* MI ESTRUCTURA (UI REAL) */}
