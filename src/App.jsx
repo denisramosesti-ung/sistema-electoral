@@ -43,8 +43,6 @@ const App = () => {
     }
   }, []);
 
-<<<<<<< HEAD
-=======
   const getPersonasBuscables = () => {
   if (!currentUser || !estructura) return [];
 
@@ -99,7 +97,6 @@ const App = () => {
 };
 
 
->>>>>>> b767552 (Busqueda interna por rol y limpieza buscador CI)
   // ======================= LOGIN =======================
   const handleLogin = async () => {
     const code = loginID.trim();
