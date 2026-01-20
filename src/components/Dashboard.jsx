@@ -251,11 +251,11 @@ const canEliminar = (tipo, persona) => {
 
   // ======================= LOGOUT =======================
   const handleLogout = () => {
-    setExpandedCoords({});
-    setSearchResult(null);
-    setSearchCI("");
-    onLogout?.();
-  };
+  setExpandedCoords({});
+  setSearchCI("");
+  onLogout?.();
+};
+
 
   // ======================= TELÉFONO =======================
 
