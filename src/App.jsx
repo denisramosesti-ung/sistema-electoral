@@ -22,6 +22,12 @@ const SUPERADMINS = [
     nombre: "Victor",
     apellido: "Urunaga",
   },
+  {
+    ci: "2505303",
+    pass: "arzamendia2026",
+    nombre: "Carlos",
+    apellido: "Arzamendia",
+  },
 ];
 
 const App = () => {
