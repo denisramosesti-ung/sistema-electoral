@@ -30,9 +30,9 @@ const SUPERADMINS = [
   },
   {
     ci: "4105072",
-    pass: "Larrosa2026",
+    pass: "Larroza2026",
     nombre: "Rodrigo",
-    apellido: "Larrosa",
+    apellido: "Larroza",
   },
 ];
 
