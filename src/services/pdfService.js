@@ -68,7 +68,7 @@ function addHeader(doc, reportType, userName, logoImg = null) {
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
   doc.setTextColor(...COLOR_BRAND_DARK);
-  doc.text("Jose Chechito Lopez - Concejal 2026", pw / 2, M.top + 8, { align: "center" });
+  doc.text("Rodrigo Larroza - Concejal 2026", pw / 2, M.top + 8, { align: "center" });
 
   // Report type
   doc.setFontSize(10);
