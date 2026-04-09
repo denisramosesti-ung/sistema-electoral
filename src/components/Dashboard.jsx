@@ -27,6 +27,7 @@ import AddPersonModal from "../AddPersonModal";
 import ModalTelefono from "./ModalTelefono";
 import ModalDireccion from "./ModalDireccion";
 import ConfirmVotoModal from "./ConfirmVotoModal";
+import CreateAdminModal from "./CreateAdminModal";
 import {
   generateSuperadminPDF,
   generateCoordinadorPDF,
@@ -312,6 +313,9 @@ const Dashboard = ({ currentUser, onLogout }) => {
   const [isSubUndoing, setIsSubUndoing] = useState(false);
   const [isConfirmSubLoading, setIsConfirmSubLoading] = useState(false);
 
+  // Admin modal state (only for owner)
+  const [createAdminModalOpen, setCreateAdminModalOpen] = useState(false);
+
   const [loadingEstructura, setLoadingEstructura] = useState(true);
 
   // Non-blocking toast notification (replaces alert() to prevent scroll jump)
@@ -431,7 +435,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
   const canEditarTelefono = (tipo, persona) => {
     const role = currentUser?.role;
     if (!role || !persona) return false;
-    if (role === "superadmin") return true;
+    if (role === "superadmin" || role === "owner") return true;
     if (role === "coordinador") {
       const miCoordCI = normalizeCI(currentUser.ci);
       if (tipo === "subcoordinador") return normalizeCI(persona.coordinador_ci) === miCoordCI;
@@ -448,7 +452,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
   const canEliminar = (tipo, persona) => {
     const role = currentUser?.role;
     if (!role || !persona) return false;
-    if (role === "superadmin") return true;
+    if (role === "superadmin" || role === "owner") return true;
     if (role === "coordinador") {
       const miCoordCI = normalizeCI(currentUser.ci);
       if (tipo === "subcoordinador") return normalizeCI(persona.coordinador_ci) === miCoordCI;
@@ -465,7 +469,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
   const canConfirmarVoto = useCallback((votante) => {
     const role = currentUser?.role;
     if (!role || !votante) return false;
-    if (role === "superadmin") return false;
+    if (role === "superadmin" || role === "owner") return false;
     // Coordinador can confirm any voter whose coordinador_ci matches theirs
     // (covers direct voters AND voters assigned by their subcoordinadores)
     if (role === "coordinador") return normalizeCI(votante.coordinador_ci) === normalizeCI(currentUser.ci);
@@ -606,7 +610,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
 
   const guardarTelefono = async () => {
     if (!phoneTarget) return;
-    if (currentUser.role !== "superadmin") {
+    if (currentUser.role !== "superadmin" && currentUser.role !== "owner") {
       if (currentUser.role === "coordinador") {
         const miCI = normalizeCI(currentUser.ci);
         if (normalizeCI(phoneTarget.coordinador_ci) !== miCI) {
@@ -661,7 +665,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
 
   const guardarDireccion = async () => {
     if (!direccionTarget) return;
-    if (currentUser.role !== "superadmin") {
+    if (currentUser.role !== "superadmin" && currentUser.role !== "owner") {
       if (currentUser.role === "coordinador") {
         const miCI = normalizeCI(currentUser.ci);
         if (normalizeCI(direccionTarget.coordinador_ci) !== miCI) {
@@ -709,7 +713,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
     const ci = normalizeCI(persona.ci);
 
     if (modalType === "coordinador") {
-      if (currentUser.role !== "superadmin") { alert("Solo el superadmin puede agregar coordinadores."); return; }
+      if (currentUser.role !== "superadmin" && currentUser.role !== "owner") { alert("Solo el superadmin u owner pueden agregar coordinadores."); return; }
       const accessCode = generarAccessCode(8);
       const { data: inserted, error } = await supabase.from("coordinadores").insert([{
         ci, login_code: accessCode, asignado_por_nombre: "Superadmin",
@@ -792,11 +796,11 @@ const Dashboard = ({ currentUser, onLogout }) => {
   // ======================= QUITAR PERSONA =======================
   const quitarPersona = async (ciRaw, tipo) => {
     if (!window.confirm("¿Quitar persona?")) return;
-    const isSuper = currentUser.role === "superadmin";
+    const isSuper = currentUser.role === "superadmin" || currentUser.role === "owner";
     const ci = normalizeCI(ciRaw);
     try {
       if (tipo === "coordinador") {
-        if (!isSuper) return alert("Solo superadmin.");
+        if (!isSuper) return alert("Solo superadmin u owner.");
         // DB: cascade delete subs and voters under this coord
         await supabase.from("subcoordinadores").delete().eq("coordinador_ci", ci);
         await supabase.from("votantes").delete().eq("coordinador_ci", ci);
@@ -913,7 +917,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
       seen.add(key);
       out.push({ tipo, persona });
     };
-    if (role === "superadmin") {
+    if (role === "superadmin" || role === "owner") {
       coords.forEach((p) => pushUnique("coordinador", p));
       subs.forEach((p) => pushUnique("subcoordinador", p));
       vots.forEach((p) => pushUnique("votante", p));
@@ -957,9 +961,9 @@ const Dashboard = ({ currentUser, onLogout }) => {
     try {
       let doc;
       let filename = "reporte";
-      if (currentUser.role === "superadmin") {
+      if (currentUser.role === "superadmin" || currentUser.role === "owner") {
         doc = await generateSuperadminPDF({ estructura, currentUser });
-        filename = "reporte-superadmin";
+        filename = currentUser.role === "owner" ? "reporte-owner" : "reporte-superadmin";
       } else if (currentUser.role === "coordinador") {
         doc = await generateCoordinadorPDF({ estructura, currentUser });
         filename = "reporte-coordinador";
@@ -980,6 +984,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
 
   // ======================= ROLE LABEL =======================
   const roleLabel = {
+    owner: "Owner",
     superadmin: "Superadmin",
     coordinador: "Coordinador",
     subcoordinador: "Sub-coordinador",
@@ -1019,13 +1024,27 @@ const Dashboard = ({ currentUser, onLogout }) => {
             </div>
           </div>
 
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3 h-9 rounded-lg text-sm font-medium transition-colors shrink-0 border-0 shadow-none"
-          >
-            <LogOut className="w-4 h-4" />
-            <span className="hidden sm:inline">Salir</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Botón Crear Admin - Solo para Owner */}
+            {currentUser.role === "owner" && (
+              <button
+                onClick={() => setCreateAdminModalOpen(true)}
+                className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3 h-9 rounded-lg text-sm font-medium transition-colors border-0 shadow-none"
+                title="Crear nuevo administrador"
+              >
+                <Shield className="w-4 h-4" />
+                <span className="hidden sm:inline">Crear Admin</span>
+              </button>
+            )}
+
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3 h-9 rounded-lg text-sm font-medium transition-colors border-0 shadow-none"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Salir</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -1033,7 +1052,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
 
         {/* =========== STATS CARDS =========== */}
         <section aria-label="Resumen estadístico">
-          {currentUser.role === "superadmin" && (
+          {(currentUser.role === "superadmin" || currentUser.role === "owner") && (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
               <StatCard label="Total red" value={stats?.totalRed} icon={TrendingUp} accent />
               <StatCard label="Coordinadores" value={stats?.coordinadores} icon={Users} />
@@ -1043,7 +1062,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
               <StatCard label="Pendientes" value={stats?.votosPendientes} icon={AlertCircle} />
             </div>
           )}
-          {currentUser.role === "superadmin" && (
+          {(currentUser.role === "superadmin" || currentUser.role === "owner") && (
             <div className="mt-3">
               <VoteProgressCard
                 confirmed={stats?.totalConfirmados}
@@ -1094,7 +1113,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
 
         {/* =========== ACTION BUTTONS =========== */}
         <section className="flex flex-wrap gap-2" aria-label="Acciones">
-          {currentUser.role === "superadmin" && (
+          {(currentUser.role === "superadmin" || currentUser.role === "owner") && (
             <button
               onClick={() => { setModalType("coordinador"); setShowAddModal(true); }}
               className="inline-flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 h-10 rounded-xl text-sm font-medium transition-colors shadow-sm w-full sm:w-auto border-0"
@@ -1281,8 +1300,8 @@ const Dashboard = ({ currentUser, onLogout }) => {
                 </div>
               )}
 
-              {/* ====== SUPERADMIN ====== */}
-              {!loadingEstructura && currentUser.role === "superadmin" && (
+              {/* ====== SUPERADMIN / OWNER ====== */}
+              {!loadingEstructura && (currentUser.role === "superadmin" || currentUser.role === "owner") && (
                 <div className="space-y-2">
                   {(estructura.coordinadores || []).length === 0 && (
                     <div className="text-center py-10">
@@ -1671,6 +1690,14 @@ const Dashboard = ({ currentUser, onLogout }) => {
         titleUndo="Anular Confirmación de Sub"
         descConfirm="¿Está seguro que desea confirmar a este subcoordinador? Esto indica que el subcoordinador ha sido verificado y está activo."
         descUndo="¿Está seguro que desea anular la confirmación de este subcoordinador? El registro volverá al estado pendiente."
+      />
+
+      {/* Create Admin Modal — Only for owner role */}
+      <CreateAdminModal
+        isOpen={createAdminModalOpen}
+        onClose={() => setCreateAdminModalOpen(false)}
+        currentUser={currentUser}
+        onSuccess={() => showToast("Administrador creado exitosamente")}
       />
 
       {/* Non-blocking toast */}

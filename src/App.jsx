@@ -8,32 +8,10 @@ import { ShieldCheck, Eye, EyeOff } from "lucide-react";
 import Dashboard from "./components/Dashboard";
 import { normalizeCI } from "./utils/estructuraHelpers";
 
-// ======================= SUPERADMINS LOCALES =======================
-const SUPERADMINS = [
-  {
-    ci: "4630621",
-    pass: "16052018",
-    nombre: "Denis",
-    apellido: "Ramos",
-  },
-  {
-    ci: "4291234",
-    pass: "112233",
-    nombre: "Victor",
-    apellido: "Urunaga",
-  },
-  {
-    ci: "2505303",
-    pass: "arzamendia2026",
-    nombre: "Carlos",
-    apellido: "Arzamendia",
-  },
-];
-
 const App = () => {
   // ======================= SESIÓN =======================
   const [currentUser, setCurrentUser] = useState(null);
-  const [loginID, setLoginID] = useState("");
+  const [loginUsername, setLoginUsername] = useState("");
   const [loginPass, setLoginPass] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [isLogging, setIsLogging] = useState(false);
@@ -50,43 +28,72 @@ const App = () => {
     }
   }, []);
 
-  const isSuperadminLogin = SUPERADMINS.some((s) => s.ci === loginID.trim());
-
   // ======================= LOGIN =======================
   const handleLogin = async () => {
-    const code = loginID.trim();
-    if (!code) return alert("Ingrese CI o código.");
+    const username = loginUsername.trim();
+    const password = loginPass.trim();
+
+    if (!username) return alert("Ingrese usuario o código de acceso.");
 
     setIsLogging(true);
 
     try {
-      // ======================= SUPERADMIN LOCAL =======================
-      const superadmin = SUPERADMINS.find((s) => s.ci === code);
+      // ======================= FLUJO 1: ADMIN (CON PASSWORD) =======================
+      // Si hay password → SOLO intentar usuarios_admin, NO intentar coordinador/sub
+      if (password) {
+        const { data: admin, error: adminErr } = await supabase
+          .from("usuarios_admin")
+          .select("id,username,role,nombre,apellido")
+          .eq("username", username)
+          .eq("password", password)
+          .maybeSingle();
 
-      if (superadmin) {
-        if (loginPass !== superadmin.pass) {
-          alert("Contraseña incorrecta.");
+        if (adminErr) {
+          console.error("[v0] Error login admin:", adminErr);
+          alert("Error al consultar base de datos.");
+          setIsLogging(false);
           return;
         }
+
+        if (!admin) {
+          alert("Usuario o contraseña incorrectos.");
+          setIsLogging(false);
+          return;
+        }
+
+        // Validación de roles permitidos
+        const rolesPermitidos = ['owner', 'superadmin'];
+        if (!rolesPermitidos.includes(admin.role)) {
+          alert("Rol de usuario no válido.");
+          setIsLogging(false);
+          return;
+        }
+
         const u = {
-          ci: superadmin.ci,
-          nombre: superadmin.nombre,
-          apellido: superadmin.apellido,
-          role: "superadmin",
+          username: admin.username,
+          nombre: admin.nombre || "Admin",
+          apellido: admin.apellido || "",
+          role: admin.role,
         };
         setCurrentUser(u);
         localStorage.setItem("currentUser", JSON.stringify(u));
+        setIsLogging(false);
         return;
       }
 
-      // ======================= COORDINADOR =======================
+      // ======================= FLUJO 2: COORDINADOR/SUBCOORDINADOR (SIN PASSWORD) =======================
+      // Si NO hay password → SOLO intentar coordinador/sub, NO intentar admin
+      
+      // Intentar como coordinador
       const { data: coord, error: coordErr } = await supabase
         .from("coordinadores")
         .select("ci,login_code,telefono,padron(*)")
-        .eq("login_code", code)
+        .eq("login_code", username)
         .maybeSingle();
 
-      if (coordErr) console.error("Error login coord:", coordErr);
+      if (coordErr) {
+        console.error("[v0] Error login coord:", coordErr);
+      }
 
       if (coord?.padron) {
         const u = {
@@ -98,17 +105,20 @@ const App = () => {
         };
         setCurrentUser(u);
         localStorage.setItem("currentUser", JSON.stringify(u));
+        setIsLogging(false);
         return;
       }
 
-      // ======================= SUBCOORDINADOR =======================
+      // Intentar como subcoordinador
       const { data: sub, error: subErr } = await supabase
         .from("subcoordinadores")
         .select("ci,login_code,telefono,coordinador_ci,padron(*)")
-        .eq("login_code", code)
+        .eq("login_code", username)
         .maybeSingle();
 
-      if (subErr) console.error("Error login sub:", subErr);
+      if (subErr) {
+        console.error("[v0] Error login sub:", subErr);
+      }
 
       if (sub?.padron) {
         const u = {
@@ -120,11 +130,16 @@ const App = () => {
         };
         setCurrentUser(u);
         localStorage.setItem("currentUser", JSON.stringify(u));
+        setIsLogging(false);
         return;
       }
 
-      alert("Usuario no encontrado.");
-    } finally {
+      // No se encontró el código
+      alert("Código de acceso no encontrado.");
+      setIsLogging(false);
+    } catch (err) {
+      console.error("[v0] Error en login:", err);
+      alert("Error al iniciar sesión.");
       setIsLogging(false);
     }
   };
@@ -136,7 +151,7 @@ const App = () => {
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem("currentUser");
-    setLoginID("");
+    setLoginUsername("");
     setLoginPass("");
   };
 
@@ -175,34 +190,34 @@ const App = () => {
 
           {/* Form */}
           <div className="px-8 py-7 space-y-5">
-            {/* CI / Código */}
+            {/* Username */}
             <div>
               <label
-                htmlFor="loginID"
+                htmlFor="loginUsername"
                 className="block text-sm font-medium text-slate-700 mb-1.5"
               >
-                CI o Código de Acceso
+                Usuario
               </label>
               <input
-                id="loginID"
+                id="loginUsername"
                 type="text"
-                value={loginID}
-                onChange={(e) => setLoginID(e.target.value)}
+                value={loginUsername}
+                onChange={(e) => setLoginUsername(e.target.value)}
                 onKeyDown={handleKeyDown}
                 className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50 placeholder-slate-400"
-                placeholder="Ej: A1B2C3D4"
+                placeholder="Usuario o código de acceso"
                 autoComplete="username"
               />
             </div>
 
-            {/* Contraseña — solo superadmin */}
-            {isSuperadminLogin && (
+            {/* Password - conditional */}
+            {loginUsername && (
               <div className="animate-fade-in">
                 <label
                   htmlFor="loginPass"
                   className="block text-sm font-medium text-slate-700 mb-1.5"
                 >
-                  Contraseña Superadmin
+                  Contraseña
                 </label>
                 <div className="relative">
                   <input
@@ -253,9 +268,9 @@ const App = () => {
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-600 space-y-1">
               <p className="font-semibold text-slate-700 mb-2">Instrucciones</p>
               <ol className="list-decimal ml-4 space-y-1 leading-relaxed">
-                <li>Ingrese su CI o código de acceso proporcionado.</li>
-                <li>Los superadmins deben ingresar su contraseña.</li>
-                <li>Ante dudas, comuníquese con el administrador.</li>
+                <li>Ingrese su usuario o código de acceso en el primer campo.</li>
+                <li>Si tiene contraseña (administradores), ingrese su contraseña cuando aparezca el campo.</li>
+                <li>Si solo tiene código de acceso (coordinadores/subcoordinadores), presione "Iniciar Sesión" directamente.</li>
               </ol>
             </div>
           </div>
