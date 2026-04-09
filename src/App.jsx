@@ -41,6 +41,8 @@ const App = () => {
       // ======================= FLUJO 1: ADMIN (CON PASSWORD) =======================
       // Si hay password → SOLO intentar usuarios_admin, NO intentar coordinador/sub
       if (password) {
+        console.log("[v0] Admin login attempt", { username });
+
         const { data: admin, error: adminErr } = await supabase
           .from("usuarios_admin")
           .select("id,username,role,nombre,apellido")
@@ -49,13 +51,14 @@ const App = () => {
           .maybeSingle();
 
         if (adminErr) {
-          console.error("[v0] Error login admin:", adminErr);
+          console.error("[v0] Admin login failed - Database error:", adminErr);
           alert("Error al consultar base de datos.");
           setIsLogging(false);
           return;
         }
 
         if (!admin) {
+          console.log("[v0] Admin login failed - Invalid credentials");
           alert("Usuario o contraseña incorrectos.");
           setIsLogging(false);
           return;
@@ -64,10 +67,17 @@ const App = () => {
         // Validación de roles permitidos
         const rolesPermitidos = ['owner', 'superadmin'];
         if (!rolesPermitidos.includes(admin.role)) {
+          console.error("[v0] Admin login failed - Invalid role:", admin.role);
           alert("Rol de usuario no válido.");
           setIsLogging(false);
           return;
         }
+
+        console.log("[v0] Admin login success", { 
+          username: admin.username, 
+          role: admin.role,
+          nombre: admin.nombre 
+        });
 
         const u = {
           username: admin.username,
