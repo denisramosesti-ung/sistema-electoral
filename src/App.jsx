@@ -41,6 +41,8 @@ const App = () => {
       // ======================= FLUJO 1: ADMIN (CON PASSWORD) =======================
       // Si hay password → SOLO intentar usuarios_admin, NO intentar coordinador/sub
       if (password) {
+        console.log("[v0] Admin login attempt", { username });
+
         const { data: admin, error: adminErr } = await supabase
           .from("usuarios_admin")
           .select("id,username,role,nombre,apellido")
@@ -49,13 +51,14 @@ const App = () => {
           .maybeSingle();
 
         if (adminErr) {
-          console.error("[v0] Error login admin:", adminErr);
+          console.error("[v0] Admin login failed - Database error:", adminErr);
           alert("Error al consultar base de datos.");
           setIsLogging(false);
           return;
         }
 
         if (!admin) {
+          console.log("[v0] Admin login failed - Invalid credentials");
           alert("Usuario o contraseña incorrectos.");
           setIsLogging(false);
           return;
@@ -64,10 +67,17 @@ const App = () => {
         // Validación de roles permitidos
         const rolesPermitidos = ['owner', 'superadmin'];
         if (!rolesPermitidos.includes(admin.role)) {
+          console.error("[v0] Admin login failed - Invalid role:", admin.role);
           alert("Rol de usuario no válido.");
           setIsLogging(false);
           return;
         }
+
+        console.log("[v0] Admin login success", { 
+          username: admin.username, 
+          role: admin.role,
+          nombre: admin.nombre 
+        });
 
         const u = {
           username: admin.username,
@@ -190,13 +200,13 @@ const App = () => {
 
           {/* Form */}
           <div className="px-8 py-7 space-y-5">
-            {/* Username */}
+            {/* Usuario / Código */}
             <div>
               <label
                 htmlFor="loginUsername"
                 className="block text-sm font-medium text-slate-700 mb-1.5"
               >
-                Usuario
+                Usuario / Código
               </label>
               <input
                 id="loginUsername"
@@ -210,41 +220,39 @@ const App = () => {
               />
             </div>
 
-            {/* Password - conditional */}
-            {loginUsername && (
-              <div className="animate-fade-in">
-                <label
-                  htmlFor="loginPass"
-                  className="block text-sm font-medium text-slate-700 mb-1.5"
+            {/* Contraseña (opcional) - siempre visible */}
+            <div>
+              <label
+                htmlFor="loginPass"
+                className="block text-sm font-medium text-slate-700 mb-1.5"
+              >
+                Contraseña <span className="text-slate-500 font-normal">(opcional)</span>
+              </label>
+              <div className="relative">
+                <input
+                  id="loginPass"
+                  type={showPass ? "text" : "password"}
+                  value={loginPass}
+                  onChange={(e) => setLoginPass(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="w-full px-4 py-2.5 pr-11 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50 placeholder-slate-400"
+                  placeholder="Solo para administradores"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPass((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0 border-0 bg-transparent shadow-none"
+                  aria-label={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
                 >
-                  Contraseña
-                </label>
-                <div className="relative">
-                  <input
-                    id="loginPass"
-                    type={showPass ? "text" : "password"}
-                    value={loginPass}
-                    onChange={(e) => setLoginPass(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    className="w-full px-4 py-2.5 pr-11 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50 placeholder-slate-400"
-                    placeholder="Ingrese contraseña"
-                    autoComplete="current-password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPass((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0 border-0 bg-transparent shadow-none"
-                    aria-label={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
-                  >
-                    {showPass ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
+                  {showPass ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
               </div>
-            )}
+            </div>
 
             {/* Submit */}
             <button
@@ -265,13 +273,17 @@ const App = () => {
 
           {/* Footer note */}
           <div className="px-8 pb-7">
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-600 space-y-1">
-              <p className="font-semibold text-slate-700 mb-2">Instrucciones</p>
-              <ol className="list-decimal ml-4 space-y-1 leading-relaxed">
-                <li>Ingrese su usuario o código de acceso en el primer campo.</li>
-                <li>Si tiene contraseña (administradores), ingrese su contraseña cuando aparezca el campo.</li>
-                <li>Si solo tiene código de acceso (coordinadores/subcoordinadores), presione "Iniciar Sesión" directamente.</li>
-              </ol>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-600">
+              <ul className="space-y-1.5 leading-relaxed">
+                <li className="flex items-start gap-2">
+                  <span className="text-brand-600 font-bold mt-0.5">•</span>
+                  <span><strong className="text-slate-700">Administradores</strong> deben ingresar usuario y contraseña.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-brand-600 font-bold mt-0.5">•</span>
+                  <span><strong className="text-slate-700">Coordinadores y subcoordinadores</strong> deben ingresar solo su código de acceso.</span>
+                </li>
+              </ul>
             </div>
           </div>
         </div>
