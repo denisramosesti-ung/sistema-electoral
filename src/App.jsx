@@ -11,9 +11,8 @@ import { normalizeCI } from "./utils/estructuraHelpers";
 const App = () => {
   // ======================= SESIÓN =======================
   const [currentUser, setCurrentUser] = useState(null);
-  const [loginID, setLoginID] = useState("");
-  const [loginPass, setLoginPass] = useState("");
   const [loginUsername, setLoginUsername] = useState("");
+  const [loginPass, setLoginPass] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [isLogging, setIsLogging] = useState(false);
 
@@ -31,15 +30,17 @@ const App = () => {
 
   // ======================= LOGIN =======================
   const handleLogin = async () => {
-    const code = loginID.trim();
     const username = loginUsername.trim();
     const password = loginPass.trim();
 
-    // ======================= ADMIN LOGIN (USUARIOS_ADMIN) =======================
-    // Intentar primero con username + password si están presentes
-    if (username && password) {
-      setIsLogging(true);
-      try {
+    if (!username) return alert("Ingrese usuario o código de acceso.");
+
+    setIsLogging(true);
+
+    try {
+      // ======================= ADMIN LOGIN (CON PASSWORD) =======================
+      // Si hay password, intentar login como admin
+      if (password) {
         const { data: admin, error: adminErr } = await supabase
           .from("usuarios_admin")
           .select("id,username,role,nombre,apellido")
@@ -64,7 +65,7 @@ const App = () => {
             username: admin.username,
             nombre: admin.nombre || "Admin",
             apellido: admin.apellido || "",
-            role: admin.role, // 'owner' o 'superadmin'
+            role: admin.role,
           };
           setCurrentUser(u);
           localStorage.setItem("currentUser", JSON.stringify(u));
@@ -75,24 +76,16 @@ const App = () => {
           setIsLogging(false);
           return;
         }
-      } catch (err) {
-        console.error("[v0] Error en login admin:", err);
-        setIsLogging(false);
-        return;
       }
-    }
 
-    // ======================= COORDINADOR/SUBCOORDINADOR LOGIN =======================
-    if (!code) return alert("Ingrese CI o código.");
-
-    setIsLogging(true);
-
-    try {
-      // ======================= COORDINADOR =======================
+      // ======================= COORDINADOR/SUBCOORDINADOR LOGIN (SIN PASSWORD) =======================
+      // Si no hay password, usar el username como código de acceso
+      
+      // Intentar como coordinador
       const { data: coord, error: coordErr } = await supabase
         .from("coordinadores")
         .select("ci,login_code,telefono,padron(*)")
-        .eq("login_code", code)
+        .eq("login_code", username)
         .maybeSingle();
 
       if (coordErr) console.error("Error login coord:", coordErr);
@@ -107,14 +100,15 @@ const App = () => {
         };
         setCurrentUser(u);
         localStorage.setItem("currentUser", JSON.stringify(u));
+        setIsLogging(false);
         return;
       }
 
-      // ======================= SUBCOORDINADOR =======================
+      // Intentar como subcoordinador
       const { data: sub, error: subErr } = await supabase
         .from("subcoordinadores")
         .select("ci,login_code,telefono,coordinador_ci,padron(*)")
-        .eq("login_code", code)
+        .eq("login_code", username)
         .maybeSingle();
 
       if (subErr) console.error("Error login sub:", subErr);
@@ -129,10 +123,14 @@ const App = () => {
         };
         setCurrentUser(u);
         localStorage.setItem("currentUser", JSON.stringify(u));
+        setIsLogging(false);
         return;
       }
 
-      alert("Usuario no encontrado.");
+      alert("Código de acceso no encontrado.");
+    } catch (err) {
+      console.error("[v0] Error en login:", err);
+      alert("Error al iniciar sesión.");
     } finally {
       setIsLogging(false);
     }
@@ -145,9 +143,8 @@ const App = () => {
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem("currentUser");
-    setLoginID("");
-    setLoginPass("");
     setLoginUsername("");
+    setLoginPass("");
   };
 
   // ======================= DASHBOARD =======================
@@ -185,100 +182,59 @@ const App = () => {
 
           {/* Form */}
           <div className="px-8 py-7 space-y-5">
-            {/* Admin Login Section */}
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-              <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
-                Login Administrativo (Opcional)
-              </p>
-              
-              {/* Username */}
-              <div>
-                <label
-                  htmlFor="loginUsername"
-                  className="block text-sm font-medium text-slate-700 mb-1.5"
-                >
-                  Usuario Admin
-                </label>
-                <input
-                  id="loginUsername"
-                  type="text"
-                  value={loginUsername}
-                  onChange={(e) => setLoginUsername(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white placeholder-slate-400"
-                  placeholder="Usuario"
-                  autoComplete="username"
-                />
-              </div>
-
-              {/* Admin Password */}
-              {loginUsername && (
-                <div className="animate-fade-in">
-                  <label
-                    htmlFor="loginAdminPass"
-                    className="block text-sm font-medium text-slate-700 mb-1.5"
-                  >
-                    Contraseña Admin
-                  </label>
-                  <div className="relative">
-                    <input
-                      id="loginAdminPass"
-                      type={showPass ? "text" : "password"}
-                      value={loginPass}
-                      onChange={(e) => setLoginPass(e.target.value)}
-                      onKeyDown={handleKeyDown}
-                      className="w-full px-4 py-2.5 pr-11 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white placeholder-slate-400"
-                      placeholder="Contraseña"
-                      autoComplete="current-password"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPass((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0 border-0 bg-transparent shadow-none"
-                      aria-label={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
-                    >
-                      {showPass ? (
-                        <EyeOff className="w-4 h-4" />
-                      ) : (
-                        <Eye className="w-4 h-4" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-              )}
+            {/* Username */}
+            <div>
+              <label
+                htmlFor="loginUsername"
+                className="block text-sm font-medium text-slate-700 mb-1.5"
+              >
+                Usuario
+              </label>
+              <input
+                id="loginUsername"
+                type="text"
+                value={loginUsername}
+                onChange={(e) => setLoginUsername(e.target.value)}
+                onKeyDown={handleKeyDown}
+                className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50 placeholder-slate-400"
+                placeholder="Usuario o código de acceso"
+                autoComplete="username"
+              />
             </div>
 
-            {/* Divider */}
-            {!loginUsername && (
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-200"></div>
-                </div>
-                <div className="relative flex justify-center text-xs">
-                  <span className="px-2 bg-white text-slate-500">o usar código de acceso</span>
-                </div>
-              </div>
-            )}
-
-            {/* CI / Código */}
-            {!loginUsername && (
-              <div>
+            {/* Password - conditional */}
+            {loginUsername && (
+              <div className="animate-fade-in">
                 <label
-                  htmlFor="loginID"
+                  htmlFor="loginPass"
                   className="block text-sm font-medium text-slate-700 mb-1.5"
                 >
-                  CI o Código de Acceso
+                  Contraseña
                 </label>
-                <input
-                  id="loginID"
-                  type="text"
-                  value={loginID}
-                  onChange={(e) => setLoginID(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50 placeholder-slate-400"
-                  placeholder="Ej: A1B2C3D4"
-                  autoComplete="off"
-                />
+                <div className="relative">
+                  <input
+                    id="loginPass"
+                    type={showPass ? "text" : "password"}
+                    value={loginPass}
+                    onChange={(e) => setLoginPass(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    className="w-full px-4 py-2.5 pr-11 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50 placeholder-slate-400"
+                    placeholder="Ingrese contraseña"
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0 border-0 bg-transparent shadow-none"
+                    aria-label={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  >
+                    {showPass ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -304,9 +260,9 @@ const App = () => {
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-600 space-y-1">
               <p className="font-semibold text-slate-700 mb-2">Instrucciones</p>
               <ol className="list-decimal ml-4 space-y-1 leading-relaxed">
-                <li>Administradores: usar usuario y contraseña admin.</li>
-                <li>Coordinadores/Subcoords: usar código de acceso proporcionado.</li>
-                <li>Ante dudas, comuníquese con el administrador.</li>
+                <li>Ingrese su usuario o código de acceso en el primer campo.</li>
+                <li>Si tiene contraseña (administradores), ingrese su contraseña cuando aparezca el campo.</li>
+                <li>Si solo tiene código de acceso (coordinadores/subcoordinadores), presione "Iniciar Sesión" directamente.</li>
               </ol>
             </div>
           </div>
