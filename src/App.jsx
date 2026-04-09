@@ -38,8 +38,8 @@ const App = () => {
     setIsLogging(true);
 
     try {
-      // ======================= ADMIN LOGIN (CON PASSWORD) =======================
-      // Si hay password, intentar login como admin
+      // ======================= FLUJO 1: ADMIN (CON PASSWORD) =======================
+      // Si hay password → SOLO intentar usuarios_admin, NO intentar coordinador/sub
       if (password) {
         const { data: admin, error: adminErr } = await supabase
           .from("usuarios_admin")
@@ -50,36 +50,39 @@ const App = () => {
 
         if (adminErr) {
           console.error("[v0] Error login admin:", adminErr);
-        }
-
-        if (admin) {
-          // Validación de roles permitidos
-          const rolesPermitidos = ['owner', 'superadmin'];
-          if (!rolesPermitidos.includes(admin.role)) {
-            alert("Rol de usuario no válido.");
-            setIsLogging(false);
-            return;
-          }
-
-          const u = {
-            username: admin.username,
-            nombre: admin.nombre || "Admin",
-            apellido: admin.apellido || "",
-            role: admin.role,
-          };
-          setCurrentUser(u);
-          localStorage.setItem("currentUser", JSON.stringify(u));
+          alert("Error al consultar base de datos.");
           setIsLogging(false);
           return;
-        } else {
+        }
+
+        if (!admin) {
           alert("Usuario o contraseña incorrectos.");
           setIsLogging(false);
           return;
         }
+
+        // Validación de roles permitidos
+        const rolesPermitidos = ['owner', 'superadmin'];
+        if (!rolesPermitidos.includes(admin.role)) {
+          alert("Rol de usuario no válido.");
+          setIsLogging(false);
+          return;
+        }
+
+        const u = {
+          username: admin.username,
+          nombre: admin.nombre || "Admin",
+          apellido: admin.apellido || "",
+          role: admin.role,
+        };
+        setCurrentUser(u);
+        localStorage.setItem("currentUser", JSON.stringify(u));
+        setIsLogging(false);
+        return;
       }
 
-      // ======================= COORDINADOR/SUBCOORDINADOR LOGIN (SIN PASSWORD) =======================
-      // Si no hay password, usar el username como código de acceso
+      // ======================= FLUJO 2: COORDINADOR/SUBCOORDINADOR (SIN PASSWORD) =======================
+      // Si NO hay password → SOLO intentar coordinador/sub, NO intentar admin
       
       // Intentar como coordinador
       const { data: coord, error: coordErr } = await supabase
@@ -88,7 +91,9 @@ const App = () => {
         .eq("login_code", username)
         .maybeSingle();
 
-      if (coordErr) console.error("Error login coord:", coordErr);
+      if (coordErr) {
+        console.error("[v0] Error login coord:", coordErr);
+      }
 
       if (coord?.padron) {
         const u = {
@@ -111,7 +116,9 @@ const App = () => {
         .eq("login_code", username)
         .maybeSingle();
 
-      if (subErr) console.error("Error login sub:", subErr);
+      if (subErr) {
+        console.error("[v0] Error login sub:", subErr);
+      }
 
       if (sub?.padron) {
         const u = {
@@ -127,11 +134,12 @@ const App = () => {
         return;
       }
 
+      // No se encontró el código
       alert("Código de acceso no encontrado.");
+      setIsLogging(false);
     } catch (err) {
       console.error("[v0] Error en login:", err);
       alert("Error al iniciar sesión.");
-    } finally {
       setIsLogging(false);
     }
   };
