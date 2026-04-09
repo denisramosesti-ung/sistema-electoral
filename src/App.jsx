@@ -35,6 +35,7 @@ const App = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loginID, setLoginID] = useState("");
   const [loginPass, setLoginPass] = useState("");
+  const [loginUsername, setLoginUsername] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [isLogging, setIsLogging] = useState(false);
 
@@ -55,6 +56,49 @@ const App = () => {
   // ======================= LOGIN =======================
   const handleLogin = async () => {
     const code = loginID.trim();
+    const username = loginUsername.trim();
+    const password = loginPass.trim();
+
+    // ======================= ADMIN LOGIN (USUARIOS_ADMIN) =======================
+    // Intentar primero con username + password si están presentes
+    if (username && password) {
+      setIsLogging(true);
+      try {
+        const { data: admin, error: adminErr } = await supabase
+          .from("usuarios_admin")
+          .select("id,username,role,nombre,apellido")
+          .eq("username", username)
+          .eq("password", password)
+          .maybeSingle();
+
+        if (adminErr) {
+          console.error("[v0] Error login admin:", adminErr);
+        }
+
+        if (admin) {
+          const u = {
+            username: admin.username,
+            nombre: admin.nombre || "Admin",
+            apellido: admin.apellido || "",
+            role: admin.role, // 'owner' o 'superadmin'
+          };
+          setCurrentUser(u);
+          localStorage.setItem("currentUser", JSON.stringify(u));
+          setIsLogging(false);
+          return;
+        } else {
+          alert("Usuario o contraseña incorrectos.");
+          setIsLogging(false);
+          return;
+        }
+      } catch (err) {
+        console.error("[v0] Error en login admin:", err);
+        setIsLogging(false);
+        return;
+      }
+    }
+
+    // ======================= FLUJO ACTUAL (NO MODIFICADO) =======================
     if (!code) return alert("Ingrese CI o código.");
 
     setIsLogging(true);
@@ -138,6 +182,7 @@ const App = () => {
     localStorage.removeItem("currentUser");
     setLoginID("");
     setLoginPass("");
+    setLoginUsername("");
   };
 
   // ======================= DASHBOARD =======================
@@ -175,28 +220,105 @@ const App = () => {
 
           {/* Form */}
           <div className="px-8 py-7 space-y-5">
-            {/* CI / Código */}
-            <div>
-              <label
-                htmlFor="loginID"
-                className="block text-sm font-medium text-slate-700 mb-1.5"
-              >
-                CI o Código de Acceso
-              </label>
-              <input
-                id="loginID"
-                type="text"
-                value={loginID}
-                onChange={(e) => setLoginID(e.target.value)}
-                onKeyDown={handleKeyDown}
-                className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50 placeholder-slate-400"
-                placeholder="Ej: A1B2C3D4"
-                autoComplete="username"
-              />
+            {/* Admin Login Section */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+              <p className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                Login Administrativo (Opcional)
+              </p>
+              
+              {/* Username */}
+              <div>
+                <label
+                  htmlFor="loginUsername"
+                  className="block text-sm font-medium text-slate-700 mb-1.5"
+                >
+                  Usuario Admin
+                </label>
+                <input
+                  id="loginUsername"
+                  type="text"
+                  value={loginUsername}
+                  onChange={(e) => setLoginUsername(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white placeholder-slate-400"
+                  placeholder="Usuario"
+                  autoComplete="username"
+                />
+              </div>
+
+              {/* Admin Password */}
+              {loginUsername && (
+                <div className="animate-fade-in">
+                  <label
+                    htmlFor="loginAdminPass"
+                    className="block text-sm font-medium text-slate-700 mb-1.5"
+                  >
+                    Contraseña Admin
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="loginAdminPass"
+                      type={showPass ? "text" : "password"}
+                      value={loginPass}
+                      onChange={(e) => setLoginPass(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                      className="w-full px-4 py-2.5 pr-11 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-white placeholder-slate-400"
+                      placeholder="Contraseña"
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPass((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0 border-0 bg-transparent shadow-none"
+                      aria-label={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    >
+                      {showPass ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Contraseña — solo superadmin */}
-            {isSuperadminLogin && (
+            {/* Divider */}
+            {!loginUsername && (
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-slate-200"></div>
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="px-2 bg-white text-slate-500">o usar código de acceso</span>
+                </div>
+              </div>
+            )}
+
+            {/* CI / Código */}
+            {!loginUsername && (
+              <div>
+                <label
+                  htmlFor="loginID"
+                  className="block text-sm font-medium text-slate-700 mb-1.5"
+                >
+                  CI o Código de Acceso
+                </label>
+                <input
+                  id="loginID"
+                  type="text"
+                  value={loginID}
+                  onChange={(e) => setLoginID(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50 placeholder-slate-400"
+                  placeholder="Ej: A1B2C3D4"
+                  autoComplete="off"
+                />
+              </div>
+            )}
+
+            {/* Contraseña — solo superadmin local (CI-based) */}
+            {!loginUsername && isSuperadminLogin && (
               <div className="animate-fade-in">
                 <label
                   htmlFor="loginPass"
@@ -253,8 +375,9 @@ const App = () => {
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-600 space-y-1">
               <p className="font-semibold text-slate-700 mb-2">Instrucciones</p>
               <ol className="list-decimal ml-4 space-y-1 leading-relaxed">
-                <li>Ingrese su CI o código de acceso proporcionado.</li>
-                <li>Los superadmins deben ingresar su contraseña.</li>
+                <li>Administradores: usar usuario y contraseña admin.</li>
+                <li>Coordinadores/Subcoords: usar código de acceso proporcionado.</li>
+                <li>Superadmins locales: ingresar CI y contraseña.</li>
                 <li>Ante dudas, comuníquese con el administrador.</li>
               </ol>
             </div>
