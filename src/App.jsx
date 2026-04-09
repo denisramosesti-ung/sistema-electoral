@@ -8,28 +8,6 @@ import { ShieldCheck, Eye, EyeOff } from "lucide-react";
 import Dashboard from "./components/Dashboard";
 import { normalizeCI } from "./utils/estructuraHelpers";
 
-// ======================= SUPERADMINS LOCALES =======================
-const SUPERADMINS = [
-  {
-    ci: "4630621",
-    pass: "16052018",
-    nombre: "Denis",
-    apellido: "Ramos",
-  },
-  {
-    ci: "4291234",
-    pass: "112233",
-    nombre: "Victor",
-    apellido: "Urunaga",
-  },
-  {
-    ci: "2505303",
-    pass: "arzamendia2026",
-    nombre: "Carlos",
-    apellido: "Arzamendia",
-  },
-];
-
 const App = () => {
   // ======================= SESIÓN =======================
   const [currentUser, setCurrentUser] = useState(null);
@@ -50,8 +28,6 @@ const App = () => {
       console.error("Error leyendo sesión local:", e);
     }
   }, []);
-
-  const isSuperadminLogin = SUPERADMINS.some((s) => s.ci === loginID.trim());
 
   // ======================= LOGIN =======================
   const handleLogin = async () => {
@@ -76,6 +52,14 @@ const App = () => {
         }
 
         if (admin) {
+          // Validación de roles permitidos
+          const rolesPermitidos = ['owner', 'superadmin'];
+          if (!rolesPermitidos.includes(admin.role)) {
+            alert("Rol de usuario no válido.");
+            setIsLogging(false);
+            return;
+          }
+
           const u = {
             username: admin.username,
             nombre: admin.nombre || "Admin",
@@ -98,31 +82,12 @@ const App = () => {
       }
     }
 
-    // ======================= FLUJO ACTUAL (NO MODIFICADO) =======================
+    // ======================= COORDINADOR/SUBCOORDINADOR LOGIN =======================
     if (!code) return alert("Ingrese CI o código.");
 
     setIsLogging(true);
 
     try {
-      // ======================= SUPERADMIN LOCAL =======================
-      const superadmin = SUPERADMINS.find((s) => s.ci === code);
-
-      if (superadmin) {
-        if (loginPass !== superadmin.pass) {
-          alert("Contraseña incorrecta.");
-          return;
-        }
-        const u = {
-          ci: superadmin.ci,
-          nombre: superadmin.nombre,
-          apellido: superadmin.apellido,
-          role: "superadmin",
-        };
-        setCurrentUser(u);
-        localStorage.setItem("currentUser", JSON.stringify(u));
-        return;
-      }
-
       // ======================= COORDINADOR =======================
       const { data: coord, error: coordErr } = await supabase
         .from("coordinadores")
@@ -317,42 +282,6 @@ const App = () => {
               </div>
             )}
 
-            {/* Contraseña — solo superadmin local (CI-based) */}
-            {!loginUsername && isSuperadminLogin && (
-              <div className="animate-fade-in">
-                <label
-                  htmlFor="loginPass"
-                  className="block text-sm font-medium text-slate-700 mb-1.5"
-                >
-                  Contraseña Superadmin
-                </label>
-                <div className="relative">
-                  <input
-                    id="loginPass"
-                    type={showPass ? "text" : "password"}
-                    value={loginPass}
-                    onChange={(e) => setLoginPass(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    className="w-full px-4 py-2.5 pr-11 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50 placeholder-slate-400"
-                    placeholder="Ingrese contraseña"
-                    autoComplete="current-password"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPass((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0 border-0 bg-transparent shadow-none"
-                    aria-label={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
-                  >
-                    {showPass ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
-
             {/* Submit */}
             <button
               onClick={handleLogin}
@@ -377,7 +306,6 @@ const App = () => {
               <ol className="list-decimal ml-4 space-y-1 leading-relaxed">
                 <li>Administradores: usar usuario y contraseña admin.</li>
                 <li>Coordinadores/Subcoords: usar código de acceso proporcionado.</li>
-                <li>Superadmins locales: ingresar CI y contraseña.</li>
                 <li>Ante dudas, comuníquese con el administrador.</li>
               </ol>
             </div>
