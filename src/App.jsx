@@ -48,7 +48,7 @@ const App = () => {
 
         const { data: admin, error: adminErr } = await supabase
           .from("usuarios_admin")
-          .select("id,username,rol,nombre,apellido")
+          .select("id,username,rol")
           .eq("username", username)
           .eq("password", password)
           .maybeSingle();
@@ -92,14 +92,13 @@ const App = () => {
 
         console.log("[v0] Admin login success", { 
           username: admin.username, 
-          rol: admin.rol,
-          nombre: admin.nombre 
+          rol: admin.rol
         });
 
         const u = {
           username: admin.username,
-          nombre: admin.nombre || "Admin",
-          apellido: admin.apellido || "",
+          nombre: admin.username,
+          apellido: "",
           role: admin.rol,
         };
         setCurrentUser(u);

@@ -9,8 +9,6 @@ import { supabase } from "../supabaseClient";
  * @param {string} adminData.username - Nombre de usuario único
  * @param {string} adminData.password - Contraseña
  * @param {string} adminData.rol - 'owner' o 'superadmin'
- * @param {string} [adminData.nombre] - Nombre opcional
- * @param {string} [adminData.apellido] - Apellido opcional
  * @returns {Promise<{success: boolean, message: string, data?: Object}>}
  */
 export async function crearUsuarioAdmin(currentUser, adminData) {
@@ -68,8 +66,6 @@ export async function crearUsuarioAdmin(currentUser, adminData) {
         username: adminData.username,
         password: adminData.password, // NOTA: En producción, usar hashing seguro
         rol: adminData.rol,
-        nombre: adminData.nombre || null,
-        apellido: adminData.apellido || null,
       })
       .select()
       .single();
