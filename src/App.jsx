@@ -32,10 +32,11 @@ const App = () => {
 
   // ======================= VERIFICACIÓN ADMIN EN TIEMPO REAL =======================
   useEffect(() => {
-    const username = loginUsername.trim();
+    const username = loginUsername.trim().toLowerCase();
     
     if (!username) {
       setIsAdmin(false);
+      console.log("[v0] isAdminUser:", false, "(no username)");
       return;
     }
 
@@ -46,17 +47,16 @@ const App = () => {
         const { data, error } = await supabase
           .from("usuarios_admin")
           .select("id")
-          .eq("username", username)
+          .ilike("username", username)
           .maybeSingle();
 
-        if (!error && data) {
-          setIsAdmin(true);
-        } else {
-          setIsAdmin(false);
-        }
+        const isAdminUser = !error && !!data;
+        setIsAdmin(isAdminUser);
+        console.log("[v0] isAdminUser:", isAdminUser, "for username:", username);
       } catch (err) {
         console.error("[v0] Error checking admin:", err);
         setIsAdmin(false);
+        console.log("[v0] isAdminUser:", false, "(error)");
       } finally {
         setCheckingAdmin(false);
       }
@@ -276,31 +276,26 @@ const App = () => {
               />
             </div>
 
-            {/* Contraseña - habilitada dinámicamente para admins */}
-            <div>
-              <label
-                htmlFor="loginPass"
-                className="block text-sm font-medium text-slate-700 mb-1.5"
-              >
-                Contraseña {!isAdmin && <span className="text-slate-500 font-normal">(solo administradores)</span>}
-              </label>
-              <div className="relative">
-                <input
-                  id="loginPass"
-                  type={showPass ? "text" : "password"}
-                  value={loginPass}
-                  onChange={(e) => setLoginPass(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  disabled={!isAdmin}
-                  className={`w-full px-4 py-2.5 pr-11 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent placeholder-slate-400 ${
-                    isAdmin 
-                      ? "bg-slate-50 border-slate-300" 
-                      : "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed"
-                  }`}
-                  placeholder={isAdmin ? "Ingrese contraseña" : "Solo para administradores"}
-                  autoComplete="current-password"
-                />
-                {isAdmin && (
+            {/* Contraseña - visible SOLO para admins */}
+            {isAdmin && (
+              <div>
+                <label
+                  htmlFor="loginPass"
+                  className="block text-sm font-medium text-slate-700 mb-1.5"
+                >
+                  Contraseña
+                </label>
+                <div className="relative">
+                  <input
+                    id="loginPass"
+                    type={showPass ? "text" : "password"}
+                    value={loginPass}
+                    onChange={(e) => setLoginPass(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    className="w-full px-4 py-2.5 pr-11 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50 placeholder-slate-400"
+                    placeholder="Ingrese contraseña"
+                    autoComplete="current-password"
+                  />
                   <button
                     type="button"
                     onClick={() => setShowPass((v) => !v)}
@@ -313,9 +308,9 @@ const App = () => {
                       <Eye className="w-4 h-4" />
                     )}
                   </button>
-                )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Submit */}
             <button
