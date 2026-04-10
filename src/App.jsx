@@ -15,6 +15,8 @@ const App = () => {
   const [loginPass, setLoginPass] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [isLogging, setIsLogging] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [checkingAdmin, setCheckingAdmin] = useState(false);
 
   // ======================= SESIÓN PERSISTENTE =======================
   useEffect(() => {
@@ -27,6 +29,44 @@ const App = () => {
       console.error("Error leyendo sesión local:", e);
     }
   }, []);
+
+  // ======================= VERIFICACIÓN ADMIN EN TIEMPO REAL =======================
+  useEffect(() => {
+    const username = loginUsername.trim();
+    
+    if (!username) {
+      setIsAdmin(false);
+      return;
+    }
+
+    setCheckingAdmin(true);
+    
+    const checkAdmin = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("usuarios_admin")
+          .select("id")
+          .eq("username", username)
+          .maybeSingle();
+
+        if (!error && data) {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      } catch (err) {
+        console.error("[v0] Error checking admin:", err);
+        setIsAdmin(false);
+      } finally {
+        setCheckingAdmin(false);
+      }
+    };
+
+    // Debounce de 400ms
+    const timeoutId = setTimeout(checkAdmin, 400);
+
+    return () => clearTimeout(timeoutId);
+  }, [loginUsername]);
 
   // ======================= LOGIN =======================
   const handleLogin = async () => {
@@ -236,13 +276,13 @@ const App = () => {
               />
             </div>
 
-            {/* Contraseña (opcional) - siempre visible */}
+            {/* Contraseña - habilitada dinámicamente para admins */}
             <div>
               <label
                 htmlFor="loginPass"
                 className="block text-sm font-medium text-slate-700 mb-1.5"
               >
-                Contraseña <span className="text-slate-500 font-normal">(opcional)</span>
+                Contraseña {!isAdmin && <span className="text-slate-500 font-normal">(solo administradores)</span>}
               </label>
               <div className="relative">
                 <input
@@ -251,22 +291,29 @@ const App = () => {
                   value={loginPass}
                   onChange={(e) => setLoginPass(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  className="w-full px-4 py-2.5 pr-11 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50 placeholder-slate-400"
-                  placeholder="Solo para administradores"
+                  disabled={!isAdmin}
+                  className={`w-full px-4 py-2.5 pr-11 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent placeholder-slate-400 ${
+                    isAdmin 
+                      ? "bg-slate-50 border-slate-300" 
+                      : "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed"
+                  }`}
+                  placeholder={isAdmin ? "Ingrese contraseña" : "Solo para administradores"}
                   autoComplete="current-password"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPass((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0 border-0 bg-transparent shadow-none"
-                  aria-label={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
-                >
-                  {showPass ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
-                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPass((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0 border-0 bg-transparent shadow-none"
+                    aria-label={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  >
+                    {showPass ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                )}
               </div>
             </div>
 
