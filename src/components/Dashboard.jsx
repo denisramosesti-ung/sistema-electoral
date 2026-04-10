@@ -1244,30 +1244,10 @@ const Dashboard = ({ currentUser, onLogout }) => {
                           </div>
                           <p className="text-xs text-slate-500 mb-1">CI: {persona.ci}</p>
                           
-                          {/* Datos del padrón */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-slate-600 mt-2 pt-2 border-t border-slate-100">
-                            {persona.seccional && (
-                              <p>
-                                <span className="font-medium text-slate-700">Seccional:</span> {persona.seccional}
-                              </p>
-                            )}
-                            {persona.local_votacion && (
-                              <p>
-                                <span className="font-medium text-slate-700">Local:</span> {persona.local_votacion}
-                              </p>
-                            )}
-                            {(persona.mesa || persona.orden) && (
-                              <p>
-                                <span className="font-medium text-slate-700">Mesa/Orden:</span>{" "}
-                                {persona.mesa || "-"} / {persona.orden || "-"}
-                              </p>
-                            )}
-                            {persona.direccion && (
-                              <p className="sm:col-span-2">
-                                <span className="font-medium text-slate-700">Dirección:</span> {persona.direccion}
-                              </p>
-                            )}
-                          </div>
+                          {/* Datos del padrón - formato inline */}
+                          <p className="text-sm text-gray-600 mt-1">
+                            Seccional: {persona.seccional || "-"} · Local: {persona.local_votacion || "-"} · Mesa: {persona.mesa || "-"} · Orden: {persona.orden || "-"} · Dir: {persona.direccion || "-"}
+                          </p>
                         </div>
                         <div className="flex gap-1.5 shrink-0 flex-wrap">
                           <ActionBtn onClick={() => abrirTelefono(tipo, persona)} title="Editar teléfono" variant="green">
