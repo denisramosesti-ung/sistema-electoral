@@ -1244,6 +1244,11 @@ const Dashboard = ({ currentUser, onLogout }) => {
                           </div>
                           <p className="text-xs text-slate-500 mb-1">CI: {persona.ci}</p>
                           
+                          {/* Teléfono */}
+                          <p className="text-sm text-slate-700 mt-1">
+                            📞 {persona.telefono || "-"}
+                          </p>
+                          
                           {/* Datos del padrón - formato inline */}
                           <p className="text-sm text-gray-600 mt-1">
                             Seccional: {persona.seccional || "-"} · Local: {persona.local_votacion || "-"} · Mesa: {persona.mesa || "-"} · Orden: {persona.orden || "-"} · Dir: {persona.direccion_override || persona.direccion || "-"}
