@@ -10,7 +10,7 @@ export default function CreateAdminModal({ isOpen, onClose, currentUser, onSucce
   const [formData, setFormData] = useState({
     username: "",
     password: "",
-    role: "superadmin",
+    rol: "superadmin",
     nombre: "",
     apellido: "",
   });
@@ -38,7 +38,7 @@ export default function CreateAdminModal({ isOpen, onClose, currentUser, onSucce
       setFormData({
         username: "",
         password: "",
-        role: "superadmin",
+        rol: "superadmin",
         nombre: "",
         apellido: "",
       });
@@ -119,14 +119,14 @@ export default function CreateAdminModal({ isOpen, onClose, currentUser, onSucce
             </div>
           </div>
 
-          {/* Role */}
+          {/* Rol */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
               Rol <span className="text-red-500">*</span>
             </label>
             <select
-              value={formData.role}
-              onChange={(e) => handleChange("role", e.target.value)}
+              value={formData.rol}
+              onChange={(e) => handleChange("rol", e.target.value)}
               className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50"
               required
             >

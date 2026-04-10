@@ -8,7 +8,7 @@ import { supabase } from "../supabaseClient";
  * @param {Object} adminData - Datos del nuevo admin
  * @param {string} adminData.username - Nombre de usuario único
  * @param {string} adminData.password - Contraseña
- * @param {string} adminData.role - 'owner' o 'superadmin'
+ * @param {string} adminData.rol - 'owner' o 'superadmin'
  * @param {string} [adminData.nombre] - Nombre opcional
  * @param {string} [adminData.apellido] - Apellido opcional
  * @returns {Promise<{success: boolean, message: string, data?: Object}>}
@@ -23,18 +23,18 @@ export async function crearUsuarioAdmin(currentUser, adminData) {
   }
 
   // Validar datos requeridos
-  if (!adminData.username || !adminData.password || !adminData.role) {
+  if (!adminData.username || !adminData.password || !adminData.rol) {
     return {
       success: false,
-      message: "Username, password y role son requeridos.",
+      message: "Username, password y rol son requeridos.",
     };
   }
 
-  // Validar role
-  if (!["owner", "superadmin"].includes(adminData.role)) {
+  // Validar rol
+  if (!["owner", "superadmin"].includes(adminData.rol)) {
     return {
       success: false,
-      message: "Role debe ser 'owner' o 'superadmin'.",
+      message: "Rol debe ser 'owner' o 'superadmin'.",
     };
   }
 
@@ -67,7 +67,7 @@ export async function crearUsuarioAdmin(currentUser, adminData) {
       .insert({
         username: adminData.username,
         password: adminData.password, // NOTA: En producción, usar hashing seguro
-        role: adminData.role,
+        rol: adminData.rol,
         nombre: adminData.nombre || null,
         apellido: adminData.apellido || null,
       })

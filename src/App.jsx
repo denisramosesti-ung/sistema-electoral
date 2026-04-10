@@ -48,7 +48,7 @@ const App = () => {
 
         const { data: admin, error: adminErr } = await supabase
           .from("usuarios_admin")
-          .select("id,username,role,nombre,apellido")
+          .select("id,username,rol,nombre,apellido")
           .eq("username", username)
           .eq("password", password)
           .maybeSingle();
@@ -83,8 +83,8 @@ const App = () => {
 
         // Validación de roles permitidos
         const rolesPermitidos = ['owner', 'superadmin'];
-        if (!rolesPermitidos.includes(admin.role)) {
-          console.error("[v0] Admin login failed - Invalid role:", admin.role);
+        if (!rolesPermitidos.includes(admin.rol)) {
+          console.error("[v0] Admin login failed - Invalid role:", admin.rol);
           alert("Rol de usuario no válido.");
           setIsLogging(false);
           return;
@@ -92,7 +92,7 @@ const App = () => {
 
         console.log("[v0] Admin login success", { 
           username: admin.username, 
-          role: admin.role,
+          rol: admin.rol,
           nombre: admin.nombre 
         });
 
@@ -100,7 +100,7 @@ const App = () => {
           username: admin.username,
           nombre: admin.nombre || "Admin",
           apellido: admin.apellido || "",
-          role: admin.role,
+          role: admin.rol,
         };
         setCurrentUser(u);
         localStorage.setItem("currentUser", JSON.stringify(u));
