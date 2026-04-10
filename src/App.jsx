@@ -24,7 +24,11 @@ const App = () => {
     if (!saved) return;
     try {
       const u = JSON.parse(saved);
-      if (u && u.ci && u.role) setCurrentUser(u);
+      // Aceptar si tiene role Y (ci O username)
+      if (u && u.role && (u.ci || u.username)) {
+        setCurrentUser(u);
+        console.log("[v0] Session restored:", { role: u.role, hasCI: !!u.ci, hasUsername: !!u.username });
+      }
     } catch (e) {
       console.error("Error leyendo sesión local:", e);
     }
@@ -136,6 +140,7 @@ const App = () => {
         });
 
         const u = {
+          id: admin.id,
           username: admin.username,
           nombre: admin.username,
           apellido: "",
