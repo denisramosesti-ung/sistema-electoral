@@ -41,7 +41,10 @@ const App = () => {
       // ======================= FLUJO 1: ADMIN (CON PASSWORD) =======================
       // Si hay password → SOLO intentar usuarios_admin, NO intentar coordinador/sub
       if (password) {
-        console.log("[v0] Admin login attempt", { username });
+        console.log("[v0] Admin login attempt", { 
+          username,
+          hasPassword: !!password 
+        });
 
         const { data: admin, error: adminErr } = await supabase
           .from("usuarios_admin")
@@ -50,15 +53,29 @@ const App = () => {
           .eq("password", password)
           .maybeSingle();
 
+        console.log("[v0] Supabase response:", {
+          data: admin,
+          error: adminErr,
+          errorMessage: adminErr?.message,
+          errorDetails: adminErr?.details,
+          errorHint: adminErr?.hint,
+          errorCode: adminErr?.code
+        });
+
         if (adminErr) {
-          console.error("[v0] Admin login failed - Database error:", adminErr);
-          alert("Error al consultar base de datos.");
+          console.error("[v0] Admin login failed - Database error:", {
+            message: adminErr.message,
+            details: adminErr.details,
+            hint: adminErr.hint,
+            code: adminErr.code
+          });
+          alert(`Error al consultar base de datos: ${adminErr.message}`);
           setIsLogging(false);
           return;
         }
 
         if (!admin) {
-          console.log("[v0] Admin login failed - Invalid credentials");
+          console.log("[v0] Admin login failed - Invalid credentials (no data returned)");
           alert("Usuario o contraseña incorrectos.");
           setIsLogging(false);
           return;
