@@ -1246,7 +1246,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
                           
                           {/* Datos del padrón - formato inline */}
                           <p className="text-sm text-gray-600 mt-1">
-                            Seccional: {persona.seccional || "-"} · Local: {persona.local_votacion || "-"} · Mesa: {persona.mesa || "-"} · Orden: {persona.orden || "-"} · Dir: {persona.direccion || "-"}
+                            Seccional: {persona.seccional || "-"} · Local: {persona.local_votacion || "-"} · Mesa: {persona.mesa || "-"} · Orden: {persona.orden || "-"} · Dir: {persona.direccion_override || persona.direccion || "-"}
                           </p>
                         </div>
                         <div className="flex gap-1.5 shrink-0 flex-wrap">
