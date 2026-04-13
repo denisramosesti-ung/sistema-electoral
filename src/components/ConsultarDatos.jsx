@@ -15,12 +15,8 @@ const hasTextValue = (v) => {
   return s !== "" && s !== "false" && s !== "null" && s !== "0";
 };
 
-/** Devuelve true para 'S', 'SI', 'TRUE', '1', true */
-const isYesVote = (v) => {
-  if (v === true || v === 1) return true;
-  const s = String(v || "").trim().toUpperCase();
-  return s === "S" || s === "SI" || s === "TRUE" || s === "1";
-};
+/** Un voto es "Sí" únicamente cuando el valor es exactamente 'S' */
+const isYesVote = (v) => v === "S";
 
 /** Limpia acentos, trim y uppercase para comparación segura */
 const normalizeText = (text) => {
@@ -108,8 +104,6 @@ export default function ConsultarDatos({ onBack }) {
         const ci    = String(r.ci);
         const det   = detalleMap[ci]  || {};
         const detBi = detBiMap[ci]    || {};
-
-        console.log("[v0] CI sample", ci, "det keys:", Object.keys(det).length, "bi keys:", Object.keys(detBi).length);
 
         const edadNum = det.edad
           ? (typeof det.edad === "number" ? det.edad : parseInt(det.edad, 10))
