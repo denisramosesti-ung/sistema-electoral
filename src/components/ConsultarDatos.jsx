@@ -8,25 +8,8 @@ import DataTableBI from "./consultarDatos/DataTableBI";
 
 // ======================= HELPERS =======================
 
-/** Devuelve false para null, undefined, '', 'false', 'null', '0' */
-const hasTextValue = (v) => {
-  if (v === null || v === undefined) return false;
-  const s = String(v).trim().toLowerCase();
-  return s !== "" && s !== "false" && s !== "null" && s !== "0";
-};
-
 /** Un voto es "Sí" únicamente cuando el valor es exactamente 'S' */
 const isYesVote = (v) => v === "S";
-
-/** Limpia acentos, trim y uppercase para comparación segura */
-const normalizeText = (text) => {
-  if (!text) return "";
-  return String(text)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toUpperCase();
-};
 
 // ======================= FILTROS POR DEFECTO =======================
 const DEFAULT_FILTERS = {
@@ -65,87 +48,17 @@ export default function ConsultarDatos({ onBack }) {
   const [error, setError]         = useState(null);
   const [filters, setFilters]     = useState(DEFAULT_FILTERS);
 
-  // ======================= CARGA UNIFICADA =======================
+  // ======================= CARGA ÚNICA DESDE padron_bi =======================
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      // Ejecutar las 4 consultas en paralelo
-      const [
-        { data: padronData,    error: e1 },
-        { data: detalleData,   error: e2 },
-        { data: detBiData,     error: e3 },
-        { data: nuevoAnrData,  error: e4 },
-      ] = await Promise.all([
-        supabase.from("padron").select("ci, nombre, apellido, seccional, local_votacion"),
-        supabase.from("padron_detalle").select("ci, abogados, jubilados, funcionario_publico, exa_san_jose, edad, partido, mesa, orden, local_votacion"),
-        supabase.from("padron_detalle_bi").select("ci, universidades, cargo_seccionales, voto_internas_anr_2021, voto_internas_plra_2021, voto_grl_2021, voto_anr_presidenciales_2022, voto_plra_presidenciales_2022, voto_grl_presidenciales_2023"),
-        supabase.from("padron_nuevo_anr").select("ci"),
-      ]);
+      const { data, error: err } = await supabase.from("padron_bi").select("*");
 
-      if (e1) throw new Error(`padron: ${e1.message}`);
-      if (e2) { console.error("[v0] padron_detalle error:", e2.message); }
-      if (e3) { console.error("[v0] padron_detalle_bi error:", e3.message); }
-      if (e4) { console.error("[v0] padron_nuevo_anr error:", e4.message); }
+      if (err) throw new Error(err.message);
+      if (!data) throw new Error("No se recibieron datos.");
 
-      if (!padronData) throw new Error("No se recibieron datos del padrón.");
-
-      // Construir mapas por CI para O(1) lookup — normalizar siempre como String
-      const detalleMap = {};
-      (detalleData || []).forEach((r) => { detalleMap[String(r.ci)] = r; });
-
-      const detBiMap = {};
-      (detBiData || []).forEach((r) => { detBiMap[String(r.ci)] = r; });
-
-      const nuevoAnrSet = new Set((nuevoAnrData || []).map((r) => String(r.ci)));
-
-      // Construir dataset enriquecido
-      const merged = padronData.map((r) => {
-        const ci    = String(r.ci);
-        const det   = detalleMap[ci]  || {};
-        const detBi = detBiMap[ci]    || {};
-
-        const edadNum = det.edad
-          ? (typeof det.edad === "number" ? det.edad : parseInt(det.edad, 10))
-          : null;
-
-        // Local de votación: priorizar padron, fallback detalle, normalizado
-        const localRaw = r.local_votacion || det.local_votacion || null;
-        const localNorm = normalizeText(localRaw);
-
-        return {
-          ci:            ci,
-          nombre:        r.nombre,
-          apellido:      r.apellido,
-          seccional:     r.seccional,
-          local_votacion: localRaw,
-          _localNorm:    localNorm,  // para comparación interna
-          edad:          isNaN(edadNum) ? null : edadNum,
-          partido:       det.partido || null,
-          mesa:          det.mesa ?? null,
-          orden:         det.orden ?? null,
-          universidades:       detBi.universidades    || null,
-          cargo_seccionales:   detBi.cargo_seccionales || null,
-
-          // ---- FLAGS calculados ----
-          abogado_flag:           hasTextValue(det.abogados),
-          jubilado_flag:          hasTextValue(det.jubilados),
-          funcionario_publico_flag: hasTextValue(det.funcionario_publico),
-          exa_san_jose_flag:      hasTextValue(det.exa_san_jose),
-          nuevo_anr_flag:         nuevoAnrSet.has(r.ci),
-          tercera_edad_flag:      typeof edadNum === "number" && !isNaN(edadNum) && edadNum >= 60,
-
-          // ---- Votación (crudo) ----
-          voto_internas_anr_2021:        detBi.voto_internas_anr_2021        ?? null,
-          voto_internas_plra_2021:       detBi.voto_internas_plra_2021       ?? null,
-          voto_grl_2021:                 detBi.voto_grl_2021                 ?? null,
-          voto_anr_presidenciales_2022:  detBi.voto_anr_presidenciales_2022  ?? null,
-          voto_plra_presidenciales_2022: detBi.voto_plra_presidenciales_2022 ?? null,
-          voto_grl_presidenciales_2023:  detBi.voto_grl_presidenciales_2023  ?? null,
-        };
-      });
-
-      setRawData(merged);
+      setRawData(data);
     } catch (e) {
       console.error("[v0] ConsultarDatos load error:", e);
       setError(e.message || "Error al cargar datos.");
@@ -160,15 +73,15 @@ export default function ConsultarDatos({ onBack }) {
   const options = useMemo(() => ({
     partidos:          toOptions(rawData, "partido"),
     seccionales:       [...new Set(rawData.map((r) => r.seccional).filter((v) => v != null && v !== ""))].sort((a, b) => Number(a) - Number(b)),
-    locales:           [...new Set(rawData.map((r) => r._localNorm).filter(Boolean))].sort(),
+    locales:           toOptions(rawData, "local_votacion"),
     universidades:     toOptions(rawData, "universidades"),
     cargosSeccionales: toOptions(rawData, "cargo_seccionales"),
   }), [rawData]);
 
-  // ======================= FILTRADO UNIFICADO =======================
+  // ======================= FILTRADO — usa flags directos de padron_bi =======================
   const filtered = useMemo(() => {
     return rawData.filter((r) => {
-      // Flags booleanos
+      // Flags booleanos directos
       if (filters.abogados            && !r.abogado_flag)             return false;
       if (filters.funcionario_publico  && !r.funcionario_publico_flag) return false;
       if (filters.jubilados            && !r.jubilado_flag)            return false;
@@ -176,16 +89,10 @@ export default function ConsultarDatos({ onBack }) {
       if (filters.nuevo_anr            && !r.nuevo_anr_flag)           return false;
       if (filters.exa_san_jose         && !r.exa_san_jose_flag)        return false;
 
-      // Partido
-      if (filters.partido && r.partido !== filters.partido) return false;
-
-      // Seccional: comparar como número
-      if (filters.seccional !== "" && Number(r.seccional) !== Number(filters.seccional)) return false;
-
-      // Local de votación: comparar normalizado
-      if (filters.local_votacion && r._localNorm !== normalizeText(filters.local_votacion)) return false;
-
-      // Selects opcionales
+      // Selects de texto
+      if (filters.partido        && r.partido        !== filters.partido)        return false;
+      if (filters.seccional      && r.seccional      !== filters.seccional)      return false;
+      if (filters.local_votacion && r.local_votacion !== filters.local_votacion) return false;
       if (filters.universidades     && r.universidades     !== filters.universidades)     return false;
       if (filters.cargo_seccionales && r.cargo_seccionales !== filters.cargo_seccionales) return false;
 
@@ -194,12 +101,12 @@ export default function ConsultarDatos({ onBack }) {
       if (filters.edadMax !== "" && (r.edad === null || r.edad > Number(filters.edadMax))) return false;
 
       // Votación
-      if (filters.voto_internas_anr_2021 === "si"  && !isYesVote(r.voto_internas_anr_2021))        return false;
-      if (filters.voto_internas_anr_2021 === "no"  &&  isYesVote(r.voto_internas_anr_2021))        return false;
-      if (filters.voto_internas_plra_2021 === "si" && !isYesVote(r.voto_internas_plra_2021))       return false;
-      if (filters.voto_internas_plra_2021 === "no" &&  isYesVote(r.voto_internas_plra_2021))       return false;
-      if (filters.voto_grl_2021 === "si"           && !isYesVote(r.voto_grl_2021))                 return false;
-      if (filters.voto_grl_2021 === "no"           &&  isYesVote(r.voto_grl_2021))                 return false;
+      if (filters.voto_internas_anr_2021 === "si"        && !isYesVote(r.voto_internas_anr_2021))        return false;
+      if (filters.voto_internas_anr_2021 === "no"        &&  isYesVote(r.voto_internas_anr_2021))        return false;
+      if (filters.voto_internas_plra_2021 === "si"       && !isYesVote(r.voto_internas_plra_2021))       return false;
+      if (filters.voto_internas_plra_2021 === "no"       &&  isYesVote(r.voto_internas_plra_2021))       return false;
+      if (filters.voto_grl_2021 === "si"                 && !isYesVote(r.voto_grl_2021))                 return false;
+      if (filters.voto_grl_2021 === "no"                 &&  isYesVote(r.voto_grl_2021))                 return false;
       if (filters.voto_anr_presidenciales_2022 === "si"  && !isYesVote(r.voto_anr_presidenciales_2022))  return false;
       if (filters.voto_anr_presidenciales_2022 === "no"  &&  isYesVote(r.voto_anr_presidenciales_2022))  return false;
       if (filters.voto_plra_presidenciales_2022 === "si" && !isYesVote(r.voto_plra_presidenciales_2022)) return false;
@@ -211,7 +118,7 @@ export default function ConsultarDatos({ onBack }) {
     });
   }, [rawData, filters]);
 
-  // ======================= METRICS (siempre desde filtered) =======================
+  // ======================= METRICS (desde filtered, flags directos) =======================
   const metrics = useMemo(() => ({
     total:        filtered.length,
     abogados:     filtered.filter((r) => r.abogado_flag).length,

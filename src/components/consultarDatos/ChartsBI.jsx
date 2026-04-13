@@ -161,12 +161,7 @@ export default function ChartsBI({ filtered }) {
   );
 
   const makeVoteSlices = (key, labelSi = "Sí votó", labelNo = "No votó") => {
-    const si = filtered.filter((r) => {
-      const v = r[key];
-      if (!v) return false;
-      const s = String(v).trim().toUpperCase();
-      return s === "S" || s === "SI" || s === "TRUE" || s === "1";
-    }).length;
+    const si = filtered.filter((r) => r[key] === "S").length;
     return [
       { label: labelSi, value: si },
       { label: labelNo, value: filtered.length - si },
