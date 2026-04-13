@@ -55,8 +55,6 @@ export default function ConsultarDatos({ onBack }) {
           apellido,
           seccional,
           local_votacion,
-          edad,
-          partido,
           padron_detalle_bi (*)
         `);
 
@@ -74,16 +72,17 @@ export default function ConsultarDatos({ onBack }) {
           apellido: r.apellido,
           seccional: r.seccional,
           local_votacion: r.local_votacion,
-          edad: typeof r.edad === "number" ? r.edad : (r.edad ? parseInt(r.edad, 10) : null),
-          partido: r.partido,
-          // Normalized booleans
+          // Campos de padron_detalle_bi
+          edad: typeof det.edad === "number" ? det.edad : (det.edad ? parseInt(det.edad, 10) : null),
+          partido: det.partido || null,
+          // Normalized booleans desde padron_detalle_bi
           _abogado:          toBool(det.abogados),
           _funcionario:      toBool(det.funcionario_publico),
           _jubilado:         toBool(det.jubilados),
           _terceraEdad:      toBool(det.tercera_edad),
           _nuevoAnr:         toBool(det.nuevo_anr),
           _exaSanJose:       toBool(det.exa_san_jose),
-          // Select options
+          // Select options desde padron_detalle_bi
           universidades:     det.universidades || null,
           cargo_seccionales: det.cargo_seccionales || null,
         };
