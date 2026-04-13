@@ -46,18 +46,28 @@ export default function ConsultarDatos({ onBack }) {
     setLoading(true);
     setError(null);
     try {
-      // Traer padron + padron_detalle en una sola consulta via join
+      // Traer padron + padron_detalle_bi en una sola consulta via join
       const { data, error: err } = await supabase
         .from("padron")
-        .select("ci, nombre, apellido, seccional, local_votacion, edad, partido, padron_detalle(abogados, funcionario_publico, jubilados, tercera_edad, nuevo_anr, exa_san_jose, universidades, cargo_seccionales)");
+        .select(`
+          ci,
+          nombre,
+          apellido,
+          seccional,
+          local_votacion,
+          edad,
+          partido,
+          padron_detalle_bi (*)
+        `);
 
       if (err) throw err;
+      if (!data) throw new Error("No se recibieron datos del servidor.");
 
-      // Flatten: combinar padron + padron_detalle en un solo objeto
-      const merged = (data || []).map((r) => {
-        const det = Array.isArray(r.padron_detalle)
-          ? r.padron_detalle[0] || {}
-          : r.padron_detalle || {};
+      // Flatten: combinar padron + padron_detalle_bi en un solo objeto
+      const merged = data.map((r) => {
+        const det = Array.isArray(r.padron_detalle_bi)
+          ? r.padron_detalle_bi[0] || {}
+          : r.padron_detalle_bi || {};
         return {
           ci: r.ci,
           nombre: r.nombre,
