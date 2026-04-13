@@ -29,6 +29,8 @@ const DEFAULT_FILTERS = {
   cargo_seccionales: "",
   edadMin: "",
   edadMax: "",
+  voto_internas: "",   // "" | "si" | "no"
+  voto_generales: "",  // "" | "si" | "no"
 };
 
 // ======================= DEDUPLICATE OPTION =======================
@@ -89,6 +91,8 @@ export default function ConsultarDatos({ onBack }) {
           // Campos de padron_detalle_bi
           edad: typeof det.edad === "number" ? det.edad : (det.edad ? parseInt(det.edad, 10) : null),
           partido: det.partido || null,
+          mesa: det.mesa ?? null,
+          orden: det.orden ?? null,
           // Normalized booleans desde padron_detalle_bi
           _abogado:          toBool(det.abogados),
           _funcionario:      toBool(det.funcionario_publico),
@@ -96,6 +100,9 @@ export default function ConsultarDatos({ onBack }) {
           _terceraEdad:      toBool(det.tercera_edad),
           _nuevoAnr:         toBool(det.nuevo_anr),
           _exaSanJose:       toBool(det.exa_san_jose),
+          // Votación — se guardan en crudo (valor "S" / "N" / null)
+          voto_internas_anr_2021:         det.voto_internas_anr_2021 ?? null,
+          voto_gral_presidenciales_2023:  det.voto_gral_presidenciales_2023 ?? null,
           // Select options desde padron_detalle_bi
           universidades:     det.universidades || null,
           cargo_seccionales: det.cargo_seccionales || null,
@@ -142,6 +149,11 @@ export default function ConsultarDatos({ onBack }) {
 
       if (filters.edadMin !== "" && (r.edad === null || r.edad < filters.edadMin)) return false;
       if (filters.edadMax !== "" && (r.edad === null || r.edad > filters.edadMax)) return false;
+
+      if (filters.voto_internas === "si"  && r.voto_internas_anr_2021        !== "S") return false;
+      if (filters.voto_internas === "no"  && r.voto_internas_anr_2021        === "S") return false;
+      if (filters.voto_generales === "si" && r.voto_gral_presidenciales_2023 !== "S") return false;
+      if (filters.voto_generales === "no" && r.voto_gral_presidenciales_2023 === "S") return false;
 
       return true;
     });

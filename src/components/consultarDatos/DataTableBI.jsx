@@ -9,6 +9,8 @@ const COLUMNS = [
   { key: "ci",             label: "CI"               },
   { key: "seccional",      label: "Seccional"        },
   { key: "local_votacion", label: "Local Votación"   },
+  { key: "mesa",           label: "Mesa"             },
+  { key: "orden",          label: "Orden"            },
   { key: "edad",           label: "Edad"             },
   { key: "partido",        label: "Partido"          },
 ];

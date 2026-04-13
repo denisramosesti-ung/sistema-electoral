@@ -104,6 +104,39 @@ export default function FilterPanel({ filters, onChange, onReset, options }) {
         />
       </div>
 
+      {/* Votación */}
+      <div className="flex flex-col gap-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 -mb-1">
+          Votación
+        </p>
+
+        <div>
+          <label className="block text-xs text-slate-600 mb-1">Voto Internas ANR 2021</label>
+          <select
+            value={filters.voto_internas}
+            onChange={(e) => handleSelect("voto_internas", e.target.value)}
+            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-slate-50"
+          >
+            <option value="">Todos</option>
+            <option value="si">Sí</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs text-slate-600 mb-1">Voto Generales 2023</label>
+          <select
+            value={filters.voto_generales}
+            onChange={(e) => handleSelect("voto_generales", e.target.value)}
+            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-slate-50"
+          >
+            <option value="">Todos</option>
+            <option value="si">Sí</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+      </div>
+
       {/* Rango de Edad */}
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">

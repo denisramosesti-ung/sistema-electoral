@@ -155,28 +155,35 @@ export default function ChartsBI({ filtered }) {
     return Object.entries(map).map(([label, value]) => ({ label, value }));
   }, [filtered]);
 
-  const abogadoSlices = useMemo(() => {
-    const yes = filtered.filter((r) => r._abogado).length;
-    const no = filtered.length - yes;
-    return [
-      { label: "Abogados", value: yes },
-      { label: "No abogados", value: no },
-    ];
-  }, [filtered]);
-
   const edades = useMemo(
     () => filtered.map((r) => r.edad).filter((e) => typeof e === "number" && !isNaN(e)),
     [filtered]
   );
 
+  const votoInternasSlices = useMemo(() => {
+    const si = filtered.filter((r) => r.voto_internas_anr_2021 === "S").length;
+    const no = filtered.length - si;
+    return [
+      { label: "Votó internas", value: si },
+      { label: "No votó", value: no },
+    ];
+  }, [filtered]);
+
+  const votoGeneralesSlices = useMemo(() => {
+    const si = filtered.filter((r) => r.voto_gral_presidenciales_2023 === "S").length;
+    const no = filtered.length - si;
+    return [
+      { label: "Votó generales", value: si },
+      { label: "No votó", value: no },
+    ];
+  }, [filtered]);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <BarChart title="Distribución por Partido" data={byPartido} maxBars={10} color="bg-brand-500" />
       <BarChart title="Votantes por Seccional" data={bySeccional} maxBars={12} color="bg-amber-500" />
-      <PieChart
-        title="Abogados vs No Abogados"
-        slices={abogadoSlices}
-      />
+      <PieChart title="Voto Internas ANR 2021" slices={votoInternasSlices} />
+      <PieChart title="Voto Generales 2023" slices={votoGeneralesSlices} />
       <EdadHistogram data={edades} />
     </div>
   );
