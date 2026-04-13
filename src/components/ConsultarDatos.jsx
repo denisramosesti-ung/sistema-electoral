@@ -6,106 +6,145 @@ import StatsCardsBI from "./consultarDatos/StatsCardsBI";
 import ChartsBI from "./consultarDatos/ChartsBI";
 import DataTableBI from "./consultarDatos/DataTableBI";
 
-// ======================= NORMALIZACIÓN =======================
-const toBool = (v) => {
-  if (typeof v === "boolean") return v;
-  if (typeof v === "number") return v === 1;
+// ======================= HELPERS =======================
+
+/** Devuelve false para null, undefined, '', 'false', 'null', '0' */
+const hasTextValue = (v) => {
+  if (v === null || v === undefined) return false;
+  const s = String(v).trim().toLowerCase();
+  return s !== "" && s !== "false" && s !== "null" && s !== "0";
+};
+
+/** Devuelve true para 'S', 'SI', 'TRUE', '1', true */
+const isYesVote = (v) => {
+  if (v === true || v === 1) return true;
   const s = String(v || "").trim().toUpperCase();
-  return s === "S" || s === "SI" || s === "1" || s === "TRUE";
+  return s === "S" || s === "SI" || s === "TRUE" || s === "1";
+};
+
+/** Limpia acentos, trim y uppercase para comparación segura */
+const normalizeText = (text) => {
+  if (!text) return "";
+  return String(text)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase();
 };
 
 // ======================= FILTROS POR DEFECTO =======================
 const DEFAULT_FILTERS = {
-  abogados: false,
+  // Checkboxes
+  abogados:            false,
   funcionario_publico: false,
-  jubilados: false,
-  tercera_edad: false,
-  nuevo_anr: false,
-  exa_san_jose: false,
-  partido: "",
-  seccional: "",
-  local_votacion: "",
-  universidades: "",
-  cargo_seccionales: "",
-  edadMin: "",
-  edadMax: "",
-  voto_internas: "",   // "" | "si" | "no"
-  voto_generales: "",  // "" | "si" | "no"
+  jubilados:           false,
+  tercera_edad:        false,
+  nuevo_anr:           false,
+  exa_san_jose:        false,
+  // Selects de texto
+  partido:             "",
+  seccional:           "",
+  local_votacion:      "",
+  universidades:       "",
+  cargo_seccionales:   "",
+  // Rango de edad
+  edadMin:             "",
+  edadMax:             "",
+  // Votación — "" | "si" | "no"
+  voto_internas_anr_2021:          "",
+  voto_internas_plra_2021:         "",
+  voto_grl_2021:                   "",
+  voto_anr_presidenciales_2022:    "",
+  voto_plra_presidenciales_2022:   "",
+  voto_grl_presidenciales_2023:    "",
 };
 
-// ======================= DEDUPLICATE OPTION =======================
+// ======================= OPTION BUILDER =======================
 const toOptions = (arr, key) =>
   [...new Set(arr.map((r) => r[key]).filter((v) => v != null && v !== ""))].sort();
 
 export default function ConsultarDatos({ onBack }) {
-  const [rawData, setRawData] = useState([]);
-  const [dashboardStats, setDashboardStats] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [rawData, setRawData]     = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState(null);
+  const [filters, setFilters]     = useState(DEFAULT_FILTERS);
 
-  // ======================= CARGA ÚNICA DE DATOS =======================
+  // ======================= CARGA UNIFICADA =======================
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      // Consulta 1: métricas pre-calculadas desde la vista SQL
-      const { data: statsData, error: statsErr } = await supabase
-        .from("vw_dashboard_padron")
-        .select("*")
-        .single();
+      // Ejecutar las 4 consultas en paralelo
+      const [
+        { data: padronData,    error: e1 },
+        { data: detalleData,   error: e2 },
+        { data: detBiData,     error: e3 },
+        { data: nuevoAnrData,  error: e4 },
+      ] = await Promise.all([
+        supabase.from("padron").select("ci, nombre, apellido, seccional, local_votacion"),
+        supabase.from("padron_detalle").select("ci, abogados, jubilados, funcionario_publico, exa_san_jose, edad, partido, mesa, orden, local_votacion"),
+        supabase.from("padron_detalle_bi").select("ci, universidades, cargo_seccionales, voto_internas_anr_2021, voto_internas_plra_2021, voto_grl_2021, voto_anr_presidenciales_2022, voto_plra_presidenciales_2022, voto_grl_presidenciales_2023"),
+        supabase.from("padron_nuevo_anr").select("ci"),
+      ]);
 
-      if (statsErr) {
-        console.error("[v0] vw_dashboard_padron error:", statsErr.message);
-        // No es fatal — seguimos con cálculo frontend como fallback
-      } else {
-        setDashboardStats(statsData);
-      }
+      if (e1) throw new Error(`padron: ${e1.message}`);
+      if (e2) { console.error("[v0] padron_detalle error:", e2.message); }
+      if (e3) { console.error("[v0] padron_detalle_bi error:", e3.message); }
+      if (e4) { console.error("[v0] padron_nuevo_anr error:", e4.message); }
 
-      // Consulta 2: datos completos para filtros/tabla/gráficos
-      const { data, error: err } = await supabase
-        .from("padron")
-        .select(`
-          ci,
-          nombre,
-          apellido,
-          seccional,
-          local_votacion,
-          padron_detalle_bi (*)
-        `);
+      if (!padronData) throw new Error("No se recibieron datos del padrón.");
 
-      if (err) throw err;
-      if (!data) throw new Error("No se recibieron datos del servidor.");
+      // Construir mapas por CI para O(1) lookup
+      const detalleMap = {};
+      (detalleData || []).forEach((r) => { detalleMap[r.ci] = r; });
 
-      // Flatten: combinar padron + padron_detalle_bi en un solo objeto
-      const merged = data.map((r) => {
-        const det = Array.isArray(r.padron_detalle_bi)
-          ? r.padron_detalle_bi[0] || {}
-          : r.padron_detalle_bi || {};
+      const detBiMap = {};
+      (detBiData || []).forEach((r) => { detBiMap[r.ci] = r; });
+
+      const nuevoAnrSet = new Set((nuevoAnrData || []).map((r) => r.ci));
+
+      // Construir dataset enriquecido
+      const merged = padronData.map((r) => {
+        const det   = detalleMap[r.ci]  || {};
+        const detBi = detBiMap[r.ci]    || {};
+
+        const edadNum = det.edad
+          ? (typeof det.edad === "number" ? det.edad : parseInt(det.edad, 10))
+          : null;
+
+        // Local de votación: priorizar padron, fallback detalle, normalizado
+        const localRaw = r.local_votacion || det.local_votacion || null;
+        const localNorm = normalizeText(localRaw);
+
         return {
-          ci: r.ci,
-          nombre: r.nombre,
-          apellido: r.apellido,
-          seccional: r.seccional,
-          local_votacion: r.local_votacion,
-          // Campos de padron_detalle_bi
-          edad: typeof det.edad === "number" ? det.edad : (det.edad ? parseInt(det.edad, 10) : null),
-          partido: det.partido || null,
-          mesa: det.mesa ?? null,
-          orden: det.orden ?? null,
-          // Normalized booleans desde padron_detalle_bi
-          _abogado:          toBool(det.abogados),
-          _funcionario:      toBool(det.funcionario_publico),
-          _jubilado:         toBool(det.jubilados),
-          _terceraEdad:      toBool(det.tercera_edad),
-          _nuevoAnr:         toBool(det.nuevo_anr),
-          _exaSanJose:       toBool(det.exa_san_jose),
-          // Votación — se guardan en crudo (valor "S" / "N" / null)
-          voto_internas_anr_2021:         det.voto_internas_anr_2021 ?? null,
-          voto_gral_presidenciales_2023:  det.voto_gral_presidenciales_2023 ?? null,
-          // Select options desde padron_detalle_bi
-          universidades:     det.universidades || null,
-          cargo_seccionales: det.cargo_seccionales || null,
+          ci:            r.ci,
+          nombre:        r.nombre,
+          apellido:      r.apellido,
+          seccional:     r.seccional,
+          local_votacion: localRaw,
+          _localNorm:    localNorm,  // para comparación interna
+          edad:          isNaN(edadNum) ? null : edadNum,
+          partido:       det.partido || null,
+          mesa:          det.mesa ?? null,
+          orden:         det.orden ?? null,
+          universidades:       detBi.universidades    || null,
+          cargo_seccionales:   detBi.cargo_seccionales || null,
+
+          // ---- FLAGS calculados ----
+          abogado_flag:           hasTextValue(det.abogados),
+          jubilado_flag:          hasTextValue(det.jubilados),
+          funcionario_publico_flag: hasTextValue(det.funcionario_publico),
+          exa_san_jose_flag:      hasTextValue(det.exa_san_jose),
+          nuevo_anr_flag:         nuevoAnrSet.has(r.ci),
+          tercera_edad_flag:      typeof edadNum === "number" && !isNaN(edadNum) && edadNum >= 60,
+
+          // ---- Votación (crudo) ----
+          voto_internas_anr_2021:        detBi.voto_internas_anr_2021        ?? null,
+          voto_internas_plra_2021:       detBi.voto_internas_plra_2021       ?? null,
+          voto_grl_2021:                 detBi.voto_grl_2021                 ?? null,
+          voto_anr_presidenciales_2022:  detBi.voto_anr_presidenciales_2022  ?? null,
+          voto_plra_presidenciales_2022: detBi.voto_plra_presidenciales_2022 ?? null,
+          voto_grl_presidenciales_2023:  detBi.voto_grl_presidenciales_2023  ?? null,
         };
       });
 
@@ -118,76 +157,72 @@ export default function ConsultarDatos({ onBack }) {
     }
   }, []);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  // ======================= SELECT OPTIONS (memoized) =======================
+  // ======================= SELECT OPTIONS =======================
   const options = useMemo(() => ({
-    partidos:        toOptions(rawData, "partido"),
-    seccionales:     toOptions(rawData, "seccional"),
-    locales:         toOptions(rawData, "local_votacion"),
-    universidades:   toOptions(rawData, "universidades"),
+    partidos:          toOptions(rawData, "partido"),
+    seccionales:       [...new Set(rawData.map((r) => r.seccional).filter((v) => v != null && v !== ""))].sort((a, b) => Number(a) - Number(b)),
+    locales:           [...new Set(rawData.map((r) => r._localNorm).filter(Boolean))].sort(),
+    universidades:     toOptions(rawData, "universidades"),
     cargosSeccionales: toOptions(rawData, "cargo_seccionales"),
   }), [rawData]);
 
-  // ======================= FILTERED DATA (memoized) =======================
+  // ======================= FILTRADO UNIFICADO =======================
   const filtered = useMemo(() => {
     return rawData.filter((r) => {
-      if (filters.abogados         && !r._abogado)     return false;
-      if (filters.funcionario_publico && !r._funcionario) return false;
-      if (filters.jubilados         && !r._jubilado)    return false;
-      if (filters.tercera_edad      && !r._terceraEdad) return false;
-      if (filters.nuevo_anr         && !r._nuevoAnr)    return false;
-      if (filters.exa_san_jose      && !r._exaSanJose)  return false;
+      // Flags booleanos
+      if (filters.abogados            && !r.abogado_flag)             return false;
+      if (filters.funcionario_publico  && !r.funcionario_publico_flag) return false;
+      if (filters.jubilados            && !r.jubilado_flag)            return false;
+      if (filters.tercera_edad         && !r.tercera_edad_flag)        return false;
+      if (filters.nuevo_anr            && !r.nuevo_anr_flag)           return false;
+      if (filters.exa_san_jose         && !r.exa_san_jose_flag)        return false;
 
-      if (filters.partido         && r.partido         !== filters.partido)         return false;
-      if (filters.seccional       && r.seccional       !== filters.seccional)       return false;
-      if (filters.local_votacion  && r.local_votacion  !== filters.local_votacion)  return false;
-      if (filters.universidades   && r.universidades   !== filters.universidades)   return false;
+      // Partido
+      if (filters.partido && r.partido !== filters.partido) return false;
+
+      // Seccional: comparar como número
+      if (filters.seccional !== "" && Number(r.seccional) !== Number(filters.seccional)) return false;
+
+      // Local de votación: comparar normalizado
+      if (filters.local_votacion && r._localNorm !== normalizeText(filters.local_votacion)) return false;
+
+      // Selects opcionales
+      if (filters.universidades     && r.universidades     !== filters.universidades)     return false;
       if (filters.cargo_seccionales && r.cargo_seccionales !== filters.cargo_seccionales) return false;
 
-      if (filters.edadMin !== "" && (r.edad === null || r.edad < filters.edadMin)) return false;
-      if (filters.edadMax !== "" && (r.edad === null || r.edad > filters.edadMax)) return false;
+      // Edad
+      if (filters.edadMin !== "" && (r.edad === null || r.edad < Number(filters.edadMin))) return false;
+      if (filters.edadMax !== "" && (r.edad === null || r.edad > Number(filters.edadMax))) return false;
 
-      if (filters.voto_internas === "si"  && r.voto_internas_anr_2021        !== "S") return false;
-      if (filters.voto_internas === "no"  && r.voto_internas_anr_2021        === "S") return false;
-      if (filters.voto_generales === "si" && r.voto_gral_presidenciales_2023 !== "S") return false;
-      if (filters.voto_generales === "no" && r.voto_gral_presidenciales_2023 === "S") return false;
+      // Votación
+      if (filters.voto_internas_anr_2021 === "si"  && !isYesVote(r.voto_internas_anr_2021))        return false;
+      if (filters.voto_internas_anr_2021 === "no"  &&  isYesVote(r.voto_internas_anr_2021))        return false;
+      if (filters.voto_internas_plra_2021 === "si" && !isYesVote(r.voto_internas_plra_2021))       return false;
+      if (filters.voto_internas_plra_2021 === "no" &&  isYesVote(r.voto_internas_plra_2021))       return false;
+      if (filters.voto_grl_2021 === "si"           && !isYesVote(r.voto_grl_2021))                 return false;
+      if (filters.voto_grl_2021 === "no"           &&  isYesVote(r.voto_grl_2021))                 return false;
+      if (filters.voto_anr_presidenciales_2022 === "si"  && !isYesVote(r.voto_anr_presidenciales_2022))  return false;
+      if (filters.voto_anr_presidenciales_2022 === "no"  &&  isYesVote(r.voto_anr_presidenciales_2022))  return false;
+      if (filters.voto_plra_presidenciales_2022 === "si" && !isYesVote(r.voto_plra_presidenciales_2022)) return false;
+      if (filters.voto_plra_presidenciales_2022 === "no" &&  isYesVote(r.voto_plra_presidenciales_2022)) return false;
+      if (filters.voto_grl_presidenciales_2023 === "si"  && !isYesVote(r.voto_grl_presidenciales_2023))  return false;
+      if (filters.voto_grl_presidenciales_2023 === "no"  &&  isYesVote(r.voto_grl_presidenciales_2023))  return false;
 
       return true;
     });
   }, [rawData, filters]);
 
-  // ======================= METRICS (memoized) =======================
-  // Usa la vista SQL pre-calculada si los filtros están en estado inicial,
-  // de lo contrario calcula en frontend sobre los datos filtrados.
-  const hasActiveFilters = useMemo(
-    () => Object.entries(filters).some(([, v]) => v !== false && v !== ""),
-    [filters]
-  );
-
-  const metrics = useMemo(() => {
-    if (!hasActiveFilters && dashboardStats) {
-      return {
-        total:        dashboardStats.total       ?? 0,
-        abogados:     dashboardStats.abogados     ?? 0,
-        funcionarios: dashboardStats.funcionarios ?? 0,
-        jubilados:    dashboardStats.jubilados    ?? 0,
-        terceraEdad:  dashboardStats.tercera_edad ?? 0,
-        nuevoAnr:     dashboardStats.nuevo_anr    ?? 0,
-      };
-    }
-    // Fallback: calcular sobre datos filtrados
-    return {
-      total:        filtered.length,
-      abogados:     filtered.filter((r) => r._abogado).length,
-      funcionarios: filtered.filter((r) => r._funcionario).length,
-      jubilados:    filtered.filter((r) => r._jubilado).length,
-      terceraEdad:  filtered.filter((r) => r._terceraEdad).length,
-      nuevoAnr:     filtered.filter((r) => r._nuevoAnr).length,
-    };
-  }, [filtered, dashboardStats, hasActiveFilters]);
+  // ======================= METRICS (siempre desde filtered) =======================
+  const metrics = useMemo(() => ({
+    total:        filtered.length,
+    abogados:     filtered.filter((r) => r.abogado_flag).length,
+    funcionarios: filtered.filter((r) => r.funcionario_publico_flag).length,
+    jubilados:    filtered.filter((r) => r.jubilado_flag).length,
+    terceraEdad:  filtered.filter((r) => r.tercera_edad_flag).length,
+    nuevoAnr:     filtered.filter((r) => r.nuevo_anr_flag).length,
+  }), [filtered]);
 
   const resetFilters = () => setFilters(DEFAULT_FILTERS);
 
@@ -206,14 +241,16 @@ export default function ConsultarDatos({ onBack }) {
           </button>
           <span className="text-white/30 select-none">|</span>
           <h1 className="text-white font-semibold text-base">Consultar Datos</h1>
-
           <div className="ml-auto flex items-center gap-2">
-            {loading && (
-              <RefreshCw className="w-4 h-4 text-white/70 animate-spin" />
-            )}
+            {loading && <RefreshCw className="w-4 h-4 text-white/70 animate-spin" />}
             {!loading && (
               <span className="text-xs text-white/60">
                 {rawData.length.toLocaleString("es-PY")} registros cargados
+                {filtered.length !== rawData.length && (
+                  <span className="ml-1 text-white/80 font-medium">
+                    · {filtered.length.toLocaleString("es-PY")} filtrados
+                  </span>
+                )}
               </span>
             )}
           </div>
@@ -240,14 +277,8 @@ export default function ConsultarDatos({ onBack }) {
       {/* CONTENT */}
       {!loading && !error && (
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col gap-6">
-
-          {/* Stats */}
           <StatsCardsBI metrics={metrics} />
-
-          {/* Body: filter sidebar + charts + table */}
           <div className="flex flex-col lg:flex-row gap-5">
-
-            {/* Sidebar */}
             <div className="lg:w-64 shrink-0">
               <FilterPanel
                 filters={filters}
@@ -256,8 +287,6 @@ export default function ConsultarDatos({ onBack }) {
                 options={options}
               />
             </div>
-
-            {/* Main content */}
             <div className="flex-1 flex flex-col gap-5 min-w-0">
               <ChartsBI filtered={filtered} />
               <DataTableBI data={filtered} />

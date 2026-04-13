@@ -2,26 +2,29 @@ import React from "react";
 import { Filter, RotateCcw } from "lucide-react";
 
 const CHECKBOX_FIELDS = [
-  { key: "abogados", label: "Abogados" },
+  { key: "abogados",            label: "Abogados"            },
   { key: "funcionario_publico", label: "Funcionario Público" },
-  { key: "jubilados", label: "Jubilados" },
-  { key: "tercera_edad", label: "Tercera Edad" },
-  { key: "nuevo_anr", label: "Nuevo ANR" },
-  { key: "exa_san_jose", label: "Exa San José" },
+  { key: "jubilados",           label: "Jubilados"           },
+  { key: "tercera_edad",        label: "Tercera Edad"        },
+  { key: "nuevo_anr",           label: "Nuevo ANR"           },
+  { key: "exa_san_jose",        label: "Exa San José"        },
+];
+
+const VOTE_FIELDS = [
+  { key: "voto_internas_anr_2021",       label: "Internas ANR 2021"        },
+  { key: "voto_internas_plra_2021",      label: "Internas PLRA 2021"       },
+  { key: "voto_grl_2021",               label: "Generales 2021"            },
+  { key: "voto_anr_presidenciales_2022",  label: "ANR Presidenciales 2022" },
+  { key: "voto_plra_presidenciales_2022", label: "PLRA Presidenciales 2022"},
+  { key: "voto_grl_presidenciales_2023",  label: "Generales 2023"          },
 ];
 
 export default function FilterPanel({ filters, onChange, onReset, options }) {
   const { partidos, seccionales, locales, universidades, cargosSeccionales } = options;
 
-  const handleCheckbox = (key) => {
-    onChange({ ...filters, [key]: !filters[key] });
-  };
-
-  const handleSelect = (key, value) => {
-    onChange({ ...filters, [key]: value });
-  };
-
-  const handleEdad = (key, value) => {
+  const handleCheckbox = (key) => onChange({ ...filters, [key]: !filters[key] });
+  const handleSelect   = (key, value) => onChange({ ...filters, [key]: value });
+  const handleEdad     = (key, value) => {
     const num = value === "" ? "" : parseInt(value, 10);
     onChange({ ...filters, [key]: num });
   };
@@ -44,7 +47,7 @@ export default function FilterPanel({ filters, onChange, onReset, options }) {
         </button>
       </div>
 
-      {/* Checkboxes */}
+      {/* Categorías */}
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
           Categorías
@@ -66,12 +69,11 @@ export default function FilterPanel({ filters, onChange, onReset, options }) {
         </div>
       </div>
 
-      {/* Selects */}
+      {/* Selects de texto */}
       <div className="flex flex-col gap-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 -mb-1">
           Opciones
         </p>
-
         <SelectField
           label="Partido"
           value={filters.partido}
@@ -104,39 +106,6 @@ export default function FilterPanel({ filters, onChange, onReset, options }) {
         />
       </div>
 
-      {/* Votación */}
-      <div className="flex flex-col gap-3">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 -mb-1">
-          Votación
-        </p>
-
-        <div>
-          <label className="block text-xs text-slate-600 mb-1">Voto Internas ANR 2021</label>
-          <select
-            value={filters.voto_internas}
-            onChange={(e) => handleSelect("voto_internas", e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-slate-50"
-          >
-            <option value="">Todos</option>
-            <option value="si">Sí</option>
-            <option value="no">No</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-xs text-slate-600 mb-1">Voto Generales 2023</label>
-          <select
-            value={filters.voto_generales}
-            onChange={(e) => handleSelect("voto_generales", e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-slate-50"
-          >
-            <option value="">Todos</option>
-            <option value="si">Sí</option>
-            <option value="no">No</option>
-          </select>
-        </div>
-      </div>
-
       {/* Rango de Edad */}
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
@@ -164,6 +133,21 @@ export default function FilterPanel({ filters, onChange, onReset, options }) {
           />
         </div>
       </div>
+
+      {/* Votación */}
+      <div className="flex flex-col gap-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 -mb-1">
+          Votación
+        </p>
+        {VOTE_FIELDS.map(({ key, label }) => (
+          <VoteSelect
+            key={key}
+            label={label}
+            value={filters[key]}
+            onChange={(v) => handleSelect(key, v)}
+          />
+        ))}
+      </div>
     </aside>
   );
 }
@@ -183,6 +167,23 @@ function SelectField({ label, value, options, onChange }) {
             {opt || "(sin datos)"}
           </option>
         ))}
+      </select>
+    </div>
+  );
+}
+
+function VoteSelect({ label, value, onChange }) {
+  return (
+    <div>
+      <label className="block text-xs text-slate-600 mb-1">{label}</label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 bg-slate-50"
+      >
+        <option value="">Todos</option>
+        <option value="si">Sí</option>
+        <option value="no">No</option>
       </select>
     </div>
   );

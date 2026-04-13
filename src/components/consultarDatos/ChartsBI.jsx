@@ -160,30 +160,28 @@ export default function ChartsBI({ filtered }) {
     [filtered]
   );
 
-  const votoInternasSlices = useMemo(() => {
-    const si = filtered.filter((r) => r.voto_internas_anr_2021 === "S").length;
-    const no = filtered.length - si;
+  const makeVoteSlices = (key, labelSi = "Sí votó", labelNo = "No votó") => {
+    const si = filtered.filter((r) => {
+      const v = r[key];
+      if (!v) return false;
+      const s = String(v).trim().toUpperCase();
+      return s === "S" || s === "SI" || s === "TRUE" || s === "1";
+    }).length;
     return [
-      { label: "Votó internas", value: si },
-      { label: "No votó", value: no },
+      { label: labelSi, value: si },
+      { label: labelNo, value: filtered.length - si },
     ];
-  }, [filtered]);
+  };
 
-  const votoGeneralesSlices = useMemo(() => {
-    const si = filtered.filter((r) => r.voto_gral_presidenciales_2023 === "S").length;
-    const no = filtered.length - si;
-    return [
-      { label: "Votó generales", value: si },
-      { label: "No votó", value: no },
-    ];
-  }, [filtered]);
+  const votoInternasAnrSlices  = useMemo(() => makeVoteSlices("voto_internas_anr_2021",       "Sí (ANR 2021)",   "No votó"), [filtered]);
+  const votoGenerales2023Slices = useMemo(() => makeVoteSlices("voto_grl_presidenciales_2023", "Sí (Grl. 2023)", "No votó"), [filtered]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <BarChart title="Distribución por Partido" data={byPartido} maxBars={10} color="bg-brand-500" />
       <BarChart title="Votantes por Seccional" data={bySeccional} maxBars={12} color="bg-amber-500" />
-      <PieChart title="Voto Internas ANR 2021" slices={votoInternasSlices} />
-      <PieChart title="Voto Generales 2023" slices={votoGeneralesSlices} />
+      <PieChart title="Voto Internas ANR 2021" slices={votoInternasAnrSlices} />
+      <PieChart title="Voto Generales 2023" slices={votoGenerales2023Slices} />
       <EdadHistogram data={edades} />
     </div>
   );
