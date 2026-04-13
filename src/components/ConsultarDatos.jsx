@@ -77,8 +77,23 @@ export default function ConsultarDatos({ onBack }) {
       if (err) throw new Error(err.message);
       if (!data) throw new Error("No se recibieron datos.");
 
+      // DEBUG: datos originales
+      console.log("[v0] DATA ORIGINAL:", data.length);
+      console.log("[v0] Ejemplo item ORIGINAL:", data[0]);
+      console.log("[v0] TIPO voto_internas_anr_2021:", typeof data[0]?.voto_internas_anr_2021, "valor:", data[0]?.voto_internas_anr_2021);
+      console.log("[v0] TIPO edad:", typeof data[0]?.edad, "valor:", data[0]?.edad);
+      console.log("[v0] TIPO abogado_flag:", typeof data[0]?.abogado_flag, "valor:", data[0]?.abogado_flag);
+
       // Normalizar TODOS los tipos al cargar — una sola vez
-      setRawData(data.map(normalizeRow));
+      const normalized = data.map(normalizeRow);
+
+      // DEBUG: datos normalizados
+      console.log("[v0] DATA NORMALIZADA:", normalized.length);
+      console.log("[v0] Ejemplo item NORMALIZADO:", normalized[0]);
+      console.log("[v0] TIPO voto_internas_anr_2021 (norm):", typeof normalized[0]?.voto_internas_anr_2021, "valor:", normalized[0]?.voto_internas_anr_2021);
+      console.log("[v0] TIPO edad (norm):", typeof normalized[0]?.edad, "valor:", normalized[0]?.edad);
+
+      setRawData(normalized);
     } catch (e) {
       console.error("[v0] ConsultarDatos load error:", e);
       setError(e.message || "Error al cargar datos.");
@@ -98,7 +113,15 @@ export default function ConsultarDatos({ onBack }) {
 
   // ======================= FILTRADO =======================
   const filtered = useMemo(() => {
-    return rawData.filter((r) => {
+    // DEBUG: inicio del filtrado
+    console.log("[v0] INICIO FILTRADO - rawData.length:", rawData.length);
+    console.log("[v0] FILTROS ACTIVOS:", JSON.stringify(filters));
+
+    const result = rawData.filter((r, index) => {
+      // DEBUG: solo logear los primeros 3 items
+      if (index < 3) {
+        console.log("[v0] Evaluando item", index, "- voto_internas_anr_2021:", r.voto_internas_anr_2021, "edad:", r.edad);
+      }
       // Flags (boolean directo)
       if (filters.abogados            && !r.abogado_flag)             return false;
       if (filters.funcionario_publico  && !r.funcionario_publico_flag) return false;
@@ -137,6 +160,11 @@ export default function ConsultarDatos({ onBack }) {
 
       return true;
     });
+
+    // DEBUG: resultado del filtrado
+    console.log("[v0] DATA FILTRADA:", result.length);
+
+    return result;
   }, [rawData, filters]);
 
   // ======================= METRICS (desde filtered, booleanos directos) =======================
@@ -200,6 +228,11 @@ export default function ConsultarDatos({ onBack }) {
 
           {/* Contenido principal */}
           <main className="flex-1 min-w-0 p-4 flex flex-col gap-5">
+            {/* DEBUG VISUAL */}
+            <div className="bg-yellow-100 border border-yellow-400 rounded-lg p-3 text-sm">
+              <strong>DEBUG:</strong> Total Original: {rawData.length} | Total Filtrado: {filtered.length}
+            </div>
+
             <StatsCardsBI metrics={metrics} />
             <ChartsBI filtered={filtered} />
             <DataTableBI data={filtered} />
