@@ -94,19 +94,22 @@ export default function ConsultarDatos({ onBack }) {
 
       if (!padronData) throw new Error("No se recibieron datos del padrón.");
 
-      // Construir mapas por CI para O(1) lookup
+      // Construir mapas por CI para O(1) lookup — normalizar siempre como String
       const detalleMap = {};
-      (detalleData || []).forEach((r) => { detalleMap[r.ci] = r; });
+      (detalleData || []).forEach((r) => { detalleMap[String(r.ci)] = r; });
 
       const detBiMap = {};
-      (detBiData || []).forEach((r) => { detBiMap[r.ci] = r; });
+      (detBiData || []).forEach((r) => { detBiMap[String(r.ci)] = r; });
 
-      const nuevoAnrSet = new Set((nuevoAnrData || []).map((r) => r.ci));
+      const nuevoAnrSet = new Set((nuevoAnrData || []).map((r) => String(r.ci)));
 
       // Construir dataset enriquecido
       const merged = padronData.map((r) => {
-        const det   = detalleMap[r.ci]  || {};
-        const detBi = detBiMap[r.ci]    || {};
+        const ci    = String(r.ci);
+        const det   = detalleMap[ci]  || {};
+        const detBi = detBiMap[ci]    || {};
+
+        console.log("[v0] CI sample", ci, "det keys:", Object.keys(det).length, "bi keys:", Object.keys(detBi).length);
 
         const edadNum = det.edad
           ? (typeof det.edad === "number" ? det.edad : parseInt(det.edad, 10))
@@ -117,7 +120,7 @@ export default function ConsultarDatos({ onBack }) {
         const localNorm = normalizeText(localRaw);
 
         return {
-          ci:            r.ci,
+          ci:            ci,
           nombre:        r.nombre,
           apellido:      r.apellido,
           seccional:     r.seccional,
