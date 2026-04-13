@@ -155,20 +155,22 @@ export default function ChartsBI({ filtered }) {
     return Object.entries(map).map(([label, value]) => ({ label, value }));
   }, [filtered]);
 
+  // edad ya es Number (normalizado en ConsultarDatos)
   const edades = useMemo(
-    () => filtered.map((r) => r.edad).filter((e) => typeof e === "number" && !isNaN(e)),
+    () => filtered.map((r) => r.edad).filter((e) => e !== null && !isNaN(e)),
     [filtered]
   );
 
+  // votos ya son boolean (normalizado en ConsultarDatos) — usar directamente
   const makeVoteSlices = (key, labelSi = "Sí votó", labelNo = "No votó") => {
-    const si = filtered.filter((r) => r[key] === true).length;
+    const si = filtered.filter((r) => r[key]).length;
     return [
       { label: labelSi, value: si },
       { label: labelNo, value: filtered.length - si },
     ];
   };
 
-  const votoInternasAnrSlices  = useMemo(() => makeVoteSlices("voto_internas_anr_2021",       "Sí (ANR 2021)",   "No votó"), [filtered]);
+  const votoInternasAnrSlices   = useMemo(() => makeVoteSlices("voto_internas_anr_2021",       "Sí (ANR 2021)",   "No votó"), [filtered]);
   const votoGenerales2023Slices = useMemo(() => makeVoteSlices("voto_grl_presidenciales_2023", "Sí (Grl. 2023)", "No votó"), [filtered]);
 
   return (
