@@ -37,6 +37,7 @@ const toOptions = (arr, key) =>
 
 export default function ConsultarDatos({ onBack }) {
   const [rawData, setRawData] = useState([]);
+  const [dashboardStats, setDashboardStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
@@ -46,7 +47,20 @@ export default function ConsultarDatos({ onBack }) {
     setLoading(true);
     setError(null);
     try {
-      // Traer padron + padron_detalle_bi en una sola consulta via join
+      // Consulta 1: métricas pre-calculadas desde la vista SQL
+      const { data: statsData, error: statsErr } = await supabase
+        .from("vw_dashboard_padron")
+        .select("*")
+        .single();
+
+      if (statsErr) {
+        console.error("[v0] vw_dashboard_padron error:", statsErr.message);
+        // No es fatal — seguimos con cálculo frontend como fallback
+      } else {
+        setDashboardStats(statsData);
+      }
+
+      // Consulta 2: datos completos para filtros/tabla/gráficos
       const { data, error: err } = await supabase
         .from("padron")
         .select(`
@@ -134,14 +148,34 @@ export default function ConsultarDatos({ onBack }) {
   }, [rawData, filters]);
 
   // ======================= METRICS (memoized) =======================
-  const metrics = useMemo(() => ({
-    total:       filtered.length,
-    abogados:    filtered.filter((r) => r._abogado).length,
-    funcionarios:filtered.filter((r) => r._funcionario).length,
-    jubilados:   filtered.filter((r) => r._jubilado).length,
-    terceraEdad: filtered.filter((r) => r._terceraEdad).length,
-    nuevoAnr:    filtered.filter((r) => r._nuevoAnr).length,
-  }), [filtered]);
+  // Usa la vista SQL pre-calculada si los filtros están en estado inicial,
+  // de lo contrario calcula en frontend sobre los datos filtrados.
+  const hasActiveFilters = useMemo(
+    () => Object.entries(filters).some(([, v]) => v !== false && v !== ""),
+    [filters]
+  );
+
+  const metrics = useMemo(() => {
+    if (!hasActiveFilters && dashboardStats) {
+      return {
+        total:        dashboardStats.total       ?? 0,
+        abogados:     dashboardStats.abogados     ?? 0,
+        funcionarios: dashboardStats.funcionarios ?? 0,
+        jubilados:    dashboardStats.jubilados    ?? 0,
+        terceraEdad:  dashboardStats.tercera_edad ?? 0,
+        nuevoAnr:     dashboardStats.nuevo_anr    ?? 0,
+      };
+    }
+    // Fallback: calcular sobre datos filtrados
+    return {
+      total:        filtered.length,
+      abogados:     filtered.filter((r) => r._abogado).length,
+      funcionarios: filtered.filter((r) => r._funcionario).length,
+      jubilados:    filtered.filter((r) => r._jubilado).length,
+      terceraEdad:  filtered.filter((r) => r._terceraEdad).length,
+      nuevoAnr:     filtered.filter((r) => r._nuevoAnr).length,
+    };
+  }, [filtered, dashboardStats, hasActiveFilters]);
 
   const resetFilters = () => setFilters(DEFAULT_FILTERS);
 
