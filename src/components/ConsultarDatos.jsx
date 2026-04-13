@@ -47,9 +47,7 @@ const DEFAULT_FILTERS = {
   // Selects de texto
   partido:             "",
   seccional:           "",
-  local_votacion:      "",
-  universidades:       "",
-  cargo_seccionales:   "",
+  entidad_publica:     "",  // nuevo filtro basado en funcionario_publico (texto)
   // Edad
   edadMin: "",
   edadMax: "",
@@ -93,14 +91,12 @@ export default function ConsultarDatos({ onBack }) {
 
   // ======================= SELECT OPTIONS =======================
   const options = useMemo(() => ({
-    partidos:          toOptions(rawData, "partido"),
-    seccionales:       toOptions(rawData, "seccional"),
-    locales:           toOptions(rawData, "local_votacion"),
-    universidades:     toOptions(rawData, "universidades"),
-    cargosSeccionales: toOptions(rawData, "cargo_seccionales"),
+    partidos:         toOptions(rawData, "partido"),
+    seccionales:      toOptions(rawData, "seccional"),
+    entidadesPublicas: toOptions(rawData, "funcionario_publico"),
   }), [rawData]);
 
-  // ======================= FILTRADO — usa dataNormalizada =======================
+  // ======================= FILTRADO =======================
   const filtered = useMemo(() => {
     return rawData.filter((r) => {
       // Flags (boolean directo)
@@ -111,29 +107,33 @@ export default function ConsultarDatos({ onBack }) {
       if (filters.nuevo_anr            && !r.nuevo_anr_flag)           return false;
       if (filters.exa_san_jose         && !r.exa_san_jose_flag)        return false;
 
-      // Selects de texto (comparación directa de strings)
-      if (filters.partido        && r.partido        !== filters.partido)        return false;
-      if (filters.seccional      && r.seccional      !== filters.seccional)      return false;
-      if (filters.local_votacion && r.local_votacion !== filters.local_votacion) return false;
-      if (filters.universidades     && r.universidades     !== filters.universidades)     return false;
-      if (filters.cargo_seccionales && r.cargo_seccionales !== filters.cargo_seccionales) return false;
+      // Partido (string)
+      if (filters.partido && r.partido !== filters.partido) return false;
+
+      // Seccional (comparar como Number)
+      if (filters.seccional && Number(r.seccional) !== Number(filters.seccional)) return false;
+
+      // Entidad Pública (basado en funcionario_publico texto)
+      if (filters.entidad_publica && r.funcionario_publico !== filters.entidad_publica) return false;
 
       // Edad (Number)
-      if (filters.edadMin !== "" && (r.edad === null || r.edad < Number(filters.edadMin))) return false;
-      if (filters.edadMax !== "" && (r.edad === null || r.edad > Number(filters.edadMax))) return false;
+      const edad = r.edad !== null ? Number(r.edad) : 0;
+      if (filters.edadMin !== "" && edad < Number(filters.edadMin)) return false;
+      if (filters.edadMax !== "" && edad > Number(filters.edadMax)) return false;
 
       // Votación (boolean: true === votó, false === no votó)
-      const applyVote = (filterVal, fieldVal) => {
-        if (filterVal === "si" && !fieldVal) return false;
-        if (filterVal === "no" &&  fieldVal) return false;
-        return true;
-      };
-      if (!applyVote(filters.voto_internas_anr_2021,        r.voto_internas_anr_2021))        return false;
-      if (!applyVote(filters.voto_internas_plra_2021,       r.voto_internas_plra_2021))       return false;
-      if (!applyVote(filters.voto_grl_2021,                 r.voto_grl_2021))                 return false;
-      if (!applyVote(filters.voto_anr_presidenciales_2022,  r.voto_anr_presidenciales_2022))  return false;
-      if (!applyVote(filters.voto_plra_presidenciales_2022, r.voto_plra_presidenciales_2022)) return false;
-      if (!applyVote(filters.voto_grl_presidenciales_2023,  r.voto_grl_presidenciales_2023))  return false;
+      if (filters.voto_internas_anr_2021 === "si"        && r.voto_internas_anr_2021        !== true) return false;
+      if (filters.voto_internas_anr_2021 === "no"        && r.voto_internas_anr_2021        === true) return false;
+      if (filters.voto_internas_plra_2021 === "si"       && r.voto_internas_plra_2021       !== true) return false;
+      if (filters.voto_internas_plra_2021 === "no"       && r.voto_internas_plra_2021       === true) return false;
+      if (filters.voto_grl_2021 === "si"                 && r.voto_grl_2021                 !== true) return false;
+      if (filters.voto_grl_2021 === "no"                 && r.voto_grl_2021                 === true) return false;
+      if (filters.voto_anr_presidenciales_2022 === "si"  && r.voto_anr_presidenciales_2022  !== true) return false;
+      if (filters.voto_anr_presidenciales_2022 === "no"  && r.voto_anr_presidenciales_2022  === true) return false;
+      if (filters.voto_plra_presidenciales_2022 === "si" && r.voto_plra_presidenciales_2022 !== true) return false;
+      if (filters.voto_plra_presidenciales_2022 === "no" && r.voto_plra_presidenciales_2022 === true) return false;
+      if (filters.voto_grl_presidenciales_2023 === "si"  && r.voto_grl_presidenciales_2023  !== true) return false;
+      if (filters.voto_grl_presidenciales_2023 === "no"  && r.voto_grl_presidenciales_2023  === true) return false;
 
       return true;
     });

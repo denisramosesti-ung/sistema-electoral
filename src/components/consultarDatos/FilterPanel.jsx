@@ -20,7 +20,7 @@ const VOTE_FIELDS = [
 ];
 
 export default function FilterPanel({ filters, onChange, onReset, options }) {
-  const { partidos, seccionales, locales, universidades, cargosSeccionales } = options;
+  const { partidos, seccionales, entidadesPublicas } = options;
 
   const handleCheckbox = (key) => onChange({ ...filters, [key]: !filters[key] });
   const handleSelect   = (key, value) => onChange({ ...filters, [key]: value });
@@ -87,22 +87,10 @@ export default function FilterPanel({ filters, onChange, onReset, options }) {
           onChange={(v) => handleSelect("seccional", v)}
         />
         <SelectField
-          label="Local de Votación"
-          value={filters.local_votacion}
-          options={locales}
-          onChange={(v) => handleSelect("local_votacion", v)}
-        />
-        <SelectField
-          label="Universidad"
-          value={filters.universidades}
-          options={universidades}
-          onChange={(v) => handleSelect("universidades", v)}
-        />
-        <SelectField
-          label="Cargo Seccional"
-          value={filters.cargo_seccionales}
-          options={cargosSeccionales}
-          onChange={(v) => handleSelect("cargo_seccionales", v)}
+          label="Entidad Pública"
+          value={filters.entidad_publica}
+          options={entidadesPublicas}
+          onChange={(v) => handleSelect("entidad_publica", v)}
         />
       </div>
 
