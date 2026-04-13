@@ -170,8 +170,8 @@ export default function ChartsBI({ filtered }) {
     ];
   };
 
-  const votoInternasAnrSlices   = useMemo(() => makeVoteSlices("voto_internas_anr_2021",       "Sí (ANR 2021)",   "No votó"), [filtered]);
-  const votoGenerales2023Slices = useMemo(() => makeVoteSlices("voto_grl_presidenciales_2023", "Sí (Grl. 2023)", "No votó"), [filtered]);
+  const votoInternasAnrSlices   = useMemo(() => makeVoteSlices("voto_internas_anr_2021",        "Sí (ANR 2021)",   "No votó"), [filtered]);
+  const votoGenerales2023Slices = useMemo(() => makeVoteSlices("voto_gral_presidenciales_2023", "Sí (Grl. 2023)", "No votó"), [filtered]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

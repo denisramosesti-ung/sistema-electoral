@@ -11,12 +11,12 @@ const CHECKBOX_FIELDS = [
 ];
 
 const VOTE_FIELDS = [
-  { key: "voto_internas_anr_2021",       label: "Internas ANR 2021"        },
-  { key: "voto_internas_plra_2021",      label: "Internas PLRA 2021"       },
-  { key: "voto_grl_2021",               label: "Generales 2021"            },
-  { key: "voto_anr_presidenciales_2022",  label: "ANR Presidenciales 2022" },
-  { key: "voto_plra_presidenciales_2022", label: "PLRA Presidenciales 2022"},
-  { key: "voto_grl_presidenciales_2023",  label: "Generales 2023"          },
+  { key: "voto_internas_anr_2021",        label: "Internas ANR 2021"        },
+  { key: "voto_internas_plra_2021",       label: "Internas PLRA 2021"       },
+  { key: "voto_grales_2021",              label: "Generales 2021"           },
+  { key: "voto_anr_presidenciales_2022",  label: "ANR Presidenciales 2022"  },
+  { key: "voto_plra_presidenciales_2022", label: "PLRA Presidenciales 2022" },
+  { key: "voto_gral_presidenciales_2023", label: "Generales 2023"           },
 ];
 
 export default function FilterPanel({ filters, onChange, onReset, options }) {

@@ -28,10 +28,10 @@ const normalizeRow = (r) => ({
   // Votos booleanos
   voto_internas_anr_2021:        toBool(r.voto_internas_anr_2021),
   voto_internas_plra_2021:       toBool(r.voto_internas_plra_2021),
-  voto_grl_2021:                 toBool(r.voto_grl_2021),
+  voto_grales_2021:              toBool(r.voto_grales_2021),
   voto_anr_presidenciales_2022:  toBool(r.voto_anr_presidenciales_2022),
   voto_plra_presidenciales_2022: toBool(r.voto_plra_presidenciales_2022),
-  voto_grl_presidenciales_2023:  toBool(r.voto_grl_presidenciales_2023),
+  voto_gral_presidenciales_2023: toBool(r.voto_gral_presidenciales_2023),
 });
 
 /** Valores únicos no nulos de una clave, ordenados */
@@ -57,10 +57,10 @@ const DEFAULT_FILTERS = {
   // Votación — "" | "si" | "no"
   voto_internas_anr_2021:        "",
   voto_internas_plra_2021:       "",
-  voto_grl_2021:                 "",
+  voto_grales_2021:              "",
   voto_anr_presidenciales_2022:  "",
   voto_plra_presidenciales_2022: "",
-  voto_grl_presidenciales_2023:  "",
+  voto_gral_presidenciales_2023: "",
 };
 
 // ======================= COMPONENTE PRINCIPAL =======================
@@ -125,18 +125,18 @@ export default function ConsultarDatos({ onBack }) {
       if (filters.edadMax !== "" && edad > Number(filters.edadMax)) return false;
 
       // Votación (boolean: true === votó, false === no votó)
-      if (filters.voto_internas_anr_2021 === "si"        && r.voto_internas_anr_2021        !== true) return false;
-      if (filters.voto_internas_anr_2021 === "no"        && r.voto_internas_anr_2021        === true) return false;
-      if (filters.voto_internas_plra_2021 === "si"       && r.voto_internas_plra_2021       !== true) return false;
-      if (filters.voto_internas_plra_2021 === "no"       && r.voto_internas_plra_2021       === true) return false;
-      if (filters.voto_grl_2021 === "si"                 && r.voto_grl_2021                 !== true) return false;
-      if (filters.voto_grl_2021 === "no"                 && r.voto_grl_2021                 === true) return false;
-      if (filters.voto_anr_presidenciales_2022 === "si"  && r.voto_anr_presidenciales_2022  !== true) return false;
-      if (filters.voto_anr_presidenciales_2022 === "no"  && r.voto_anr_presidenciales_2022  === true) return false;
-      if (filters.voto_plra_presidenciales_2022 === "si" && r.voto_plra_presidenciales_2022 !== true) return false;
-      if (filters.voto_plra_presidenciales_2022 === "no" && r.voto_plra_presidenciales_2022 === true) return false;
-      if (filters.voto_grl_presidenciales_2023 === "si"  && r.voto_grl_presidenciales_2023  !== true) return false;
-      if (filters.voto_grl_presidenciales_2023 === "no"  && r.voto_grl_presidenciales_2023  === true) return false;
+      if (filters.voto_internas_anr_2021 === "si"        && !r.voto_internas_anr_2021)        return false;
+      if (filters.voto_internas_anr_2021 === "no"        &&  r.voto_internas_anr_2021)        return false;
+      if (filters.voto_internas_plra_2021 === "si"       && !r.voto_internas_plra_2021)       return false;
+      if (filters.voto_internas_plra_2021 === "no"       &&  r.voto_internas_plra_2021)       return false;
+      if (filters.voto_grales_2021 === "si"              && !r.voto_grales_2021)              return false;
+      if (filters.voto_grales_2021 === "no"              &&  r.voto_grales_2021)              return false;
+      if (filters.voto_anr_presidenciales_2022 === "si"  && !r.voto_anr_presidenciales_2022)  return false;
+      if (filters.voto_anr_presidenciales_2022 === "no"  &&  r.voto_anr_presidenciales_2022)  return false;
+      if (filters.voto_plra_presidenciales_2022 === "si" && !r.voto_plra_presidenciales_2022) return false;
+      if (filters.voto_plra_presidenciales_2022 === "no" &&  r.voto_plra_presidenciales_2022) return false;
+      if (filters.voto_gral_presidenciales_2023 === "si" && !r.voto_gral_presidenciales_2023) return false;
+      if (filters.voto_gral_presidenciales_2023 === "no" &&  r.voto_gral_presidenciales_2023) return false;
 
       return true;
     });
