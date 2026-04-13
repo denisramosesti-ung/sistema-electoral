@@ -8,8 +8,8 @@ import DataTableBI from "./consultarDatos/DataTableBI";
 
 // ======================= HELPERS =======================
 
-/** Un voto es "Sí" únicamente cuando el valor es exactamente 'S' */
-const isYesVote = (v) => v === "S";
+/** Un voto es "Sí" cuando el valor es booleano true */
+const isYesVote = (v) => v === true;
 
 // ======================= FILTROS POR DEFECTO =======================
 const DEFAULT_FILTERS = {
@@ -58,6 +58,7 @@ export default function ConsultarDatos({ onBack }) {
       if (err) throw new Error(err.message);
       if (!data) throw new Error("No se recibieron datos.");
 
+      if (data.length > 0) console.log("[v0] padron_bi sample row:", data[0]);
       setRawData(data);
     } catch (e) {
       console.error("[v0] ConsultarDatos load error:", e);

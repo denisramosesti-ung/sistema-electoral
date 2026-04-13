@@ -161,7 +161,7 @@ export default function ChartsBI({ filtered }) {
   );
 
   const makeVoteSlices = (key, labelSi = "Sí votó", labelNo = "No votó") => {
-    const si = filtered.filter((r) => r[key] === "S").length;
+    const si = filtered.filter((r) => r[key] === true).length;
     return [
       { label: labelSi, value: si },
       { label: labelNo, value: filtered.length - si },
