@@ -18,13 +18,13 @@ const normalizeRow = (r) => ({
   edad:  r.edad  != null ? Number(r.edad)  : null,
   mesa:  r.mesa  != null ? Number(r.mesa)  : null,
   orden: r.orden != null ? Number(r.orden) : null,
-  // Flags booleanos
-  abogado_flag:             toBool(r.abogado_flag),
-  jubilado_flag:            toBool(r.jubilado_flag),
-  funcionario_publico_flag: toBool(r.funcionario_publico_flag),
-  tercera_edad_flag:        toBool(r.tercera_edad_flag),
-  nuevo_anr_flag:           toBool(r.nuevo_anr_flag),
-  exa_san_jose_flag:        toBool(r.exa_san_jose_flag),
+  // Flags booleanos — leer desde los campos reales de padron_bi
+  abogado_flag:             toBool(r.abogados),
+  jubilado_flag:            toBool(r.jubilados),
+  funcionario_publico_flag: toBool(r.funcionario_publico),
+  tercera_edad_flag:        toBool(r.tercera_edad),
+  nuevo_anr_flag:           toBool(r.nuevo_anr),
+  exa_san_jose_flag:        toBool(r.exa_san_jose),
   // Votos booleanos
   voto_internas_anr_2021:        toBool(r.voto_internas_anr_2021),
   voto_internas_plra_2021:       toBool(r.voto_internas_plra_2021),
