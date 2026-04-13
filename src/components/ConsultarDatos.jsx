@@ -8,6 +8,9 @@ import DataTableBI    from "./consultarDatos/DataTableBI";
 
 // ======================= HELPERS =======================
 
+/** Convierte string "true"/"false" o boolean a boolean */
+const toBool = (val) => val === true || val === "true";
+
 /** Normaliza un registro crudo de padron_bi a tipos consistentes */
 const normalizeRow = (r) => ({
   ...r,
@@ -16,19 +19,19 @@ const normalizeRow = (r) => ({
   mesa:  r.mesa  != null ? Number(r.mesa)  : null,
   orden: r.orden != null ? Number(r.orden) : null,
   // Flags booleanos
-  abogado_flag:             r.abogado_flag             === true,
-  jubilado_flag:            r.jubilado_flag             === true,
-  funcionario_publico_flag: r.funcionario_publico_flag  === true,
-  tercera_edad_flag:        r.tercera_edad_flag          === true,
-  nuevo_anr_flag:           r.nuevo_anr_flag             === true,
-  exa_san_jose_flag:        r.exa_san_jose_flag          === true,
+  abogado_flag:             toBool(r.abogado_flag),
+  jubilado_flag:            toBool(r.jubilado_flag),
+  funcionario_publico_flag: toBool(r.funcionario_publico_flag),
+  tercera_edad_flag:        toBool(r.tercera_edad_flag),
+  nuevo_anr_flag:           toBool(r.nuevo_anr_flag),
+  exa_san_jose_flag:        toBool(r.exa_san_jose_flag),
   // Votos booleanos
-  voto_internas_anr_2021:        r.voto_internas_anr_2021        === true,
-  voto_internas_plra_2021:       r.voto_internas_plra_2021       === true,
-  voto_grl_2021:                 r.voto_grl_2021                 === true,
-  voto_anr_presidenciales_2022:  r.voto_anr_presidenciales_2022  === true,
-  voto_plra_presidenciales_2022: r.voto_plra_presidenciales_2022 === true,
-  voto_grl_presidenciales_2023:  r.voto_grl_presidenciales_2023  === true,
+  voto_internas_anr_2021:        toBool(r.voto_internas_anr_2021),
+  voto_internas_plra_2021:       toBool(r.voto_internas_plra_2021),
+  voto_grl_2021:                 toBool(r.voto_grl_2021),
+  voto_anr_presidenciales_2022:  toBool(r.voto_anr_presidenciales_2022),
+  voto_plra_presidenciales_2022: toBool(r.voto_plra_presidenciales_2022),
+  voto_grl_presidenciales_2023:  toBool(r.voto_grl_presidenciales_2023),
 });
 
 /** Valores únicos no nulos de una clave, ordenados */
@@ -77,23 +80,8 @@ export default function ConsultarDatos({ onBack }) {
       if (err) throw new Error(err.message);
       if (!data) throw new Error("No se recibieron datos.");
 
-      // DEBUG: datos originales
-      console.log("[v0] DATA ORIGINAL:", data.length);
-      console.log("[v0] Ejemplo item ORIGINAL:", data[0]);
-      console.log("[v0] TIPO voto_internas_anr_2021:", typeof data[0]?.voto_internas_anr_2021, "valor:", data[0]?.voto_internas_anr_2021);
-      console.log("[v0] TIPO edad:", typeof data[0]?.edad, "valor:", data[0]?.edad);
-      console.log("[v0] TIPO abogado_flag:", typeof data[0]?.abogado_flag, "valor:", data[0]?.abogado_flag);
-
       // Normalizar TODOS los tipos al cargar — una sola vez
-      const normalized = data.map(normalizeRow);
-
-      // DEBUG: datos normalizados
-      console.log("[v0] DATA NORMALIZADA:", normalized.length);
-      console.log("[v0] Ejemplo item NORMALIZADO:", normalized[0]);
-      console.log("[v0] TIPO voto_internas_anr_2021 (norm):", typeof normalized[0]?.voto_internas_anr_2021, "valor:", normalized[0]?.voto_internas_anr_2021);
-      console.log("[v0] TIPO edad (norm):", typeof normalized[0]?.edad, "valor:", normalized[0]?.edad);
-
-      setRawData(normalized);
+      setRawData(data.map(normalizeRow));
     } catch (e) {
       console.error("[v0] ConsultarDatos load error:", e);
       setError(e.message || "Error al cargar datos.");
@@ -113,15 +101,7 @@ export default function ConsultarDatos({ onBack }) {
 
   // ======================= FILTRADO =======================
   const filtered = useMemo(() => {
-    // DEBUG: inicio del filtrado
-    console.log("[v0] INICIO FILTRADO - rawData.length:", rawData.length);
-    console.log("[v0] FILTROS ACTIVOS:", JSON.stringify(filters));
-
-    const result = rawData.filter((r, index) => {
-      // DEBUG: solo logear los primeros 3 items
-      if (index < 3) {
-        console.log("[v0] Evaluando item", index, "- voto_internas_anr_2021:", r.voto_internas_anr_2021, "edad:", r.edad);
-      }
+    return rawData.filter((r) => {
       // Flags (boolean directo)
       if (filters.abogados            && !r.abogado_flag)             return false;
       if (filters.funcionario_publico  && !r.funcionario_publico_flag) return false;
@@ -160,11 +140,6 @@ export default function ConsultarDatos({ onBack }) {
 
       return true;
     });
-
-    // DEBUG: resultado del filtrado
-    console.log("[v0] DATA FILTRADA:", result.length);
-
-    return result;
   }, [rawData, filters]);
 
   // ======================= METRICS (desde filtered, booleanos directos) =======================
@@ -228,11 +203,6 @@ export default function ConsultarDatos({ onBack }) {
 
           {/* Contenido principal */}
           <main className="flex-1 min-w-0 p-4 flex flex-col gap-5">
-            {/* DEBUG VISUAL */}
-            <div className="bg-yellow-100 border border-yellow-400 rounded-lg p-3 text-sm">
-              <strong>DEBUG:</strong> Total Original: {rawData.length} | Total Filtrado: {filtered.length}
-            </div>
-
             <StatsCardsBI metrics={metrics} />
             <ChartsBI filtered={filtered} />
             <DataTableBI data={filtered} />
