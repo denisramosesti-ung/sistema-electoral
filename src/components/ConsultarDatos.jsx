@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, RefreshCw } from "lucide-react";
+import { ArrowLeft, RefreshCw, Printer } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import FilterPanel  from "./consultarDatos/FilterPanel";
 import StatsCardsBI from "./consultarDatos/StatsCardsBI";
@@ -96,6 +96,37 @@ export default function ConsultarDatos({ onBack }) {
 
   // Reset filtros
   const handleReset = () => setFilters(DEFAULT_FILTERS);
+
+  // Imprimir resultados filtrados
+  const imprimirResultados = () => {
+    const contenido = document.getElementById("tabla-resultados")?.innerHTML;
+    if (!contenido) return;
+
+    const ventana = window.open("", "_blank");
+    if (!ventana) return;
+
+    ventana.document.write(`
+      <html>
+        <head>
+          <title>Resultados Filtrados</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #ccc; padding: 6px; font-size: 12px; text-align: left; }
+            th { background: #f5f5f5; font-weight: bold; }
+            h2 { margin-bottom: 16px; }
+          </style>
+        </head>
+        <body>
+          <h2>Resultados Filtrados (${filtered.length.toLocaleString()} registros)</h2>
+          <table>${contenido}</table>
+        </body>
+      </html>
+    `);
+
+    ventana.document.close();
+    ventana.print();
+  };
 
   // ======================= SELECT OPTIONS (desde dataset completo) =======================
   const options = useMemo(() => ({
@@ -213,6 +244,18 @@ export default function ConsultarDatos({ onBack }) {
             <>
               <StatsCardsBI metrics={metrics} />
               <ChartsBI filtered={filtered} />
+
+              {/* Botón imprimir */}
+              <div className="flex justify-end">
+                <button
+                  onClick={imprimirResultados}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors shadow-sm"
+                >
+                  <Printer className="w-4 h-4" />
+                  Imprimir resultados
+                </button>
+              </div>
+
               <DataTableBI data={filtered} />
             </>
           )}

@@ -1,12 +1,17 @@
 import React, { useMemo } from "react";
 
 // ======================= BAR CHART =======================
-function BarChart({ title, data, maxBars = 12, color = "bg-brand-500" }) {
-  const sorted = useMemo(
-    () => [...data].sort((a, b) => b.value - a.value).slice(0, maxBars),
-    [data, maxBars]
-  );
-  const max = sorted[0]?.value || 1;
+function BarChart({ title, data, maxBars = 12, color = "bg-brand-500", preserveOrder = false }) {
+  const sorted = useMemo(() => {
+    if (preserveOrder) {
+      // Mantener el orden original, solo limitar cantidad
+      return data.slice(0, maxBars);
+    }
+    // Ordenar por cantidad descendente
+    return [...data].sort((a, b) => b.value - a.value).slice(0, maxBars);
+  }, [data, maxBars, preserveOrder]);
+
+  const max = Math.max(...sorted.map((d) => d.value), 1);
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-card p-5">
@@ -132,7 +137,7 @@ function EdadHistogram({ data }) {
     }));
   }, [data]);
 
-  return <BarChart title="Distribución por Edad" data={buckets} color="bg-indigo-500" maxBars={6} />;
+  return <BarChart title="Distribución por Edad" data={buckets} color="bg-indigo-500" maxBars={6} preserveOrder />;
 }
 
 // ======================= EXPORT =======================
@@ -152,7 +157,14 @@ export default function ChartsBI({ filtered }) {
       const k = r.seccional || "Sin datos";
       map[k] = (map[k] || 0) + 1;
     });
-    return Object.entries(map).map(([label, value]) => ({ label, value }));
+    // Ordenar por número de seccional ascendente (no por cantidad)
+    return Object.entries(map)
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => {
+        const numA = Number(a.label) || 9999;
+        const numB = Number(b.label) || 9999;
+        return numA - numB;
+      });
   }, [filtered]);
 
   // edad ya es Number (normalizado en ConsultarDatos)
@@ -176,7 +188,7 @@ export default function ChartsBI({ filtered }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <BarChart title="Distribución por Partido" data={byPartido} maxBars={10} color="bg-brand-500" />
-      <BarChart title="Votantes por Seccional" data={bySeccional} maxBars={12} color="bg-amber-500" />
+      <BarChart title="Votantes por Seccional" data={bySeccional} maxBars={12} color="bg-amber-500" preserveOrder />
       <PieChart title="Voto Internas ANR 2021" slices={votoInternasAnrSlices} />
       <PieChart title="Voto Generales 2023" slices={votoGenerales2023Slices} />
       <EdadHistogram data={edades} />

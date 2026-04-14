@@ -62,7 +62,7 @@ export default function DataTableBI({ data }) {
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table id="tabla-resultados" className="w-full text-sm">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200">
               {COLUMNS.map((col) => (
