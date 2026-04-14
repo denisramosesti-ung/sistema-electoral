@@ -19,6 +19,23 @@ const toBool = (val) => {
   return false;
 };
 
+/** Detecta si un campo TEXT tiene un valor significativo (no vacío, no null, no "false") */
+const hasValue = (val) => {
+  if (val === null || val === undefined) return false;
+  const v = String(val).trim().toLowerCase();
+  return v !== "" && v !== "false" && v !== "null";
+};
+
+/** Detecta si un campo BOOLEAN o TEXT representa "true" o "si" */
+const isTrue = (val) => {
+  if (val === true) return true;
+  if (typeof val === "string") {
+    const v = val.trim().toLowerCase();
+    return v === "true" || v === "si";
+  }
+  return false;
+};
+
 /** Valores únicos no nulos de una clave, ordenados */
 const toOptions = (data, key) =>
   [...new Set(data.map((r) => r[key]).filter((v) => v != null && v !== ""))].sort();
@@ -91,12 +108,15 @@ export default function ConsultarDatos({ onBack }) {
   const filtered = useMemo(() => {
     return rawData.filter((item) => {
       // Filtros de categorías (checkbox)
-      if (filters.abogados            && !toBool(item.abogados))            return false;
-      if (filters.funcionario_publico && !toBool(item.funcionario_publico)) return false;
-      if (filters.jubilados           && !toBool(item.jubilados))           return false;
-      if (filters.tercera_edad        && !toBool(item.tercera_edad))        return false;
-      if (filters.nuevo_anr           && !toBool(item.nuevo_anr))           return false;
-      if (filters.exa_san_jose        && !toBool(item.exa_san_jose))        return false;
+      // abogados, funcionario_publico, jubilados, exa_san_jose → TEXT (usar hasValue)
+      // nuevo_anr → BOOLEAN o TEXT (usar isTrue)
+      // tercera_edad → no tocar (ya funciona)
+      if (filters.abogados            && !hasValue(item.abogados))            return false;
+      if (filters.funcionario_publico && !hasValue(item.funcionario_publico)) return false;
+      if (filters.jubilados           && !hasValue(item.jubilados))           return false;
+      if (filters.tercera_edad        && !toBool(item.tercera_edad))          return false;
+      if (filters.nuevo_anr           && !isTrue(item.nuevo_anr))             return false;
+      if (filters.exa_san_jose        && !hasValue(item.exa_san_jose))        return false;
 
       // Filtros de texto
       if (filters.partido && item.partido !== filters.partido) return false;
@@ -129,11 +149,11 @@ export default function ConsultarDatos({ onBack }) {
   // ======================= METRICS (sobre datos filtrados) =======================
   const metrics = useMemo(() => ({
     total:        filtered.length,
-    abogados:     filtered.filter((r) => toBool(r.abogados)).length,
-    funcionarios: filtered.filter((r) => toBool(r.funcionario_publico)).length,
-    jubilados:    filtered.filter((r) => toBool(r.jubilados)).length,
+    abogados:     filtered.filter((r) => hasValue(r.abogados)).length,
+    funcionarios: filtered.filter((r) => hasValue(r.funcionario_publico)).length,
+    jubilados:    filtered.filter((r) => hasValue(r.jubilados)).length,
     terceraEdad:  filtered.filter((r) => toBool(r.tercera_edad)).length,
-    nuevoAnr:     filtered.filter((r) => toBool(r.nuevo_anr)).length,
+    nuevoAnr:     filtered.filter((r) => isTrue(r.nuevo_anr)).length,
   }), [filtered]);
 
   // ======================= RENDER =======================
