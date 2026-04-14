@@ -24,8 +24,6 @@ import {
   BarChart2,
 } from "lucide-react";
 
-import ConsultarDatos from "./ConsultarDatos";
-
 import AddPersonModal from "../AddPersonModal";
 import ModalTelefono from "./ModalTelefono";
 import ModalDireccion from "./ModalDireccion";
@@ -318,9 +316,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
 
   // Admin modal state (only for owner)
   const [createAdminModalOpen, setCreateAdminModalOpen] = useState(false);
-
-  // Consultar datos BI view
-  const [showConsultarDatos, setShowConsultarDatos] = useState(false);
 
   const [loadingEstructura, setLoadingEstructura] = useState(true);
 
@@ -997,16 +992,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
   }[currentUser.role] ?? currentUser.role;
 
   // ======================= UI =======================
-  // =========== CONSULTAR DATOS VIEW ===========
-  if (showConsultarDatos) {
-    return (
-      <ConsultarDatos
-        currentUser={currentUser}
-        onBack={() => setShowConsultarDatos(false)}
-      />
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-100">
       {/* LOADING SPLASH */}
@@ -1167,9 +1152,9 @@ const Dashboard = ({ currentUser, onLogout }) => {
             Descargar PDF
           </button>
 
-          {currentUser.role === "superadmin" && (
+          {(currentUser.role === "superadmin" || currentUser.role === "owner") && (
             <button
-              onClick={() => setShowConsultarDatos(true)}
+              onClick={() => window.open("/consultar-datos", "_blank")}
               className="inline-flex items-center gap-2 border border-brand-300 bg-white hover:bg-brand-50 text-brand-700 px-4 h-10 rounded-xl text-sm font-medium transition-colors w-full sm:w-auto shadow-sm"
             >
               <BarChart2 className="w-4 h-4" />
