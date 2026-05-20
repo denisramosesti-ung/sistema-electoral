@@ -323,51 +323,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
   // Módulo Ver por seccional
   const [showVerPorSeccional, setShowVerPorSeccional] = useState(false);
 
-  // ======================= LIVE STATS (superadmin/owner) =======================
-  const [liveStats, setLiveStats]           = useState(null);
-  const [liveStatsLoading, setLiveStatsLoading] = useState(false);
-  const [seccionalStats, setSeccionalStats] = useState([]);
-
-  const getDashboardStats = useCallback(async () => {
-    setLiveStatsLoading(true);
-    try {
-      const { data, error } = await supabase.rpc("get_dashboard_stats_by_seccional");
-      if (error) throw error;
-
-      const rows = data ?? [];
-      setSeccionalStats(rows);
-
-      // Sumar totales en frontend
-      const coordinadores    = rows.reduce((s, r) => s + Number(r.coordinadores    ?? 0), 0);
-      const subcoordinadores = rows.reduce((s, r) => s + Number(r.subcoordinadores ?? 0), 0);
-      const votantes         = rows.reduce((s, r) => s + Number(r.votantes         ?? 0), 0);
-      const totalRed         = rows.reduce((s, r) => s + Number(r.total_asignados  ?? 0), 0);
-
-      setLiveStats({ totalRed, coordinadores, subcoordinadores, votantes });
-    } catch (err) {
-      console.error("[v0] getDashboardStats error:", err.message);
-    } finally {
-      setLiveStatsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const role = currentUser?.role;
-    if (role !== "superadmin" && role !== "owner") return;
-
-    getDashboardStats();
-
-    // Suscripción en tiempo real — refrescar al insertar/eliminar en las 3 tablas
-    const channel = supabase
-      .channel("live-stats-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "coordinadores" },   () => getDashboardStats())
-      .on("postgres_changes", { event: "*", schema: "public", table: "subcoordinadores" }, () => getDashboardStats())
-      .on("postgres_changes", { event: "*", schema: "public", table: "votantes" },         () => getDashboardStats())
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [currentUser, getDashboardStats]);
-
   // Non-blocking toast notification (replaces alert() to prevent scroll jump)
   const [toastMsg, setToastMsg] = useState(null);
   const toastTimer = React.useRef(null);
@@ -1119,49 +1074,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
                 total={stats?.totalConfirmable}
                 percentage={stats?.porcentajeConfirmados}
               />
-            </div>
-          )}
-
-          {/* Tabla desglose por seccional — superadmin/owner */}
-          {(currentUser.role === "superadmin" || currentUser.role === "owner") && seccionalStats.length > 0 && (
-            <div className="mt-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-700">Asignados por seccional</h3>
-                <span className="text-xs text-slate-400">{seccionalStats.length} seccionales</span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                      <th className="px-4 py-2 text-left">Seccional</th>
-                      <th className="px-4 py-2 text-right">Coordinadores</th>
-                      <th className="px-4 py-2 text-right">Subcoordinadores</th>
-                      <th className="px-4 py-2 text-right">Votantes</th>
-                      <th className="px-4 py-2 text-right font-bold text-slate-700">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {seccionalStats.map((row) => (
-                      <tr key={row.seccional} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-2 font-medium text-slate-700">Seccional {row.seccional}</td>
-                        <td className="px-4 py-2 text-right text-slate-600">{Number(row.coordinadores).toLocaleString()}</td>
-                        <td className="px-4 py-2 text-right text-slate-600">{Number(row.subcoordinadores).toLocaleString()}</td>
-                        <td className="px-4 py-2 text-right text-slate-600">{Number(row.votantes).toLocaleString()}</td>
-                        <td className="px-4 py-2 text-right font-semibold text-brand-700">{Number(row.total_asignados).toLocaleString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="border-t-2 border-slate-200 bg-slate-50">
-                    <tr className="text-sm font-bold text-slate-700">
-                      <td className="px-4 py-2">Total</td>
-                      <td className="px-4 py-2 text-right">{stats?.coordinadores?.toLocaleString() ?? "—"}</td>
-                      <td className="px-4 py-2 text-right">{stats?.subcoordinadores?.toLocaleString() ?? "—"}</td>
-                      <td className="px-4 py-2 text-right">{stats?.votantes?.toLocaleString() ?? "—"}</td>
-                      <td className="px-4 py-2 text-right text-brand-700">{stats?.totalRed?.toLocaleString() ?? "—"}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
             </div>
           )}
 
