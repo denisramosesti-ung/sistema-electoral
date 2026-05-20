@@ -1104,10 +1104,10 @@ const Dashboard = ({ currentUser, onLogout }) => {
         <section aria-label="Resumen estadístico">
           {(currentUser.role === "superadmin" || currentUser.role === "owner") && (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-          <StatCard label="Total red" value={liveStatsLoading ? "..." : (liveStats?.totalRed ?? stats?.totalRed)} icon={TrendingUp} accent />
-                <StatCard label="Coordinadores" value={liveStatsLoading ? "..." : (liveStats?.coordinadores ?? stats?.coordinadores)} icon={Users} />
-                <StatCard label="Subcoordinadores" value={liveStatsLoading ? "..." : (liveStats?.subcoordinadores ?? stats?.subcoordinadores)} icon={Users} />
-                <StatCard label="Votantes" value={liveStatsLoading ? "..." : (liveStats?.votantes ?? stats?.votantes)} icon={Users} />
+          <StatCard label="Total red" value={stats?.totalRed} icon={TrendingUp} accent />
+                <StatCard label="Coordinadores" value={stats?.coordinadores} icon={Users} />
+                <StatCard label="Subcoordinadores" value={stats?.subcoordinadores} icon={Users} />
+                <StatCard label="Votantes" value={stats?.votantes} icon={Users} />
               <StatCard label="Confirmados" value={stats?.totalConfirmados} icon={CheckCircle2} />
               <StatCard label="Pendientes" value={stats?.votosPendientes} icon={AlertCircle} />
             </div>
@@ -1154,10 +1154,10 @@ const Dashboard = ({ currentUser, onLogout }) => {
                   <tfoot className="border-t-2 border-slate-200 bg-slate-50">
                     <tr className="text-sm font-bold text-slate-700">
                       <td className="px-4 py-2">Total</td>
-                      <td className="px-4 py-2 text-right">{liveStats?.coordinadores?.toLocaleString() ?? "—"}</td>
-                      <td className="px-4 py-2 text-right">{liveStats?.subcoordinadores?.toLocaleString() ?? "—"}</td>
-                      <td className="px-4 py-2 text-right">{liveStats?.votantes?.toLocaleString() ?? "—"}</td>
-                      <td className="px-4 py-2 text-right text-brand-700">{liveStats?.totalRed?.toLocaleString() ?? "—"}</td>
+                      <td className="px-4 py-2 text-right">{stats?.coordinadores?.toLocaleString() ?? "—"}</td>
+                      <td className="px-4 py-2 text-right">{stats?.subcoordinadores?.toLocaleString() ?? "—"}</td>
+                      <td className="px-4 py-2 text-right">{stats?.votantes?.toLocaleString() ?? "—"}</td>
+                      <td className="px-4 py-2 text-right text-brand-700">{stats?.totalRed?.toLocaleString() ?? "—"}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -1167,10 +1167,10 @@ const Dashboard = ({ currentUser, onLogout }) => {
 
           {currentUser.role === "coordinador" && (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-          <StatCard label="Total red" value={liveStatsLoading ? "..." : (liveStats?.totalRed ?? stats?.totalRed)} icon={TrendingUp} accent />
-                <StatCard label="Subcoordinadores" value={liveStatsLoading ? "..." : (liveStats?.subcoordinadores ?? stats?.subcoordinadores)} icon={Users} />
+          <StatCard label="Total red" value={stats?.totalRed} icon={TrendingUp} accent />
+                <StatCard label="Subcoordinadores" value={stats?.subcoordinadores} icon={Users} />
                 <StatCard label="Votantes directos" value={stats?.votantesDirectos} icon={Users} />
-                <StatCard label="Total votantes" value={liveStatsLoading ? "..." : (liveStats?.votantes ?? stats?.totalVotantes)} icon={Users} />
+                <StatCard label="Total votantes" value={stats?.totalVotantes} icon={Users} />
               <StatCard label="Confirmados" value={stats?.totalConfirmados} icon={CheckCircle2} />
               <StatCard label="Pendientes" value={stats?.votosPendientes} icon={AlertCircle} />
             </div>
