@@ -1272,8 +1272,9 @@ const Dashboard = ({ currentUser, onLogout }) => {
           </section>
         )}
 
-        {/* =========== BUSCADOR =========== */}
+        {/* =========== BUSCADOR + MI ESTRUCTURA =========== */}
         {!showVerPorSeccional && (
+        <>
         <section aria-label="Búsqueda interna">
           <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-card">
             <label
@@ -1771,6 +1772,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
             </div>
           </div>
         </section>
+        </>
         )}
       </main>
 
