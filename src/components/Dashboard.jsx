@@ -320,34 +320,28 @@ const Dashboard = ({ currentUser, onLogout }) => {
   const [loadingEstructura, setLoadingEstructura] = useState(true);
 
   // ======================= LIVE STATS (superadmin/owner) =======================
-  const [liveStats, setLiveStats] = useState(null);
+  const [liveStats, setLiveStats]           = useState(null);
   const [liveStatsLoading, setLiveStatsLoading] = useState(false);
+  const [seccionalStats, setSeccionalStats] = useState([]);
 
   const getDashboardStats = useCallback(async () => {
     setLiveStatsLoading(true);
     try {
-      const [
-        { count: coordCount, error: e1 },
-        { count: subCount,   error: e2 },
-        { count: votCount,   error: e3 },
-      ] = await Promise.all([
-        supabase.from("coordinadores").select("ci", { count: "exact", head: true }),
-        supabase.from("subcoordinadores").select("ci", { count: "exact", head: true }),
-        supabase.from("votantes").select("ci", { count: "exact", head: true }),
-      ]);
+      const { data, error } = await supabase.rpc("get_dashboard_stats_by_seccional");
+      if (error) throw error;
 
-      if (e1) console.error("[v0] liveStats coords:", e1.message);
-      if (e2) console.error("[v0] liveStats subs:",   e2.message);
-      if (e3) console.error("[v0] liveStats vots:",   e3.message);
+      const rows = data ?? [];
+      setSeccionalStats(rows);
 
-      const coordinadores   = coordCount ?? 0;
-      const subcoordinadores = subCount  ?? 0;
-      const votantes         = votCount  ?? 0;
-      const totalRed         = coordinadores + subcoordinadores + votantes;
+      // Sumar totales en frontend
+      const coordinadores    = rows.reduce((s, r) => s + Number(r.coordinadores    ?? 0), 0);
+      const subcoordinadores = rows.reduce((s, r) => s + Number(r.subcoordinadores ?? 0), 0);
+      const votantes         = rows.reduce((s, r) => s + Number(r.votantes         ?? 0), 0);
+      const totalRed         = rows.reduce((s, r) => s + Number(r.total_asignados  ?? 0), 0);
 
       setLiveStats({ totalRed, coordinadores, subcoordinadores, votantes });
     } catch (err) {
-      console.error("[v0] getDashboardStats error:", err);
+      console.error("[v0] getDashboardStats error:", err.message);
     } finally {
       setLiveStatsLoading(false);
     }
@@ -1121,6 +1115,49 @@ const Dashboard = ({ currentUser, onLogout }) => {
                 total={stats?.totalConfirmable}
                 percentage={stats?.porcentajeConfirmados}
               />
+            </div>
+          )}
+
+          {/* Tabla desglose por seccional — superadmin/owner */}
+          {(currentUser.role === "superadmin" || currentUser.role === "owner") && seccionalStats.length > 0 && (
+            <div className="mt-4 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-700">Asignados por seccional</h3>
+                <span className="text-xs text-slate-400">{seccionalStats.length} seccionales</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                      <th className="px-4 py-2 text-left">Seccional</th>
+                      <th className="px-4 py-2 text-right">Coordinadores</th>
+                      <th className="px-4 py-2 text-right">Subcoordinadores</th>
+                      <th className="px-4 py-2 text-right">Votantes</th>
+                      <th className="px-4 py-2 text-right font-bold text-slate-700">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {seccionalStats.map((row) => (
+                      <tr key={row.seccional} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-4 py-2 font-medium text-slate-700">Seccional {row.seccional}</td>
+                        <td className="px-4 py-2 text-right text-slate-600">{Number(row.coordinadores).toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right text-slate-600">{Number(row.subcoordinadores).toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right text-slate-600">{Number(row.votantes).toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right font-semibold text-brand-700">{Number(row.total_asignados).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="border-t-2 border-slate-200 bg-slate-50">
+                    <tr className="text-sm font-bold text-slate-700">
+                      <td className="px-4 py-2">Total</td>
+                      <td className="px-4 py-2 text-right">{liveStats?.coordinadores?.toLocaleString() ?? "—"}</td>
+                      <td className="px-4 py-2 text-right">{liveStats?.subcoordinadores?.toLocaleString() ?? "—"}</td>
+                      <td className="px-4 py-2 text-right">{liveStats?.votantes?.toLocaleString() ?? "—"}</td>
+                      <td className="px-4 py-2 text-right text-brand-700">{liveStats?.totalRed?.toLocaleString() ?? "—"}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             </div>
           )}
 
