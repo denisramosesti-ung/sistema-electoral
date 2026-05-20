@@ -29,6 +29,7 @@ import ModalTelefono from "./ModalTelefono";
 import ModalDireccion from "./ModalDireccion";
 import ConfirmVotoModal from "./ConfirmVotoModal";
 import CreateAdminModal from "./CreateAdminModal";
+import VerPorSeccionalModule from "./VerPorSeccionalModule";
 import {
   generateSuperadminPDF,
   generateCoordinadorPDF,
@@ -318,6 +319,9 @@ const Dashboard = ({ currentUser, onLogout }) => {
   const [createAdminModalOpen, setCreateAdminModalOpen] = useState(false);
 
   const [loadingEstructura, setLoadingEstructura] = useState(true);
+
+  // Módulo Ver por seccional
+  const [showVerPorSeccional, setShowVerPorSeccional] = useState(false);
 
   // ======================= LIVE STATS (superadmin/owner) =======================
   const [liveStats, setLiveStats]           = useState(null);
@@ -1249,9 +1253,27 @@ const Dashboard = ({ currentUser, onLogout }) => {
               Consultar datos
             </button>
           )}
+
+          {(currentUser.role === "superadmin" || currentUser.role === "owner") && (
+            <button
+              onClick={() => setShowVerPorSeccional(true)}
+              className="inline-flex items-center gap-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-4 h-10 rounded-xl text-sm font-medium transition-colors w-full sm:w-auto shadow-sm"
+            >
+              <Users className="w-4 h-4" />
+              Ver por seccional
+            </button>
+          )}
         </section>
 
+        {/* =========== VER POR SECCIONAL =========== */}
+        {showVerPorSeccional && (currentUser.role === "superadmin" || currentUser.role === "owner") && (
+          <section aria-label="Ver por seccional" className="mt-2">
+            <VerPorSeccionalModule onVolver={() => setShowVerPorSeccional(false)} />
+          </section>
+        )}
+
         {/* =========== BUSCADOR =========== */}
+        {!showVerPorSeccional && (
         <section aria-label="Búsqueda interna">
           <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-card">
             <label
@@ -1749,6 +1771,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
             </div>
           </div>
         </section>
+        )}
       </main>
 
       {/* =========== MODALS =========== */}
