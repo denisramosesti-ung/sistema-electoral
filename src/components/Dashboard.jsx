@@ -319,6 +319,57 @@ const Dashboard = ({ currentUser, onLogout }) => {
 
   const [loadingEstructura, setLoadingEstructura] = useState(true);
 
+  // ======================= LIVE STATS (superadmin/owner) =======================
+  const [liveStats, setLiveStats] = useState(null);
+  const [liveStatsLoading, setLiveStatsLoading] = useState(false);
+
+  const getDashboardStats = useCallback(async () => {
+    setLiveStatsLoading(true);
+    try {
+      const [
+        { count: coordCount, error: e1 },
+        { count: subCount,   error: e2 },
+        { count: votCount,   error: e3 },
+      ] = await Promise.all([
+        supabase.from("coordinadores").select("ci", { count: "exact", head: true }),
+        supabase.from("subcoordinadores").select("ci", { count: "exact", head: true }),
+        supabase.from("votantes").select("ci", { count: "exact", head: true }),
+      ]);
+
+      if (e1) console.error("[v0] liveStats coords:", e1.message);
+      if (e2) console.error("[v0] liveStats subs:",   e2.message);
+      if (e3) console.error("[v0] liveStats vots:",   e3.message);
+
+      const coordinadores   = coordCount ?? 0;
+      const subcoordinadores = subCount  ?? 0;
+      const votantes         = votCount  ?? 0;
+      const totalRed         = coordinadores + subcoordinadores + votantes;
+
+      setLiveStats({ totalRed, coordinadores, subcoordinadores, votantes });
+    } catch (err) {
+      console.error("[v0] getDashboardStats error:", err);
+    } finally {
+      setLiveStatsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const role = currentUser?.role;
+    if (role !== "superadmin" && role !== "owner") return;
+
+    getDashboardStats();
+
+    // Suscripción en tiempo real — refrescar al insertar/eliminar en las 3 tablas
+    const channel = supabase
+      .channel("live-stats-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "coordinadores" },   () => getDashboardStats())
+      .on("postgres_changes", { event: "*", schema: "public", table: "subcoordinadores" }, () => getDashboardStats())
+      .on("postgres_changes", { event: "*", schema: "public", table: "votantes" },         () => getDashboardStats())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [currentUser, getDashboardStats]);
+
   // Non-blocking toast notification (replaces alert() to prevent scroll jump)
   const [toastMsg, setToastMsg] = useState(null);
   const toastTimer = React.useRef(null);
@@ -1055,10 +1106,10 @@ const Dashboard = ({ currentUser, onLogout }) => {
         <section aria-label="Resumen estadístico">
           {(currentUser.role === "superadmin" || currentUser.role === "owner") && (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-              <StatCard label="Total red" value={stats?.totalRed} icon={TrendingUp} accent />
-              <StatCard label="Coordinadores" value={stats?.coordinadores} icon={Users} />
-              <StatCard label="Subcoordinadores" value={stats?.subcoordinadores} icon={Users} />
-              <StatCard label="Votantes" value={stats?.votantes} icon={Users} />
+          <StatCard label="Total red" value={liveStatsLoading ? "..." : (liveStats?.totalRed ?? stats?.totalRed)} icon={TrendingUp} accent />
+                <StatCard label="Coordinadores" value={liveStatsLoading ? "..." : (liveStats?.coordinadores ?? stats?.coordinadores)} icon={Users} />
+                <StatCard label="Subcoordinadores" value={liveStatsLoading ? "..." : (liveStats?.subcoordinadores ?? stats?.subcoordinadores)} icon={Users} />
+                <StatCard label="Votantes" value={liveStatsLoading ? "..." : (liveStats?.votantes ?? stats?.votantes)} icon={Users} />
               <StatCard label="Confirmados" value={stats?.totalConfirmados} icon={CheckCircle2} />
               <StatCard label="Pendientes" value={stats?.votosPendientes} icon={AlertCircle} />
             </div>
@@ -1075,10 +1126,10 @@ const Dashboard = ({ currentUser, onLogout }) => {
 
           {currentUser.role === "coordinador" && (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-              <StatCard label="Total red" value={stats?.totalRed} icon={TrendingUp} accent />
-              <StatCard label="Subcoordinadores" value={stats?.subcoordinadores} icon={Users} />
-              <StatCard label="Votantes directos" value={stats?.votantesDirectos} icon={Users} />
-              <StatCard label="Total votantes" value={stats?.totalVotantes} icon={Users} />
+          <StatCard label="Total red" value={liveStatsLoading ? "..." : (liveStats?.totalRed ?? stats?.totalRed)} icon={TrendingUp} accent />
+                <StatCard label="Subcoordinadores" value={liveStatsLoading ? "..." : (liveStats?.subcoordinadores ?? stats?.subcoordinadores)} icon={Users} />
+                <StatCard label="Votantes directos" value={stats?.votantesDirectos} icon={Users} />
+                <StatCard label="Total votantes" value={liveStatsLoading ? "..." : (liveStats?.votantes ?? stats?.totalVotantes)} icon={Users} />
               <StatCard label="Confirmados" value={stats?.totalConfirmados} icon={CheckCircle2} />
               <StatCard label="Pendientes" value={stats?.votosPendientes} icon={AlertCircle} />
             </div>
