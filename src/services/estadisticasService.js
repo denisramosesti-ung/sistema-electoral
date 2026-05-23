@@ -4,24 +4,19 @@ export const getEstadisticas = (estructura, currentUser) => {
   if (!currentUser) return {};
 
   // ======================= SUPERADMIN =======================
-  if (currentUser.role === "superadmin") {
+  if (currentUser.role === "superadmin" || currentUser.role === "owner") {
     const coordinadores = estructura.coordinadores.length;
     const subcoordinadores = estructura.subcoordinadores.length;
     const votantes = estructura.votantes.length;
 
-    // Confirmed subs
     const subsConfirmados = estructura.subcoordinadores.filter(
       (s) => s.confirmado === true
     ).length;
 
-    // Confirmed voters
     const votosConfirmados = estructura.votantes.filter(
       (v) => v.voto_confirmado === true
     ).length;
 
-    // Coordinadores are always counted as 1 confirmed vote each (automatic).
-    // Total confirmable = coordinadores + subs + voters
-    // Total confirmed  = coordinadores (auto) + confirmedSubs + confirmedVoters
     const totalConfirmable = coordinadores + subcoordinadores + votantes;
     const totalConfirmados = coordinadores + subsConfirmados + votosConfirmados;
     const porcentajeConfirmados =
@@ -46,53 +41,37 @@ export const getEstadisticas = (estructura, currentUser) => {
   if (currentUser.role === "coordinador") {
     const miCI = normalizeCI(currentUser.ci);
 
-    // Subcoordinadores under this coord
+    // Build Map: asignado_por -> votantes[] — single pass O(n)
+    const votantesPorAsignador = new Map();
+    for (const v of estructura.votantes) {
+      const key = normalizeCI(v.asignado_por);
+      if (!votantesPorAsignador.has(key)) votantesPorAsignador.set(key, []);
+      votantesPorAsignador.get(key).push(v);
+    }
+
     const subs = estructura.subcoordinadores.filter(
       (s) => normalizeCI(s.coordinador_ci) === miCI
     );
 
-    // Voters assigned directly by this coord
-    const votantesDirectos = estructura.votantes.filter(
-      (v) => normalizeCI(v.asignado_por) === miCI
-    );
+    const votantesDirectos = votantesPorAsignador.get(miCI) ?? [];
 
-    // Voters assigned by each sub (indirect)
-    const votantesIndirectos = subs.reduce(
-      (acc, sub) =>
-        acc +
-        estructura.votantes.filter(
-          (v) => normalizeCI(v.asignado_por) === normalizeCI(sub.ci)
-        ).length,
-      0
-    );
-
-    // Total voters = direct + indirect
-    const totalVotantes = votantesDirectos.length + votantesIndirectos;
-
-    // Confirmed subs
+    // Indirect voters: one map lookup per sub — O(subs)
+    let votantesIndirectos = 0;
+    let votosIndirectosConfirmados = 0;
     const subsConfirmados = subs.filter((s) => s.confirmado === true).length;
 
-    // Confirmed votes: direct confirmed + indirect confirmed
+    for (const sub of subs) {
+      const subVots = votantesPorAsignador.get(normalizeCI(sub.ci)) ?? [];
+      votantesIndirectos += subVots.length;
+      votosIndirectosConfirmados += subVots.filter((v) => v.voto_confirmado === true).length;
+    }
+
+    const totalVotantes = votantesDirectos.length + votantesIndirectos;
     const votosDirectosConfirmados = votantesDirectos.filter(
       (v) => v.voto_confirmado === true
     ).length;
-
-    const votosIndirectosConfirmados = subs.reduce(
-      (acc, sub) =>
-        acc +
-        estructura.votantes.filter(
-          (v) =>
-            normalizeCI(v.asignado_por) === normalizeCI(sub.ci) &&
-            v.voto_confirmado === true
-        ).length,
-      0
-    );
-
     const votosConfirmados = votosDirectosConfirmados + votosIndirectosConfirmados;
 
-    // Coordinador self is always counted as 1 confirmed vote (automatic).
-    // Total confirmable = 1 (self) + subs + all voters
-    // Total confirmed  = 1 (self auto) + confirmedSubs + confirmedVoters
     const totalConfirmable = 1 + subs.length + totalVotantes;
     const totalConfirmados = 1 + subsConfirmados + votosConfirmados;
     const porcentajeConfirmados =
@@ -121,16 +100,10 @@ export const getEstadisticas = (estructura, currentUser) => {
       (v) => normalizeCI(v.asignado_por) === miCI
     );
 
-    // Votos confirmados
     const votosConfirmados = misVotantes.filter(
       (v) => v.voto_confirmado === true
     ).length;
-    const porcentajeConfirmados =
-      misVotantes.length > 0
-        ? Math.round((votosConfirmados / misVotantes.length) * 100)
-        : 0;
 
-    // Sub self is always counted as 1 confirmed vote (automatic).
     const totalConfirmable = 1 + misVotantes.length;
     const totalConfirmados = 1 + votosConfirmados;
     const porcentajeTotal =

@@ -44,6 +44,9 @@ import {
   getVotantesDeSubcoord,
   getMisVotantes,
   getPersonasDisponibles,
+  buildSubsByCoordMap,
+  buildVotantesByAsignadoPorMap,
+  buildRolMap,
 } from "../utils/estructuraHelpers";
 
 // ======================= SMALL REUSABLE COMPONENTS =======================
@@ -849,6 +852,23 @@ const Dashboard = ({ currentUser, onLogout }) => {
     }
   };
 
+  // ======================= MEMOIZED MAPS (O(n) one-time build) =======================
+  // Built once per estructura change; reused by voteCountsByCoord, voteCountsBySub, disponibles
+  const subsByCoordMap = useMemo(
+    () => buildSubsByCoordMap(estructura.subcoordinadores || []),
+    [estructura.subcoordinadores]
+  );
+
+  const votantesByAsignadoPorMap = useMemo(
+    () => buildVotantesByAsignadoPorMap(estructura.votantes || []),
+    [estructura.votantes]
+  );
+
+  const rolMap = useMemo(
+    () => buildRolMap(estructura),
+    [estructura]
+  );
+
   // ======================= STATS =======================
   const stats = useMemo(
     () => getEstadisticas(estructura, currentUser),
@@ -856,50 +876,49 @@ const Dashboard = ({ currentUser, onLogout }) => {
   );
 
   // ======================= PER-PERSON VOTE COUNTS =======================
-  // Coordinador inline counter: 1 (self auto) + subs + voters
-  // Subcoordinador inline counter: 1 (self auto) + voters
+  // Uses pre-built Maps — O(1) per coord/sub instead of O(n) .filter() each
   const voteCountsByCoord = useMemo(() => {
     const map = {};
-    (estructura.coordinadores || []).forEach((coord) => {
+    for (const coord of (estructura.coordinadores || [])) {
       const ci = normalizeCI(coord.ci);
-      const subs = (estructura.subcoordinadores || []).filter(
-        (s) => normalizeCI(s.coordinador_ci) === ci
-      );
-      const voters = (estructura.votantes || []).filter(
-        (v) => normalizeCI(v.coordinador_ci) === ci
-      );
+      const subs = subsByCoordMap.get(ci) ?? [];
+      // All voters under this coord = direct (asignado_por=coord) + indirect (asignado_por=sub)
+      const directVoters = votantesByAsignadoPorMap.get(ci) ?? [];
+      let indirectTotal = 0;
+      let indirectConfirmed = 0;
+      for (const sub of subs) {
+        const subVots = votantesByAsignadoPorMap.get(normalizeCI(sub.ci)) ?? [];
+        indirectTotal += subVots.length;
+        indirectConfirmed += subVots.filter((v) => v.voto_confirmado === true).length;
+      }
       const subsConfirmed = subs.filter((s) => s.confirmado === true).length;
-      const votersConfirmed = voters.filter((v) => v.voto_confirmado === true).length;
-      // +1 for coord self (always auto-confirmed)
+      const directConfirmed = directVoters.filter((v) => v.voto_confirmado === true).length;
       map[ci] = {
-        total: 1 + subs.length + voters.length,
-        confirmed: 1 + subsConfirmed + votersConfirmed,
+        total: 1 + subs.length + directVoters.length + indirectTotal,
+        confirmed: 1 + subsConfirmed + directConfirmed + indirectConfirmed,
       };
-    });
+    }
     return map;
-  }, [estructura]);
+  }, [estructura.coordinadores, subsByCoordMap, votantesByAsignadoPorMap]);
 
   const voteCountsBySub = useMemo(() => {
     const map = {};
-    (estructura.subcoordinadores || []).forEach((sub) => {
+    for (const sub of (estructura.subcoordinadores || [])) {
       const ci = normalizeCI(sub.ci);
-      const voters = (estructura.votantes || []).filter(
-        (v) => normalizeCI(v.asignado_por) === ci
-      );
+      const voters = votantesByAsignadoPorMap.get(ci) ?? [];
       const votersConfirmed = voters.filter((v) => v.voto_confirmado === true).length;
-      // +1 for sub self (always auto-confirmed)
       map[ci] = {
         total: 1 + voters.length,
         confirmed: 1 + votersConfirmed,
       };
-    });
+    }
     return map;
-  }, [estructura]);
+  }, [estructura.subcoordinadores, votantesByAsignadoPorMap]);
 
   // ======================= DISPONIBLES =======================
   const disponibles = useMemo(
-    () => getPersonasDisponibles(padron, estructura),
-    [padron, estructura]
+    () => getPersonasDisponibles(padron, estructura, rolMap),
+    [padron, estructura, rolMap]
   );
 
   // ======================= BUSCADOR =======================
@@ -913,7 +932,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
     const miCI = normalizeCI(currentUser?.ci);
     const coords = estructura.coordinadores || [];
     const subs = estructura.subcoordinadores || [];
-    const vots = estructura.votantes || [];
     const out = [];
     const seen = new Set();
     const pushUnique = (tipo, persona) => {
@@ -925,23 +943,25 @@ const Dashboard = ({ currentUser, onLogout }) => {
     if (role === "superadmin" || role === "owner") {
       coords.forEach((p) => pushUnique("coordinador", p));
       subs.forEach((p) => pushUnique("subcoordinador", p));
-      vots.forEach((p) => pushUnique("votante", p));
+      (estructura.votantes || []).forEach((p) => pushUnique("votante", p));
       return out;
     }
     if (role === "coordinador") {
-      const misSubs = subs.filter((s) => normalizeCI(s.coordinador_ci) === miCI);
+      const misSubs = subsByCoordMap.get(miCI) ?? [];
       const misSubsSet = new Set(misSubs.map((s) => normalizeCI(s.ci)));
       misSubs.forEach((p) => pushUnique("subcoordinador", p));
-      vots.filter((v) => normalizeCI(v.asignado_por) === miCI).forEach((p) => pushUnique("votante", p));
-      vots.filter((v) => misSubsSet.has(normalizeCI(v.asignado_por))).forEach((p) => pushUnique("votante", p));
+      (votantesByAsignadoPorMap.get(miCI) ?? []).forEach((p) => pushUnique("votante", p));
+      misSubsSet.forEach((subCI) => {
+        (votantesByAsignadoPorMap.get(subCI) ?? []).forEach((p) => pushUnique("votante", p));
+      });
       return out;
     }
     if (role === "subcoordinador") {
-      vots.filter((v) => normalizeCI(v.asignado_por) === miCI).forEach((p) => pushUnique("votante", p));
+      (votantesByAsignadoPorMap.get(miCI) ?? []).forEach((p) => pushUnique("votante", p));
       return out;
     }
     return [];
-  }, [estructura, currentUser]);
+  }, [estructura, currentUser, subsByCoordMap, votantesByAsignadoPorMap]);
 
   const resultadosBusqueda = useMemo(() => {
     const qRaw = normalizeText(searchCI);
@@ -1254,29 +1274,18 @@ const Dashboard = ({ currentUser, onLogout }) => {
 
               {/* ====== SUPERADMIN / OWNER ====== */}
               {!loadingEstructura && (currentUser.role === "superadmin" || currentUser.role === "owner") && (() => {
-                const coordsVisible = (estructura.coordinadores || []).filter(
-                  (c) => !cisFiltradosSet || cisFiltradosSet.has(normalizeCI(c.ci))
-                );
-                const subsVisible = (estructura.subcoordinadores || []).filter(
-                  (s) => !cisFiltradosSet || cisFiltradosSet.has(normalizeCI(s.ci))
-                );
-                const votsVisible = (estructura.votantes || []).filter(
-                  (v) => !cisFiltradosSet || cisFiltradosSet.has(normalizeCI(v.ci))
-                );
                 // Coordinadores que tienen al menos un sub/votante visible o ellos mismos son visibles
                 const coordsToShow = cisFiltradosSet
                   ? (estructura.coordinadores || []).filter((c) => {
                       const cCI = normalizeCI(c.ci);
                       if (cisFiltradosSet.has(cCI)) return true;
-                      // incluir si algún sub o votante suyo coincide
-                      const subsCIs = new Set(
-                        (estructura.subcoordinadores || [])
-                          .filter((s) => normalizeCI(s.coordinador_ci) === cCI)
-                          .map((s) => normalizeCI(s.ci))
-                      );
-                      if ([...subsCIs].some((sci) => cisFiltradosSet.has(sci))) return true;
-                      return (estructura.votantes || []).some(
-                        (v) => normalizeCI(v.asignado_por) === cCI && cisFiltradosSet.has(normalizeCI(v.ci))
+                      const mySubs = subsByCoordMap.get(cCI) ?? [];
+                      if (mySubs.some((s) => cisFiltradosSet.has(normalizeCI(s.ci)))) return true;
+                      // direct voters
+                      if ((votantesByAsignadoPorMap.get(cCI) ?? []).some((v) => cisFiltradosSet.has(normalizeCI(v.ci)))) return true;
+                      // indirect voters via subs
+                      return mySubs.some((s) =>
+                        (votantesByAsignadoPorMap.get(normalizeCI(s.ci)) ?? []).some((v) => cisFiltradosSet.has(normalizeCI(v.ci)))
                       );
                     })
                   : (estructura.coordinadores || []);
@@ -1332,13 +1341,12 @@ const Dashboard = ({ currentUser, onLogout }) => {
                       </div>
 
                       {/* Coord expanded */}
-                      {(expandedCoords[coordCI] || cisFiltradosSet) && (
-                        <div className={`border-t border-slate-100 bg-slate-50/50 px-4 pb-4 pt-3 overflow-x-auto animate-fade-in${!expandedCoords[coordCI] && cisFiltradosSet ? " hidden" : ""}`}>
+                      {expandedCoords[coordCI] && (
+                        <div className="border-t border-slate-100 bg-slate-50/50 px-4 pb-4 pt-3 overflow-x-auto animate-fade-in">
                           <div className="space-y-2 min-w-0">
-                            {(estructura.subcoordinadores || [])
-                              .filter((s) => normalizeCI(s.coordinador_ci) === coordCI)
+                            {(subsByCoordMap.get(coordCI) ?? [])
                               .filter((s) => !cisFiltradosSet || cisFiltradosSet.has(normalizeCI(s.ci)) ||
-                                (estructura.votantes || []).some((v) => normalizeCI(v.asignado_por) === normalizeCI(s.ci) && cisFiltradosSet.has(normalizeCI(v.ci))))
+                                (votantesByAsignadoPorMap.get(normalizeCI(s.ci)) ?? []).some((v) => cisFiltradosSet.has(normalizeCI(v.ci))))
                               .map((sub) => {
                                 const subCI = normalizeCI(sub.ci);
                                 const subCounts = voteCountsBySub[subCI] ?? { confirmed: 0, total: 0 };
@@ -1390,7 +1398,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
                                   {expandedCoords[subCI] && (
                                     <div className="border-t border-slate-100 bg-slate-50 px-3 pb-3 pt-2 overflow-x-auto animate-fade-in">
                                       <div className="space-y-1.5 min-w-0">
-                                        {getVotantesDeSubcoord(estructura, sub.ci)
+                                        {(votantesByAsignadoPorMap.get(normalizeCI(sub.ci)) ?? [])
                                           .filter((v) => !cisFiltradosSet || cisFiltradosSet.has(normalizeCI(v.ci)))
                                           .map((v) => (
                                           <VotanteRow
@@ -1427,10 +1435,8 @@ const Dashboard = ({ currentUser, onLogout }) => {
 
                             {/* Direct voters of this coordinator */}
                             {(() => {
-                              const directVoters = (estructura.votantes || []).filter(
-                                (v) => normalizeCI(v.asignado_por) === coordCI &&
-                                  (!cisFiltradosSet || cisFiltradosSet.has(normalizeCI(v.ci)))
-                              );
+                              const directVoters = (votantesByAsignadoPorMap.get(coordCI) ?? [])
+                                .filter((v) => !cisFiltradosSet || cisFiltradosSet.has(normalizeCI(v.ci)));
                               if (directVoters.length === 0) return null;
                               return (
                                 <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
@@ -1472,9 +1478,9 @@ const Dashboard = ({ currentUser, onLogout }) => {
               {/* ====== COORDINADOR ====== */}
               {!loadingEstructura && currentUser.role === "coordinador" && (
                 <div className="space-y-2">
-                  {getMisSubcoordinadores(estructura, currentUser)
+                  {getMisSubcoordinadores(estructura, currentUser, subsByCoordMap)
                     .filter((s) => !cisFiltradosSet || cisFiltradosSet.has(normalizeCI(s.ci)) ||
-                      getVotantesDeSubcoord(estructura, s.ci).some((v) => cisFiltradosSet.has(normalizeCI(v.ci))))
+                      (votantesByAsignadoPorMap.get(normalizeCI(s.ci)) ?? []).some((v) => cisFiltradosSet.has(normalizeCI(v.ci))))
                     .map((sub) => {
                     const subCI = normalizeCI(sub.ci);
                     const subCounts = voteCountsBySub[subCI] ?? { confirmed: 0, total: 0 };
@@ -1539,7 +1545,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
                             Votantes asignados
                           </p>
                           <div className="space-y-1.5 min-w-0">
-                            {getVotantesDeSubcoord(estructura, sub.ci)
+                            {(votantesByAsignadoPorMap.get(normalizeCI(sub.ci)) ?? [])
                               .filter((v) => !cisFiltradosSet || cisFiltradosSet.has(normalizeCI(v.ci)))
                               .map((v) => (
                               <VotanteRow
@@ -1568,7 +1574,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
 
                   {/* Votantes directos del coordinador */}
                   {(() => {
-                    const misVotos = getMisVotantes(estructura, currentUser)
+                    const misVotos = getMisVotantes(estructura, currentUser, votantesByAsignadoPorMap)
                       .filter((v) => !cisFiltradosSet || cisFiltradosSet.has(normalizeCI(v.ci)));
                     if (misVotos.length === 0) return null;
                     return (
@@ -1598,10 +1604,10 @@ const Dashboard = ({ currentUser, onLogout }) => {
                     );
                   })()}
 
-                  {getMisSubcoordinadores(estructura, currentUser)
+                  {getMisSubcoordinadores(estructura, currentUser, subsByCoordMap)
                     .filter((s) => !cisFiltradosSet || cisFiltradosSet.has(normalizeCI(s.ci)) ||
-                      getVotantesDeSubcoord(estructura, s.ci).some((v) => cisFiltradosSet.has(normalizeCI(v.ci)))).length === 0 &&
-                    getMisVotantes(estructura, currentUser)
+                      (votantesByAsignadoPorMap.get(normalizeCI(s.ci)) ?? []).some((v) => cisFiltradosSet.has(normalizeCI(v.ci)))).length === 0 &&
+                    getMisVotantes(estructura, currentUser, votantesByAsignadoPorMap)
                       .filter((v) => !cisFiltradosSet || cisFiltradosSet.has(normalizeCI(v.ci))).length === 0 && (
                       <div className="text-center py-10">
                         <Users className="w-10 h-10 text-slate-200 mx-auto mb-2" />
@@ -1614,29 +1620,37 @@ const Dashboard = ({ currentUser, onLogout }) => {
               )}
 
               {/* ====== SUBCOORDINADOR ====== */}
-              {!loadingEstructura && currentUser.role === "subcoordinador" && (
-                <div className="space-y-1.5">
-                  {getMisVotantes(estructura, currentUser).map((v) => (
-                    <VotanteRow
-                      key={v.ci}
-                      v={v}
-                      onTelefono={abrirTelefono}
-                      onDireccion={abrirDireccion}
-                      onConfirmar={abrirConfirmVoto}
-                      onAnular={abrirAnularConfirmacion}
-                      onQuitar={quitarPersona}
-                      canConfirmar={canConfirmarVoto}
-                      canAnular={canAnularConfirmacion}
-                    />
-                  ))}
-                  {getMisVotantes(estructura, currentUser).length === 0 && (
-                    <div className="text-center py-10">
-                      <Users className="w-10 h-10 text-slate-200 mx-auto mb-2" />
-                      <p className="text-sm text-slate-400">No tiene votantes asignados.</p>
-                    </div>
-                  )}
-                </div>
-              )}
+              {!loadingEstructura && currentUser.role === "subcoordinador" && (() => {
+                const todosVotantes = getMisVotantes(estructura, currentUser, votantesByAsignadoPorMap);
+                const votantesFiltrados = cisFiltradosSet
+                  ? todosVotantes.filter((v) => cisFiltradosSet.has(normalizeCI(v.ci)))
+                  : todosVotantes;
+                return (
+                  <div className="space-y-1.5">
+                    {votantesFiltrados.map((v) => (
+                      <VotanteRow
+                        key={v.ci}
+                        v={v}
+                        onTelefono={abrirTelefono}
+                        onDireccion={abrirDireccion}
+                        onConfirmar={abrirConfirmVoto}
+                        onAnular={abrirAnularConfirmacion}
+                        onQuitar={quitarPersona}
+                        canConfirmar={canConfirmarVoto}
+                        canAnular={canAnularConfirmacion}
+                      />
+                    ))}
+                    {votantesFiltrados.length === 0 && (
+                      <div className="text-center py-10">
+                        <Users className="w-10 h-10 text-slate-200 mx-auto mb-2" />
+                        <p className="text-sm text-slate-400">
+                          {cisFiltradosSet ? "Sin coincidencias en la búsqueda." : "No tiene votantes asignados."}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
             </div>
           </div>
