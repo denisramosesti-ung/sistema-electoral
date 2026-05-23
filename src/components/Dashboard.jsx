@@ -21,6 +21,7 @@ import {
   TrendingUp,
   Shield,
   AlertCircle,
+  BarChart2,
 } from "lucide-react";
 
 import AddPersonModal from "../AddPersonModal";
@@ -28,6 +29,7 @@ import ModalTelefono from "./ModalTelefono";
 import ModalDireccion from "./ModalDireccion";
 import ConfirmVotoModal from "./ConfirmVotoModal";
 import CreateAdminModal from "./CreateAdminModal";
+import VerPorSeccionalModule from "./VerPorSeccionalModule";
 import {
   generateSuperadminPDF,
   generateCoordinadorPDF,
@@ -42,6 +44,9 @@ import {
   getVotantesDeSubcoord,
   getMisVotantes,
   getPersonasDisponibles,
+  buildSubsByCoordMap,
+  buildVotantesByAsignadoPorMap,
+  buildRolMap,
 } from "../utils/estructuraHelpers";
 
 // ======================= SMALL REUSABLE COMPONENTS =======================
@@ -317,6 +322,9 @@ const Dashboard = ({ currentUser, onLogout }) => {
   const [createAdminModalOpen, setCreateAdminModalOpen] = useState(false);
 
   const [loadingEstructura, setLoadingEstructura] = useState(true);
+
+  // Módulo Ver por seccional
+  const [showVerPorSeccional, setShowVerPorSeccional] = useState(false);
 
   // Non-blocking toast notification (replaces alert() to prevent scroll jump)
   const [toastMsg, setToastMsg] = useState(null);
@@ -844,6 +852,23 @@ const Dashboard = ({ currentUser, onLogout }) => {
     }
   };
 
+  // ======================= MEMOIZED MAPS (O(n) one-time build) =======================
+  // Built once per estructura change; reused by voteCountsByCoord, voteCountsBySub, disponibles
+  const subsByCoordMap = useMemo(
+    () => buildSubsByCoordMap(estructura.subcoordinadores || []),
+    [estructura.subcoordinadores]
+  );
+
+  const votantesByAsignadoPorMap = useMemo(
+    () => buildVotantesByAsignadoPorMap(estructura.votantes || []),
+    [estructura.votantes]
+  );
+
+  const rolMap = useMemo(
+    () => buildRolMap(estructura),
+    [estructura]
+  );
+
   // ======================= STATS =======================
   const stats = useMemo(
     () => getEstadisticas(estructura, currentUser),
@@ -851,50 +876,49 @@ const Dashboard = ({ currentUser, onLogout }) => {
   );
 
   // ======================= PER-PERSON VOTE COUNTS =======================
-  // Coordinador inline counter: 1 (self auto) + subs + voters
-  // Subcoordinador inline counter: 1 (self auto) + voters
+  // Uses pre-built Maps — O(1) per coord/sub instead of O(n) .filter() each
   const voteCountsByCoord = useMemo(() => {
     const map = {};
-    (estructura.coordinadores || []).forEach((coord) => {
+    for (const coord of (estructura.coordinadores || [])) {
       const ci = normalizeCI(coord.ci);
-      const subs = (estructura.subcoordinadores || []).filter(
-        (s) => normalizeCI(s.coordinador_ci) === ci
-      );
-      const voters = (estructura.votantes || []).filter(
-        (v) => normalizeCI(v.coordinador_ci) === ci
-      );
+      const subs = subsByCoordMap.get(ci) ?? [];
+      // All voters under this coord = direct (asignado_por=coord) + indirect (asignado_por=sub)
+      const directVoters = votantesByAsignadoPorMap.get(ci) ?? [];
+      let indirectTotal = 0;
+      let indirectConfirmed = 0;
+      for (const sub of subs) {
+        const subVots = votantesByAsignadoPorMap.get(normalizeCI(sub.ci)) ?? [];
+        indirectTotal += subVots.length;
+        indirectConfirmed += subVots.filter((v) => v.voto_confirmado === true).length;
+      }
       const subsConfirmed = subs.filter((s) => s.confirmado === true).length;
-      const votersConfirmed = voters.filter((v) => v.voto_confirmado === true).length;
-      // +1 for coord self (always auto-confirmed)
+      const directConfirmed = directVoters.filter((v) => v.voto_confirmado === true).length;
       map[ci] = {
-        total: 1 + subs.length + voters.length,
-        confirmed: 1 + subsConfirmed + votersConfirmed,
+        total: 1 + subs.length + directVoters.length + indirectTotal,
+        confirmed: 1 + subsConfirmed + directConfirmed + indirectConfirmed,
       };
-    });
+    }
     return map;
-  }, [estructura]);
+  }, [estructura.coordinadores, subsByCoordMap, votantesByAsignadoPorMap]);
 
   const voteCountsBySub = useMemo(() => {
     const map = {};
-    (estructura.subcoordinadores || []).forEach((sub) => {
+    for (const sub of (estructura.subcoordinadores || [])) {
       const ci = normalizeCI(sub.ci);
-      const voters = (estructura.votantes || []).filter(
-        (v) => normalizeCI(v.asignado_por) === ci
-      );
+      const voters = votantesByAsignadoPorMap.get(ci) ?? [];
       const votersConfirmed = voters.filter((v) => v.voto_confirmado === true).length;
-      // +1 for sub self (always auto-confirmed)
       map[ci] = {
         total: 1 + voters.length,
         confirmed: 1 + votersConfirmed,
       };
-    });
+    }
     return map;
-  }, [estructura]);
+  }, [estructura.subcoordinadores, votantesByAsignadoPorMap]);
 
   // ======================= DISPONIBLES =======================
   const disponibles = useMemo(
-    () => getPersonasDisponibles(padron, estructura),
-    [padron, estructura]
+    () => getPersonasDisponibles(padron, estructura, rolMap),
+    [padron, estructura, rolMap]
   );
 
   // ======================= BUSCADOR =======================
@@ -908,7 +932,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
     const miCI = normalizeCI(currentUser?.ci);
     const coords = estructura.coordinadores || [];
     const subs = estructura.subcoordinadores || [];
-    const vots = estructura.votantes || [];
     const out = [];
     const seen = new Set();
     const pushUnique = (tipo, persona) => {
@@ -920,40 +943,53 @@ const Dashboard = ({ currentUser, onLogout }) => {
     if (role === "superadmin" || role === "owner") {
       coords.forEach((p) => pushUnique("coordinador", p));
       subs.forEach((p) => pushUnique("subcoordinador", p));
-      vots.forEach((p) => pushUnique("votante", p));
+      (estructura.votantes || []).forEach((p) => pushUnique("votante", p));
       return out;
     }
     if (role === "coordinador") {
-      const misSubs = subs.filter((s) => normalizeCI(s.coordinador_ci) === miCI);
+      const misSubs = subsByCoordMap.get(miCI) ?? [];
       const misSubsSet = new Set(misSubs.map((s) => normalizeCI(s.ci)));
       misSubs.forEach((p) => pushUnique("subcoordinador", p));
-      vots.filter((v) => normalizeCI(v.asignado_por) === miCI).forEach((p) => pushUnique("votante", p));
-      vots.filter((v) => misSubsSet.has(normalizeCI(v.asignado_por))).forEach((p) => pushUnique("votante", p));
+      (votantesByAsignadoPorMap.get(miCI) ?? []).forEach((p) => pushUnique("votante", p));
+      misSubsSet.forEach((subCI) => {
+        (votantesByAsignadoPorMap.get(subCI) ?? []).forEach((p) => pushUnique("votante", p));
+      });
       return out;
     }
     if (role === "subcoordinador") {
-      vots.filter((v) => normalizeCI(v.asignado_por) === miCI).forEach((p) => pushUnique("votante", p));
+      (votantesByAsignadoPorMap.get(miCI) ?? []).forEach((p) => pushUnique("votante", p));
       return out;
     }
     return [];
-  }, [estructura, currentUser]);
+  }, [estructura, currentUser, subsByCoordMap, votantesByAsignadoPorMap]);
 
   const resultadosBusqueda = useMemo(() => {
     const qRaw = normalizeText(searchCI);
     if (!qRaw) return personasVisibles;
     const tokens = qRaw.split(" ").filter(Boolean);
-    return personasVisibles.filter(({ persona }) => {
-      const ci = normalizeText(persona?.ci);
-      const nombre = normalizeText(persona?.nombre);
-      const apellido = normalizeText(persona?.apellido);
-      const full1 = `${nombre} ${apellido}`.trim();
-      const full2 = `${apellido} ${nombre}`.trim();
-      return tokens.every((t) =>
-        ci.includes(t) || nombre.includes(t) || apellido.includes(t) ||
-        full1.includes(t) || full2.includes(t)
-      );
+    return personasVisibles.filter(({ tipo, persona }) => {
+      const haystack = [
+        persona?.ci,
+        persona?.nombre,
+        persona?.apellido,
+        `${persona?.nombre ?? ""} ${persona?.apellido ?? ""}`,
+        `${persona?.apellido ?? ""} ${persona?.nombre ?? ""}`,
+        tipo,
+        tipo === "coordinador" ? "coordinador" : tipo === "subcoordinador" ? "subcoordinador" : "votante",
+        persona?.local_votacion,
+        persona?.seccional,
+        persona?.mesa,
+        persona?.orden,
+      ].map(normalizeText);
+      return tokens.every((t) => haystack.some((h) => h.includes(t)));
     });
   }, [searchCI, personasVisibles]);
+
+  // Set de CIs visibles según búsqueda activa — O(1) lookup en renderizado
+  const cisFiltradosSet = useMemo(() => {
+    if (!normalizeText(searchCI)) return null; // null = sin filtro activo
+    return new Set(resultadosBusqueda.map(({ persona }) => normalizeCI(persona?.ci)));
+  }, [resultadosBusqueda, searchCI]);
 
   // ======================= PDF =======================
   const descargarPDF = async () => {
@@ -1054,10 +1090,10 @@ const Dashboard = ({ currentUser, onLogout }) => {
         <section aria-label="Resumen estadístico">
           {(currentUser.role === "superadmin" || currentUser.role === "owner") && (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-              <StatCard label="Total red" value={stats?.totalRed} icon={TrendingUp} accent />
-              <StatCard label="Coordinadores" value={stats?.coordinadores} icon={Users} />
-              <StatCard label="Subcoordinadores" value={stats?.subcoordinadores} icon={Users} />
-              <StatCard label="Votantes" value={stats?.votantes} icon={Users} />
+          <StatCard label="Total red" value={stats?.totalRed} icon={TrendingUp} accent />
+                <StatCard label="Coordinadores" value={stats?.coordinadores} icon={Users} />
+                <StatCard label="Subcoordinadores" value={stats?.subcoordinadores} icon={Users} />
+                <StatCard label="Votantes" value={stats?.votantes} icon={Users} />
               <StatCard label="Confirmados" value={stats?.totalConfirmados} icon={CheckCircle2} />
               <StatCard label="Pendientes" value={stats?.votosPendientes} icon={AlertCircle} />
             </div>
@@ -1074,10 +1110,10 @@ const Dashboard = ({ currentUser, onLogout }) => {
 
           {currentUser.role === "coordinador" && (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-              <StatCard label="Total red" value={stats?.totalRed} icon={TrendingUp} accent />
-              <StatCard label="Subcoordinadores" value={stats?.subcoordinadores} icon={Users} />
-              <StatCard label="Votantes directos" value={stats?.votantesDirectos} icon={Users} />
-              <StatCard label="Total votantes" value={stats?.totalVotantes} icon={Users} />
+          <StatCard label="Total red" value={stats?.totalRed} icon={TrendingUp} accent />
+                <StatCard label="Subcoordinadores" value={stats?.subcoordinadores} icon={Users} />
+                <StatCard label="Votantes directos" value={stats?.votantesDirectos} icon={Users} />
+                <StatCard label="Total votantes" value={stats?.totalVotantes} icon={Users} />
               <StatCard label="Confirmados" value={stats?.totalConfirmados} icon={CheckCircle2} />
               <StatCard label="Pendientes" value={stats?.votosPendientes} icon={AlertCircle} />
             </div>
@@ -1150,9 +1186,38 @@ const Dashboard = ({ currentUser, onLogout }) => {
             <FileText className="w-4 h-4" />
             Descargar PDF
           </button>
+
+          {(currentUser.role === "superadmin" || currentUser.role === "owner") && (
+            <button
+              onClick={() => window.open("/consultar-datos", "_blank")}
+              className="inline-flex items-center gap-2 border border-brand-300 bg-white hover:bg-brand-50 text-brand-700 px-4 h-10 rounded-xl text-sm font-medium transition-colors w-full sm:w-auto shadow-sm"
+            >
+              <BarChart2 className="w-4 h-4" />
+              Consultar datos
+            </button>
+          )}
+
+          {(currentUser.role === "superadmin" || currentUser.role === "owner") && (
+            <button
+              onClick={() => setShowVerPorSeccional(true)}
+              className="inline-flex items-center gap-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-4 h-10 rounded-xl text-sm font-medium transition-colors w-full sm:w-auto shadow-sm"
+            >
+              <Users className="w-4 h-4" />
+              Ver por seccional
+            </button>
+          )}
         </section>
 
-        {/* =========== BUSCADOR =========== */}
+        {/* =========== VER POR SECCIONAL =========== */}
+        {showVerPorSeccional && (currentUser.role === "superadmin" || currentUser.role === "owner") && (
+          <section aria-label="Ver por seccional" className="mt-2">
+            <VerPorSeccionalModule onVolver={() => setShowVerPorSeccional(false)} />
+          </section>
+        )}
+
+        {/* =========== BUSCADOR + MI ESTRUCTURA =========== */}
+        {!showVerPorSeccional && (
+        <>
         <section aria-label="Búsqueda interna">
           <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-card">
             <label
@@ -1187,99 +1252,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
           </div>
         </section>
 
-        {/* =========== RESULTADOS BÚSQUEDA =========== */}
-        {normalizeText(searchCI) && (
-          <section aria-label="Resultados de búsqueda">
-            <div className="bg-white border border-slate-200 rounded-xl shadow-card overflow-hidden">
-              <div className="px-5 py-3 border-b border-slate-100 bg-slate-50">
-                <h3 className="font-semibold text-sm text-slate-700">
-                  Resultados de búsqueda
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Solo dentro de la estructura permitida para tu rol.
-                </p>
-              </div>
-
-              <div className="p-4 space-y-2">
-                {resultadosBusqueda.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Search className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p className="text-sm text-slate-500">
-                      No se encontraron coincidencias.
-                    </p>
-                  </div>
-                ) : (
-                  resultadosBusqueda.slice(0, 50).map(({ tipo, persona }) => (
-                    <div
-                      key={`${tipo}-${persona.ci}`}
-                      className="border border-slate-200 rounded-lg p-3 hover:border-slate-300 hover:bg-slate-50 transition-colors"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                            <span className={`font-semibold text-sm truncate ${persona.nombre ? "text-slate-800" : "text-slate-400 italic"}`}>
-                              {persona.nombre ? `${persona.nombre} ${persona.apellido || ""}`.trim() : "Cargando..."}
-                            </span>
-                            <Badge
-                              variant={
-                                tipo === "coordinador"
-                                  ? "red"
-                                  : tipo === "subcoordinador"
-                                  ? "blue"
-                                  : "default"
-                              }
-                            >
-                              {tipo === "coordinador"
-                                ? "Coordinador"
-                                : tipo === "subcoordinador"
-                                ? "Subcoordinador"
-                                : "Votante"}
-                            </Badge>
-                            {tipo === "votante" && persona.voto_confirmado && (
-                              <Badge variant="green">
-                                <Check className="w-3 h-3 mr-1" />
-                                Confirmado
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-xs text-slate-500">CI: {persona.ci}</p>
-                        </div>
-                        <div className="flex gap-1.5 shrink-0 flex-wrap">
-                          <ActionBtn onClick={() => abrirTelefono(tipo, persona)} title="Editar teléfono" variant="green">
-                            <Phone className="w-3.5 h-3.5" />
-                          </ActionBtn>
-                          <ActionBtn onClick={() => abrirDireccion(tipo, persona)} title="Editar dirección" variant="blue">
-                            <MapPin className="w-3.5 h-3.5" />
-                          </ActionBtn>
-                          {tipo === "votante" && !persona.voto_confirmado && canConfirmarVoto(persona) && (
-                            <ActionBtn onClick={() => abrirConfirmVoto(persona)} title="Confirmar voto" variant="success-solid">
-                              <Check className="w-3.5 h-3.5" />
-                            </ActionBtn>
-                          )}
-                          {tipo === "votante" && persona.voto_confirmado && canAnularConfirmacion(persona) && (
-                            <ActionBtn onClick={() => abrirAnularConfirmacion(persona)} title="Anular confirmación" variant="danger">
-                              <X className="w-3.5 h-3.5" />
-                            </ActionBtn>
-                          )}
-                          <ActionBtn onClick={() => quitarPersona(persona.ci, tipo)} title="Eliminar" variant="danger">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </ActionBtn>
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-
-                {resultadosBusqueda.length > 50 && (
-                  <p className="text-xs text-center text-slate-400 pt-2">
-                    Mostrando 50 resultados. Refine la búsqueda para acotar.
-                  </p>
-                )}
-              </div>
-            </div>
-          </section>
-        )}
-
         {/* =========== MI ESTRUCTURA =========== */}
         <section aria-label="Mi estructura">
           <div className="bg-white border border-slate-200 rounded-xl shadow-card overflow-hidden">
@@ -1301,16 +1273,35 @@ const Dashboard = ({ currentUser, onLogout }) => {
               )}
 
               {/* ====== SUPERADMIN / OWNER ====== */}
-              {!loadingEstructura && (currentUser.role === "superadmin" || currentUser.role === "owner") && (
+              {!loadingEstructura && (currentUser.role === "superadmin" || currentUser.role === "owner") && (() => {
+                // Coordinadores que tienen al menos un sub/votante visible o ellos mismos son visibles
+                const coordsToShow = cisFiltradosSet
+                  ? (estructura.coordinadores || []).filter((c) => {
+                      const cCI = normalizeCI(c.ci);
+                      if (cisFiltradosSet.has(cCI)) return true;
+                      const mySubs = subsByCoordMap.get(cCI) ?? [];
+                      if (mySubs.some((s) => cisFiltradosSet.has(normalizeCI(s.ci)))) return true;
+                      // direct voters
+                      if ((votantesByAsignadoPorMap.get(cCI) ?? []).some((v) => cisFiltradosSet.has(normalizeCI(v.ci)))) return true;
+                      // indirect voters via subs
+                      return mySubs.some((s) =>
+                        (votantesByAsignadoPorMap.get(normalizeCI(s.ci)) ?? []).some((v) => cisFiltradosSet.has(normalizeCI(v.ci)))
+                      );
+                    })
+                  : (estructura.coordinadores || []);
+
+                return (
                 <div className="space-y-2">
-                  {(estructura.coordinadores || []).length === 0 && (
+                  {coordsToShow.length === 0 && (
                     <div className="text-center py-10">
                       <Users className="w-10 h-10 text-slate-200 mx-auto mb-2" />
-                      <p className="text-sm text-slate-400">No hay coordinadores aún.</p>
+                      <p className="text-sm text-slate-400">
+                        {cisFiltradosSet ? "Sin coincidencias en la búsqueda." : "No hay coordinadores aún."}
+                      </p>
                     </div>
                   )}
 
-                  {(estructura.coordinadores || []).map((coord) => {
+                  {coordsToShow.map((coord) => {
                     const coordCI = normalizeCI(coord.ci);
                     const coordCounts = voteCountsByCoord[coordCI] ?? { confirmed: 0, total: 0 };
                     return (
@@ -1353,8 +1344,9 @@ const Dashboard = ({ currentUser, onLogout }) => {
                       {expandedCoords[coordCI] && (
                         <div className="border-t border-slate-100 bg-slate-50/50 px-4 pb-4 pt-3 overflow-x-auto animate-fade-in">
                           <div className="space-y-2 min-w-0">
-                            {(estructura.subcoordinadores || [])
-                              .filter((s) => normalizeCI(s.coordinador_ci) === coordCI)
+                            {(subsByCoordMap.get(coordCI) ?? [])
+                              .filter((s) => !cisFiltradosSet || cisFiltradosSet.has(normalizeCI(s.ci)) ||
+                                (votantesByAsignadoPorMap.get(normalizeCI(s.ci)) ?? []).some((v) => cisFiltradosSet.has(normalizeCI(v.ci))))
                               .map((sub) => {
                                 const subCI = normalizeCI(sub.ci);
                                 const subCounts = voteCountsBySub[subCI] ?? { confirmed: 0, total: 0 };
@@ -1406,7 +1398,9 @@ const Dashboard = ({ currentUser, onLogout }) => {
                                   {expandedCoords[subCI] && (
                                     <div className="border-t border-slate-100 bg-slate-50 px-3 pb-3 pt-2 overflow-x-auto animate-fade-in">
                                       <div className="space-y-1.5 min-w-0">
-                                        {getVotantesDeSubcoord(estructura, sub.ci).map((v) => (
+                                        {(votantesByAsignadoPorMap.get(normalizeCI(sub.ci)) ?? [])
+                                          .filter((v) => !cisFiltradosSet || cisFiltradosSet.has(normalizeCI(v.ci)))
+                                          .map((v) => (
                                           <VotanteRow
                                             key={v.ci}
                                             v={v}
@@ -1441,9 +1435,8 @@ const Dashboard = ({ currentUser, onLogout }) => {
 
                             {/* Direct voters of this coordinator */}
                             {(() => {
-                              const directVoters = (estructura.votantes || []).filter(
-                                (v) => normalizeCI(v.asignado_por) === coordCI
-                              );
+                              const directVoters = (votantesByAsignadoPorMap.get(coordCI) ?? [])
+                                .filter((v) => !cisFiltradosSet || cisFiltradosSet.has(normalizeCI(v.ci)));
                               if (directVoters.length === 0) return null;
                               return (
                                 <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
@@ -1479,12 +1472,16 @@ const Dashboard = ({ currentUser, onLogout }) => {
                   );
                   })}
                 </div>
-              )}
+                );
+              })()}
 
               {/* ====== COORDINADOR ====== */}
               {!loadingEstructura && currentUser.role === "coordinador" && (
                 <div className="space-y-2">
-                  {getMisSubcoordinadores(estructura, currentUser).map((sub) => {
+                  {getMisSubcoordinadores(estructura, currentUser, subsByCoordMap)
+                    .filter((s) => !cisFiltradosSet || cisFiltradosSet.has(normalizeCI(s.ci)) ||
+                      (votantesByAsignadoPorMap.get(normalizeCI(s.ci)) ?? []).some((v) => cisFiltradosSet.has(normalizeCI(v.ci))))
+                    .map((sub) => {
                     const subCI = normalizeCI(sub.ci);
                     const subCounts = voteCountsBySub[subCI] ?? { confirmed: 0, total: 0 };
                     return (
@@ -1548,7 +1545,9 @@ const Dashboard = ({ currentUser, onLogout }) => {
                             Votantes asignados
                           </p>
                           <div className="space-y-1.5 min-w-0">
-                            {getVotantesDeSubcoord(estructura, sub.ci).map((v) => (
+                            {(votantesByAsignadoPorMap.get(normalizeCI(sub.ci)) ?? [])
+                              .filter((v) => !cisFiltradosSet || cisFiltradosSet.has(normalizeCI(v.ci)))
+                              .map((v) => (
                               <VotanteRow
                                 key={v.ci}
                                 v={v}
@@ -1574,7 +1573,11 @@ const Dashboard = ({ currentUser, onLogout }) => {
                   })}
 
                   {/* Votantes directos del coordinador */}
-                  {getMisVotantes(estructura, currentUser).length > 0 && (
+                  {(() => {
+                    const misVotos = getMisVotantes(estructura, currentUser, votantesByAsignadoPorMap)
+                      .filter((v) => !cisFiltradosSet || cisFiltradosSet.has(normalizeCI(v.ci)));
+                    if (misVotos.length === 0) return null;
+                    return (
                     <div className="border border-slate-200 rounded-xl overflow-hidden">
                       <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
                         <p className="font-semibold text-sm text-slate-700 flex items-center gap-2">
@@ -1583,7 +1586,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
                         </p>
                       </div>
                       <div className="p-3 space-y-1.5">
-                        {getMisVotantes(estructura, currentUser).map((v) => (
+                        {misVotos.map((v) => (
                           <VotanteRow
                             key={v.ci}
                             v={v}
@@ -1598,10 +1601,14 @@ const Dashboard = ({ currentUser, onLogout }) => {
                         ))}
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
 
-                  {getMisSubcoordinadores(estructura, currentUser).length === 0 &&
-                    getMisVotantes(estructura, currentUser).length === 0 && (
+                  {getMisSubcoordinadores(estructura, currentUser, subsByCoordMap)
+                    .filter((s) => !cisFiltradosSet || cisFiltradosSet.has(normalizeCI(s.ci)) ||
+                      (votantesByAsignadoPorMap.get(normalizeCI(s.ci)) ?? []).some((v) => cisFiltradosSet.has(normalizeCI(v.ci)))).length === 0 &&
+                    getMisVotantes(estructura, currentUser, votantesByAsignadoPorMap)
+                      .filter((v) => !cisFiltradosSet || cisFiltradosSet.has(normalizeCI(v.ci))).length === 0 && (
                       <div className="text-center py-10">
                         <Users className="w-10 h-10 text-slate-200 mx-auto mb-2" />
                         <p className="text-sm text-slate-400">
@@ -1613,33 +1620,43 @@ const Dashboard = ({ currentUser, onLogout }) => {
               )}
 
               {/* ====== SUBCOORDINADOR ====== */}
-              {!loadingEstructura && currentUser.role === "subcoordinador" && (
-                <div className="space-y-1.5">
-                  {getMisVotantes(estructura, currentUser).map((v) => (
-                    <VotanteRow
-                      key={v.ci}
-                      v={v}
-                      onTelefono={abrirTelefono}
-                      onDireccion={abrirDireccion}
-                      onConfirmar={abrirConfirmVoto}
-                      onAnular={abrirAnularConfirmacion}
-                      onQuitar={quitarPersona}
-                      canConfirmar={canConfirmarVoto}
-                      canAnular={canAnularConfirmacion}
-                    />
-                  ))}
-                  {getMisVotantes(estructura, currentUser).length === 0 && (
-                    <div className="text-center py-10">
-                      <Users className="w-10 h-10 text-slate-200 mx-auto mb-2" />
-                      <p className="text-sm text-slate-400">No tiene votantes asignados.</p>
-                    </div>
-                  )}
-                </div>
-              )}
+              {!loadingEstructura && currentUser.role === "subcoordinador" && (() => {
+                const todosVotantes = getMisVotantes(estructura, currentUser, votantesByAsignadoPorMap);
+                const votantesFiltrados = cisFiltradosSet
+                  ? todosVotantes.filter((v) => cisFiltradosSet.has(normalizeCI(v.ci)))
+                  : todosVotantes;
+                return (
+                  <div className="space-y-1.5">
+                    {votantesFiltrados.map((v) => (
+                      <VotanteRow
+                        key={v.ci}
+                        v={v}
+                        onTelefono={abrirTelefono}
+                        onDireccion={abrirDireccion}
+                        onConfirmar={abrirConfirmVoto}
+                        onAnular={abrirAnularConfirmacion}
+                        onQuitar={quitarPersona}
+                        canConfirmar={canConfirmarVoto}
+                        canAnular={canAnularConfirmacion}
+                      />
+                    ))}
+                    {votantesFiltrados.length === 0 && (
+                      <div className="text-center py-10">
+                        <Users className="w-10 h-10 text-slate-200 mx-auto mb-2" />
+                        <p className="text-sm text-slate-400">
+                          {cisFiltradosSet ? "Sin coincidencias en la búsqueda." : "No tiene votantes asignados."}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
             </div>
           </div>
         </section>
+        </>
+        )}
       </main>
 
       {/* =========== MODALS =========== */}

@@ -15,6 +15,8 @@ const App = () => {
   const [loginPass, setLoginPass] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [isLogging, setIsLogging] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [checkingAdmin, setCheckingAdmin] = useState(false);
 
   // ======================= SESIÓN PERSISTENTE =======================
   useEffect(() => {
@@ -22,11 +24,53 @@ const App = () => {
     if (!saved) return;
     try {
       const u = JSON.parse(saved);
-      if (u && u.ci && u.role) setCurrentUser(u);
+      // Aceptar si tiene role Y (ci O username)
+      if (u && u.role && (u.ci || u.username)) {
+        setCurrentUser(u);
+        console.log("[v0] Session restored:", { role: u.role, hasCI: !!u.ci, hasUsername: !!u.username });
+      }
     } catch (e) {
       console.error("Error leyendo sesión local:", e);
     }
   }, []);
+
+  // ======================= VERIFICACIÓN ADMIN EN TIEMPO REAL =======================
+  useEffect(() => {
+    const username = loginUsername.trim().toLowerCase();
+    
+    if (!username) {
+      setIsAdmin(false);
+      console.log("[v0] isAdminUser:", false, "(no username)");
+      return;
+    }
+
+    setCheckingAdmin(true);
+    
+    const checkAdmin = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("usuarios_admin")
+          .select("id")
+          .ilike("username", username)
+          .maybeSingle();
+
+        const isAdminUser = !error && !!data;
+        setIsAdmin(isAdminUser);
+        console.log("[v0] isAdminUser:", isAdminUser, "for username:", username);
+      } catch (err) {
+        console.error("[v0] Error checking admin:", err);
+        setIsAdmin(false);
+        console.log("[v0] isAdminUser:", false, "(error)");
+      } finally {
+        setCheckingAdmin(false);
+      }
+    };
+
+    // Debounce de 400ms
+    const timeoutId = setTimeout(checkAdmin, 400);
+
+    return () => clearTimeout(timeoutId);
+  }, [loginUsername]);
 
   // ======================= LOGIN =======================
   const handleLogin = async () => {
@@ -41,24 +85,41 @@ const App = () => {
       // ======================= FLUJO 1: ADMIN (CON PASSWORD) =======================
       // Si hay password → SOLO intentar usuarios_admin, NO intentar coordinador/sub
       if (password) {
-        console.log("[v0] Admin login attempt", { username });
+        console.log("[v0] Admin login attempt", { 
+          username,
+          hasPassword: !!password 
+        });
 
         const { data: admin, error: adminErr } = await supabase
           .from("usuarios_admin")
-          .select("id,username,role,nombre,apellido")
+          .select("id,username,rol")
           .eq("username", username)
           .eq("password", password)
           .maybeSingle();
 
+        console.log("[v0] Supabase response:", {
+          data: admin,
+          error: adminErr,
+          errorMessage: adminErr?.message,
+          errorDetails: adminErr?.details,
+          errorHint: adminErr?.hint,
+          errorCode: adminErr?.code
+        });
+
         if (adminErr) {
-          console.error("[v0] Admin login failed - Database error:", adminErr);
-          alert("Error al consultar base de datos.");
+          console.error("[v0] Admin login failed - Database error:", {
+            message: adminErr.message,
+            details: adminErr.details,
+            hint: adminErr.hint,
+            code: adminErr.code
+          });
+          alert(`Error al consultar base de datos: ${adminErr.message}`);
           setIsLogging(false);
           return;
         }
 
         if (!admin) {
-          console.log("[v0] Admin login failed - Invalid credentials");
+          console.log("[v0] Admin login failed - Invalid credentials (no data returned)");
           alert("Usuario o contraseña incorrectos.");
           setIsLogging(false);
           return;
@@ -66,8 +127,8 @@ const App = () => {
 
         // Validación de roles permitidos
         const rolesPermitidos = ['owner', 'superadmin'];
-        if (!rolesPermitidos.includes(admin.role)) {
-          console.error("[v0] Admin login failed - Invalid role:", admin.role);
+        if (!rolesPermitidos.includes(admin.rol)) {
+          console.error("[v0] Admin login failed - Invalid role:", admin.rol);
           alert("Rol de usuario no válido.");
           setIsLogging(false);
           return;
@@ -75,15 +136,15 @@ const App = () => {
 
         console.log("[v0] Admin login success", { 
           username: admin.username, 
-          role: admin.role,
-          nombre: admin.nombre 
+          rol: admin.rol
         });
 
         const u = {
+          id: admin.id,
           username: admin.username,
-          nombre: admin.nombre || "Admin",
-          apellido: admin.apellido || "",
-          role: admin.role,
+          nombre: admin.username,
+          apellido: "",
+          role: admin.rol,
         };
         setCurrentUser(u);
         localStorage.setItem("currentUser", JSON.stringify(u));
@@ -220,39 +281,41 @@ const App = () => {
               />
             </div>
 
-            {/* Contraseña (opcional) - siempre visible */}
-            <div>
-              <label
-                htmlFor="loginPass"
-                className="block text-sm font-medium text-slate-700 mb-1.5"
-              >
-                Contraseña <span className="text-slate-500 font-normal">(opcional)</span>
-              </label>
-              <div className="relative">
-                <input
-                  id="loginPass"
-                  type={showPass ? "text" : "password"}
-                  value={loginPass}
-                  onChange={(e) => setLoginPass(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="w-full px-4 py-2.5 pr-11 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50 placeholder-slate-400"
-                  placeholder="Solo para administradores"
-                  autoComplete="current-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPass((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0 border-0 bg-transparent shadow-none"
-                  aria-label={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
+            {/* Contraseña - visible SOLO para admins */}
+            {isAdmin && (
+              <div>
+                <label
+                  htmlFor="loginPass"
+                  className="block text-sm font-medium text-slate-700 mb-1.5"
                 >
-                  {showPass ? (
-                    <EyeOff className="w-4 h-4" />
-                  ) : (
-                    <Eye className="w-4 h-4" />
-                  )}
-                </button>
+                  Contraseña
+                </label>
+                <div className="relative">
+                  <input
+                    id="loginPass"
+                    type={showPass ? "text" : "password"}
+                    value={loginPass}
+                    onChange={(e) => setLoginPass(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    className="w-full px-4 py-2.5 pr-11 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50 placeholder-slate-400"
+                    placeholder="Ingrese contraseña"
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0 border-0 bg-transparent shadow-none"
+                    aria-label={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  >
+                    {showPass ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Submit */}
             <button

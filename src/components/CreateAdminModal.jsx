@@ -10,9 +10,7 @@ export default function CreateAdminModal({ isOpen, onClose, currentUser, onSucce
   const [formData, setFormData] = useState({
     username: "",
     password: "",
-    role: "superadmin",
-    nombre: "",
-    apellido: "",
+    rol: "superadmin",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -38,9 +36,7 @@ export default function CreateAdminModal({ isOpen, onClose, currentUser, onSucce
       setFormData({
         username: "",
         password: "",
-        role: "superadmin",
-        nombre: "",
-        apellido: "",
+        rol: "superadmin",
       });
       onSuccess && onSuccess(result.data);
       onClose();
@@ -119,50 +115,20 @@ export default function CreateAdminModal({ isOpen, onClose, currentUser, onSucce
             </div>
           </div>
 
-          {/* Role */}
+          {/* Rol */}
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">
               Rol <span className="text-red-500">*</span>
             </label>
             <select
-              value={formData.role}
-              onChange={(e) => handleChange("role", e.target.value)}
+              value={formData.rol}
+              onChange={(e) => handleChange("rol", e.target.value)}
               className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50"
               required
             >
               <option value="superadmin">Superadmin (acceso completo)</option>
               <option value="owner">Owner (puede crear admins)</option>
             </select>
-          </div>
-
-          {/* Nombre */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Nombre (opcional)
-            </label>
-            <input
-              type="text"
-              value={formData.nombre}
-              onChange={(e) => handleChange("nombre", e.target.value)}
-              className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50"
-              placeholder="Juan"
-              autoComplete="given-name"
-            />
-          </div>
-
-          {/* Apellido */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
-              Apellido (opcional)
-            </label>
-            <input
-              type="text"
-              value={formData.apellido}
-              onChange={(e) => handleChange("apellido", e.target.value)}
-              className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50"
-              placeholder="Pérez"
-              autoComplete="family-name"
-            />
           </div>
 
           {/* Actions */}
