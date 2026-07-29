@@ -1,8 +1,8 @@
 import React from "react";
 import { Phone, X } from "lucide-react";
-import { MAX_TELEFONO_INPUT_LENGTH } from "../utils/telefonoParaguay";
+import TelefonoParaguayoInput from "./TelefonoParaguayoInput";
 
-const ModalTelefono = ({ open, persona, value, onChange, onCancel, onSave, error, saving }) => {
+const ModalTelefono = ({ open, persona, value, onChange, onCancel, onSave, error, saving, valido }) => {
   if (!open || !persona) return null;
 
   return (
@@ -37,26 +37,17 @@ const ModalTelefono = ({ open, persona, value, onChange, onCancel, onSave, error
           </p>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">
+            <label htmlFor="telefonoEdicion" className="block text-sm font-medium text-slate-700 mb-1.5">
               Número de teléfono <span className="text-red-500">*</span>
             </label>
-            <input
-              type="tel"
+            <TelefonoParaguayoInput
+              id="telefonoEdicion"
               value={value}
-              onChange={(e) => onChange(e.target.value)}
-              maxLength={MAX_TELEFONO_INPUT_LENGTH}
+              onChange={onChange}
+              error={error}
               disabled={saving}
-              className={`w-full px-4 py-2.5 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:border-transparent bg-slate-50 disabled:opacity-60 ${
-                error ? "border-red-300 focus:ring-red-400" : "border-slate-300 focus:ring-brand-500"
-              }`}
-              placeholder="0981 123 456"
               autoFocus
             />
-            {error ? (
-              <p className="text-xs text-red-600 mt-1">{error}</p>
-            ) : (
-              <p className="text-xs text-slate-400 mt-1">Formatos válidos: 0981123456 o +595981123456</p>
-            )}
           </div>
         </div>
 
@@ -71,7 +62,7 @@ const ModalTelefono = ({ open, persona, value, onChange, onCancel, onSave, error
           </button>
           <button
             onClick={onSave}
-            disabled={saving}
+            disabled={saving || !valido}
             className="flex-1 h-10 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors border-0 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {saving ? (

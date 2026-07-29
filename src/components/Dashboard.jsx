@@ -20,16 +20,18 @@ import {
   TrendingUp,
   Shield,
   AlertCircle,
-  MapPin,
+  BarChart2,
 } from "lucide-react";
 
 import AddPersonModal from "../AddPersonModal";
 import ModalTelefono from "./ModalTelefono";
 import ConfirmVotoModal from "./ConfirmVotoModal";
 import CreateAdminModal from "./CreateAdminModal";
+import VerPorLocalVotacionModule from "./VerPorLocalVotacionModule";
 import {
   validarTelefonoParaguayo,
   sanitizarEntradaTelefono,
+  extraerParteEditable,
 } from "../utils/telefonoParaguay";
 import {
   generateSuperadminPDF,
@@ -290,7 +292,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
   const [modalType, setModalType] = useState("");
   const [expandedCoords, setExpandedCoords] = useState({});
   const [searchCI, setSearchCI] = useState("");
-  const [localSeleccionado, setLocalSeleccionado] = useState(null);
+  const [showVerPorLocal, setShowVerPorLocal] = useState(false);
 
   const [phoneModalOpen, setPhoneModalOpen] = useState(false);
   const [phoneTarget, setPhoneTarget] = useState(null);
@@ -600,7 +602,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
   // ======================= TELEFONO =======================
   const abrirTelefono = (tipo, p) => {
     setPhoneTarget({ tipo, ...p });
-    setPhoneValue(p.telefono || "");
+    setPhoneValue(extraerParteEditable(p.telefono));
     setPhoneError(null);
     setPhoneSaving(false);
     setPhoneModalOpen(true);
@@ -948,41 +950,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
     });
   }, [searchCI, personasVisibles]);
 
-  // ======================= VER POR LOCAL DE VOTACIÓN =======================
-  // Agrupa la estructura visible del usuario por padron.local_votacion
-  // (nunca por "seccional"). Personas sin local van a un grupo aparte.
-  const SIN_LOCAL_LABEL = "Sin local de votación";
-
-  const localesConteo = useMemo(() => {
-    const map = new Map();
-    personasVisibles.forEach(({ tipo, persona }) => {
-      const nombreLocal = String(persona?.local_votacion || "").trim() || SIN_LOCAL_LABEL;
-      if (!map.has(nombreLocal)) {
-        map.set(nombreLocal, { nombre: nombreLocal, total: 0, confirmed: 0, personas: [] });
-      }
-      const grupo = map.get(nombreLocal);
-      const confirmado =
-        tipo === "votante" ? persona.voto_confirmado === true
-        : tipo === "subcoordinador" ? persona.confirmado === true
-        : true; // coordinador: siempre autoconfirmado (misma convención que el resto del dashboard)
-      grupo.total += 1;
-      if (confirmado) grupo.confirmed += 1;
-      grupo.personas.push({ tipo, persona });
-    });
-
-    const conLocal = Array.from(map.values())
-      .filter((g) => g.nombre !== SIN_LOCAL_LABEL)
-      .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
-    const sinLocal = map.get(SIN_LOCAL_LABEL);
-
-    return sinLocal ? [...conLocal, sinLocal] : conLocal;
-  }, [personasVisibles]);
-
-  const grupoLocalSeleccionado = useMemo(
-    () => localesConteo.find((g) => g.nombre === localSeleccionado) || null,
-    [localesConteo, localSeleccionado]
-  );
-
   // ======================= PDF =======================
   const descargarPDF = async () => {
     if (!currentUser) { alert("Usuario no válido"); return; }
@@ -1178,9 +1145,38 @@ const Dashboard = ({ currentUser, onLogout }) => {
             <FileText className="w-4 h-4" />
             Descargar PDF
           </button>
+
+          {(currentUser.role === "superadmin" || currentUser.role === "owner") && (
+            <button
+              onClick={() => window.open("/consultar-datos", "_blank")}
+              className="inline-flex items-center gap-2 border border-brand-300 bg-white hover:bg-brand-50 text-brand-700 px-4 h-10 rounded-xl text-sm font-medium transition-colors w-full sm:w-auto shadow-sm"
+            >
+              <BarChart2 className="w-4 h-4" />
+              Consultar datos
+            </button>
+          )}
+
+          {(currentUser.role === "superadmin" || currentUser.role === "owner") && (
+            <button
+              onClick={() => setShowVerPorLocal(true)}
+              className="inline-flex items-center gap-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-4 h-10 rounded-xl text-sm font-medium transition-colors w-full sm:w-auto shadow-sm"
+            >
+              <Users className="w-4 h-4" />
+              Ver por local de votación
+            </button>
+          )}
         </section>
 
-        {/* =========== BUSCADOR =========== */}
+        {/* =========== VER POR LOCAL DE VOTACIÓN =========== */}
+        {showVerPorLocal && (currentUser.role === "superadmin" || currentUser.role === "owner") && (
+          <section aria-label="Ver por local de votación" className="mt-2">
+            <VerPorLocalVotacionModule estructura={estructura} onVolver={() => setShowVerPorLocal(false)} />
+          </section>
+        )}
+
+        {/* =========== BUSCADOR + RESULTADOS + MI ESTRUCTURA =========== */}
+        {!showVerPorLocal && (
+        <>
         <section aria-label="Búsqueda interna">
           <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-card">
             <label
@@ -1212,104 +1208,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
                 {resultadosBusqueda.length} resultado{resultadosBusqueda.length !== 1 ? "s" : ""}
               </p>
             )}
-          </div>
-        </section>
-
-        {/* =========== VER POR LOCAL DE VOTACIÓN =========== */}
-        <section aria-label="Ver por local de votación">
-          <div className="bg-white border border-slate-200 rounded-xl shadow-card overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-slate-500" />
-              <h2 className="text-base font-bold text-slate-800">Ver por local de votación</h2>
-            </div>
-
-            <div className="p-4 sm:p-5 space-y-4">
-              {localesConteo.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-4">
-                  No hay personas en su estructura todavía.
-                </p>
-              ) : (
-                <>
-                  <div>
-                    <label
-                      htmlFor="localVotacionSelect"
-                      className="block text-sm font-semibold text-slate-700 mb-2"
-                    >
-                      Local de votación
-                    </label>
-                    <select
-                      id="localVotacionSelect"
-                      value={localSeleccionado ?? ""}
-                      onChange={(e) => setLocalSeleccionado(e.target.value || null)}
-                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50"
-                    >
-                      <option value="">Seleccione un local...</option>
-                      {localesConteo.map((g) => (
-                        <option key={g.nombre} value={g.nombre}>
-                          {g.nombre} ({g.confirmed}/{g.total})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {grupoLocalSeleccionado && (
-                    <div className="border border-slate-200 rounded-xl overflow-hidden">
-                      <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
-                        <p className="font-semibold text-sm text-slate-700 truncate">
-                          {grupoLocalSeleccionado.nombre}
-                        </p>
-                        <VoteCounter
-                          confirmed={grupoLocalSeleccionado.confirmed}
-                          total={grupoLocalSeleccionado.total}
-                        />
-                      </div>
-                      <div className="p-3 space-y-1.5 max-h-96 overflow-y-auto">
-                        {grupoLocalSeleccionado.personas.map(({ tipo, persona }) => (
-                          <div
-                            key={`local-${tipo}-${persona.ci}`}
-                            className="border border-slate-200 rounded-lg p-3"
-                          >
-                            <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                              <span
-                                className={`font-semibold text-sm truncate ${
-                                  persona.nombre ? "text-slate-800" : "text-slate-400 italic"
-                                }`}
-                              >
-                                {persona.nombre
-                                  ? `${persona.nombre} ${persona.apellido || ""}`.trim()
-                                  : "Cargando..."}
-                              </span>
-                              <Badge
-                                variant={
-                                  tipo === "coordinador"
-                                    ? "red"
-                                    : tipo === "subcoordinador"
-                                    ? "blue"
-                                    : "default"
-                                }
-                              >
-                                {tipo === "coordinador"
-                                  ? "Coordinador"
-                                  : tipo === "subcoordinador"
-                                  ? "Subcoordinador"
-                                  : "Votante"}
-                              </Badge>
-                              {tipo === "votante" && persona.voto_confirmado && (
-                                <Badge variant="green">
-                                  <Check className="w-3 h-3 mr-1" />
-                                  Confirmado
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-xs text-slate-500">CI: {persona.ci}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
           </div>
         </section>
 
@@ -1749,6 +1647,8 @@ const Dashboard = ({ currentUser, onLogout }) => {
             </div>
           </div>
         </section>
+        </>
+        )}
       </main>
 
       {/* =========== MODALS =========== */}
@@ -1761,6 +1661,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
         onSave={guardarTelefono}
         error={phoneError}
         saving={phoneSaving}
+        valido={validarTelefonoParaguayo(phoneValue).valido}
       />
 
       <AddPersonModal
