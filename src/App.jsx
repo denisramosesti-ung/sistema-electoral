@@ -2,7 +2,7 @@
 // App maneja SOLO sesión/login.
 // Dashboard maneja TODO lo demás.
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 import { ShieldCheck, Eye, EyeOff } from "lucide-react";
 import Dashboard from "./components/Dashboard";
@@ -16,17 +16,88 @@ const App = () => {
   const [showPass, setShowPass] = useState(false);
   const [isLogging, setIsLogging] = useState(false);
 
+  // ======================= DETECCIÓN PROGRESIVA DE ADMIN =======================
+  const [showPasswordField, setShowPasswordField] = useState(false);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const debounceRef = useRef(null);
+  const usernameRef = useRef("");
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   // ======================= SESIÓN PERSISTENTE =======================
   useEffect(() => {
     const saved = localStorage.getItem("currentUser");
     if (!saved) return;
     try {
       const u = JSON.parse(saved);
-      if (u && u.ci && u.role) setCurrentUser(u);
+      if (u && (u.ci || u.username) && u.role) setCurrentUser(u);
     } catch (e) {
       console.error("Error leyendo sesión local:", e);
     }
   }, []);
+
+  // ======================= DETECCIÓN DE ADMIN (username -> owner/superadmin) =======================
+  // Escapa "%" y "_" para que ilike haga coincidencia exacta (case-insensitive),
+  // sin interpretarlos como comodines de patrón.
+  const escapeIlikePattern = (value) => value.replace(/[%_]/g, (ch) => `\\${ch}`);
+
+  const detectarAdminDebounced = async (trimmedUsername) => {
+    try {
+      const { data, error } = await supabase
+        .from("usuarios_admin")
+        .select("username,role")
+        .ilike("username", escapeIlikePattern(trimmedUsername))
+        .maybeSingle();
+
+      // Si el usuario ya modificó el campo mientras se consultaba, descartar el resultado.
+      if (usernameRef.current.trim() !== trimmedUsername) return;
+
+      if (error) {
+        console.error("[v0] Error detectando usuario admin:", error);
+        setShowPasswordField(false);
+        return;
+      }
+
+      const esAdmin = Boolean(data && ["owner", "superadmin"].includes(data.role));
+      setShowPasswordField(esAdmin);
+    } catch (e) {
+      if (usernameRef.current.trim() !== trimmedUsername) return;
+      console.error("[v0] Error detectando usuario admin:", e);
+      setShowPasswordField(false);
+    } finally {
+      if (usernameRef.current.trim() === trimmedUsername) {
+        setCheckingUsername(false);
+      }
+    }
+  };
+
+  const handleUsernameChange = (e) => {
+    const value = e.target.value;
+    setLoginUsername(value);
+    usernameRef.current = value;
+
+    // Ocultar inmediatamente la contraseña al modificar el primer campo.
+    setShowPasswordField(false);
+    setLoginPass("");
+    setShowPass(false);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setCheckingUsername(false);
+      return;
+    }
+
+    setCheckingUsername(true);
+    debounceRef.current = setTimeout(() => {
+      detectarAdminDebounced(trimmed);
+    }, 350);
+  };
 
   // ======================= LOGIN =======================
   const handleLogin = async () => {
@@ -38,15 +109,41 @@ const App = () => {
     setIsLogging(true);
 
     try {
-      // ======================= FLUJO 1: ADMIN (CON PASSWORD) =======================
-      // Si hay password → SOLO intentar usuarios_admin, NO intentar coordinador/sub
-      if (password) {
+      // ======================= FLUJO 1: ADMIN (owner/superadmin) =======================
+      // No depender del resultado previo del debounce: se vuelve a comprobar
+      // directamente contra usuarios_admin al enviar el formulario, para
+      // evitar condiciones de carrera si el usuario presiona el botón antes
+      // de que termine la detección progresiva.
+      const rolesPermitidos = ["owner", "superadmin"];
+
+      const { data: adminCheck, error: adminCheckErr } = await supabase
+        .from("usuarios_admin")
+        .select("username,role")
+        .ilike("username", escapeIlikePattern(username))
+        .maybeSingle();
+
+      if (adminCheckErr) {
+        console.error("[v0] Error verificando usuario administrativo:", adminCheckErr);
+        alert("Error al consultar base de datos.");
+        setIsLogging(false);
+        return;
+      }
+
+      const esAdmin = Boolean(adminCheck && rolesPermitidos.includes(adminCheck.role));
+
+      if (esAdmin) {
         console.log("[v0] Admin login attempt", { username });
+
+        if (!password) {
+          alert("Ingrese su contraseña");
+          setIsLogging(false);
+          return;
+        }
 
         const { data: admin, error: adminErr } = await supabase
           .from("usuarios_admin")
           .select("id,username,role,nombre,apellido")
-          .eq("username", username)
+          .ilike("username", escapeIlikePattern(username))
           .eq("password", password)
           .maybeSingle();
 
@@ -57,26 +154,17 @@ const App = () => {
           return;
         }
 
-        if (!admin) {
+        if (!admin || !rolesPermitidos.includes(admin.role)) {
           console.log("[v0] Admin login failed - Invalid credentials");
           alert("Usuario o contraseña incorrectos.");
           setIsLogging(false);
           return;
         }
 
-        // Validación de roles permitidos
-        const rolesPermitidos = ['owner', 'superadmin'];
-        if (!rolesPermitidos.includes(admin.role)) {
-          console.error("[v0] Admin login failed - Invalid role:", admin.role);
-          alert("Rol de usuario no válido.");
-          setIsLogging(false);
-          return;
-        }
-
-        console.log("[v0] Admin login success", { 
-          username: admin.username, 
+        console.log("[v0] Admin login success", {
+          username: admin.username,
           role: admin.role,
-          nombre: admin.nombre 
+          nombre: admin.nombre
         });
 
         const u = {
@@ -92,8 +180,8 @@ const App = () => {
       }
 
       // ======================= FLUJO 2: COORDINADOR/SUBCOORDINADOR (SIN PASSWORD) =======================
-      // Si NO hay password → SOLO intentar coordinador/sub, NO intentar admin
-      
+      // Si no es un usuario administrativo → intentar coordinador/sub, sin pedir password.
+
       // Intentar como coordinador
       const { data: coord, error: coordErr } = await supabase
         .from("coordinadores")
@@ -212,15 +300,19 @@ const App = () => {
                 id="loginUsername"
                 type="text"
                 value={loginUsername}
-                onChange={(e) => setLoginUsername(e.target.value)}
+                onChange={handleUsernameChange}
                 onKeyDown={handleKeyDown}
                 className="w-full px-4 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50 placeholder-slate-400"
                 placeholder="Usuario o código de acceso"
                 autoComplete="username"
               />
+              {checkingUsername && (
+                <p className="text-xs text-slate-400 mt-1.5">Verificando usuario…</p>
+              )}
             </div>
 
-            {/* Contraseña (opcional) - siempre visible */}
+            {/* Contraseña - solo visible si el usuario/código detectado es owner o superadmin */}
+            {showPasswordField && (
             <div>
               <label
                 htmlFor="loginPass"
@@ -253,6 +345,7 @@ const App = () => {
                 </button>
               </div>
             </div>
+            )}
 
             {/* Submit */}
             <button
