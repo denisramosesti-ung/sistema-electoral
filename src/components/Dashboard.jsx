@@ -13,7 +13,6 @@ import {
   Trash2,
   Check,
   X,
-  MapPin,
   Users,
   Search,
   CheckCircle2,
@@ -21,13 +20,17 @@ import {
   TrendingUp,
   Shield,
   AlertCircle,
+  MapPin,
 } from "lucide-react";
 
 import AddPersonModal from "../AddPersonModal";
 import ModalTelefono from "./ModalTelefono";
-import ModalDireccion from "./ModalDireccion";
 import ConfirmVotoModal from "./ConfirmVotoModal";
 import CreateAdminModal from "./CreateAdminModal";
+import {
+  validarTelefonoParaguayo,
+  sanitizarEntradaTelefono,
+} from "../utils/telefonoParaguay";
 import {
   generateSuperadminPDF,
   generateCoordinadorPDF,
@@ -191,7 +194,6 @@ const VoteCounter = ({ confirmed, total }) => {
 // ======================= PERSONA DATA =======================
 // counter: optional ReactNode rendered inline next to the name (e.g. VoteCounter)
 const DatosPersona = ({ persona, rol, loginCode, onCopy, counter }) => {
-  const direccionMostrar = persona.direccion_override || persona.direccion;
   const hasName = Boolean(persona.nombre);
   const displayName = hasName
     ? `${persona.nombre} ${persona.apellido || ""}`.trim()
@@ -225,7 +227,6 @@ const DatosPersona = ({ persona, rol, loginCode, onCopy, counter }) => {
         {persona.local_votacion && <span className="truncate">Local: {persona.local_votacion}</span>}
         {persona.mesa && <span>Mesa: {persona.mesa}</span>}
         {persona.orden && <span>Orden: {persona.orden}</span>}
-        {direccionMostrar && <span className="truncate">Dir: {direccionMostrar}</span>}
         {persona.telefono && <span className="truncate">Tel: {persona.telefono}</span>}
       </div>
     </div>
@@ -236,7 +237,6 @@ const DatosPersona = ({ persona, rol, loginCode, onCopy, counter }) => {
 const VotanteRow = ({
   v,
   onTelefono,
-  onDireccion,
   onConfirmar,
   onAnular,
   onQuitar,
@@ -258,9 +258,6 @@ const VotanteRow = ({
     <div className="flex gap-1.5 shrink-0 flex-wrap">
       <ActionBtn onClick={() => onTelefono("votante", v)} title="Editar teléfono" variant="green">
         <Phone className="w-3.5 h-3.5" />
-      </ActionBtn>
-      <ActionBtn onClick={() => onDireccion("votante", v)} title="Editar dirección" variant="blue">
-        <MapPin className="w-3.5 h-3.5" />
       </ActionBtn>
       {!v.voto_confirmado && canConfirmar(v) && (
         <ActionBtn onClick={() => onConfirmar(v)} title="Confirmar voto" variant="success-solid">
@@ -293,14 +290,13 @@ const Dashboard = ({ currentUser, onLogout }) => {
   const [modalType, setModalType] = useState("");
   const [expandedCoords, setExpandedCoords] = useState({});
   const [searchCI, setSearchCI] = useState("");
+  const [localSeleccionado, setLocalSeleccionado] = useState(null);
 
   const [phoneModalOpen, setPhoneModalOpen] = useState(false);
   const [phoneTarget, setPhoneTarget] = useState(null);
-  const [phoneValue, setPhoneValue] = useState("+595");
-
-  const [direccionModalOpen, setDireccionModalOpen] = useState(false);
-  const [direccionTarget, setDireccionTarget] = useState(null);
-  const [direccionValue, setDireccionValue] = useState("");
+  const [phoneValue, setPhoneValue] = useState("");
+  const [phoneError, setPhoneError] = useState(null);
+  const [phoneSaving, setPhoneSaving] = useState(false);
 
   const [confirmVotoModalOpen, setConfirmVotoModalOpen] = useState(false);
   const [confirmVotoTarget, setConfirmVotoTarget] = useState(null);
@@ -604,41 +600,63 @@ const Dashboard = ({ currentUser, onLogout }) => {
   // ======================= TELEFONO =======================
   const abrirTelefono = (tipo, p) => {
     setPhoneTarget({ tipo, ...p });
-    setPhoneValue(p.telefono || "+595");
+    setPhoneValue(p.telefono || "");
+    setPhoneError(null);
+    setPhoneSaving(false);
     setPhoneModalOpen(true);
   };
 
+  const cerrarTelefono = () => {
+    if (phoneSaving) return;
+    setPhoneModalOpen(false);
+    setPhoneTarget(null);
+    setPhoneValue("");
+    setPhoneError(null);
+  };
+
+  const cambiarPhoneValue = (v) => {
+    setPhoneValue(sanitizarEntradaTelefono(v));
+    if (phoneError) setPhoneError(null);
+  };
+
   const guardarTelefono = async () => {
-    if (!phoneTarget) return;
+    if (!phoneTarget || phoneSaving) return;
     if (currentUser.role !== "superadmin" && currentUser.role !== "owner") {
       if (currentUser.role === "coordinador") {
         const miCI = normalizeCI(currentUser.ci);
         if (normalizeCI(phoneTarget.coordinador_ci) !== miCI) {
-          alert("No tiene permiso para editar el teléfono de esta persona.");
+          setPhoneError("No tiene permiso para editar el teléfono de esta persona.");
           return;
         }
         if (phoneTarget.tipo === "coordinador") {
-          alert("No tiene permiso para editar el teléfono de otro coordinador.");
+          setPhoneError("No tiene permiso para editar el teléfono de otro coordinador.");
           return;
         }
       }
       if (currentUser.role === "subcoordinador") {
-        if (phoneTarget.tipo !== "votante") { alert("No tiene permiso para editar esta persona."); return; }
+        if (phoneTarget.tipo !== "votante") { setPhoneError("No tiene permiso para editar esta persona."); return; }
         if (normalizeCI(phoneTarget.asignado_por) !== normalizeCI(currentUser.ci)) {
-          alert("No tiene permiso para editar el teléfono de este votante."); return;
+          setPhoneError("No tiene permiso para editar el teléfono de este votante."); return;
         }
       }
     }
-    const telefono = String(phoneValue || "").trim();
-    if (!telefono) { alert("Ingrese número de teléfono."); return; }
+
+    const { valido, error: validationError, normalizado } = validarTelefonoParaguayo(phoneValue);
+    if (!valido) { setPhoneError(validationError); return; }
 
     let tabla = "votantes";
     if (phoneTarget.tipo === "coordinador") tabla = "coordinadores";
     if (phoneTarget.tipo === "subcoordinador") tabla = "subcoordinadores";
 
     const targetCI = normalizeCI(phoneTarget.ci);
-    const { error } = await supabase.from(tabla).update({ telefono }).eq("ci", targetCI);
-    if (error) { console.error("Error guardando teléfono:", error); alert(error.message || "Error guardando teléfono"); return; }
+    setPhoneSaving(true);
+    const { error } = await supabase.from(tabla).update({ telefono: normalizado }).eq("ci", targetCI);
+    if (error) {
+      console.error("Error guardando teléfono:", error);
+      setPhoneError(error.message || "Error guardando teléfono");
+      setPhoneSaving(false);
+      return;
+    }
 
     // Update only the affected array, preserve all other references
     const tipo = phoneTarget.tipo;
@@ -646,83 +664,41 @@ const Dashboard = ({ currentUser, onLogout }) => {
     setEstructura((prev) => ({
       ...prev,
       [key]: prev[key].map((x) =>
-        normalizeCI(x.ci) === targetCI ? { ...x, telefono } : x
+        normalizeCI(x.ci) === targetCI ? { ...x, telefono: normalizado } : x
       ),
     }));
 
+    setPhoneSaving(false);
     setPhoneModalOpen(false);
     setPhoneTarget(null);
-    setPhoneValue("+595");
+    setPhoneValue("");
+    setPhoneError(null);
     showToast("Teléfono actualizado correctamente");
   };
 
-  // ======================= DIRECCIÓN =======================
-  const abrirDireccion = (tipo, p) => {
-    setDireccionTarget({ tipo, ...p });
-    setDireccionValue(p.direccion_override || p.direccion || "");
-    setDireccionModalOpen(true);
-  };
-
-  const guardarDireccion = async () => {
-    if (!direccionTarget) return;
-    if (currentUser.role !== "superadmin" && currentUser.role !== "owner") {
-      if (currentUser.role === "coordinador") {
-        const miCI = normalizeCI(currentUser.ci);
-        if (normalizeCI(direccionTarget.coordinador_ci) !== miCI) {
-          alert("No tiene permiso para editar la dirección de esta persona."); return;
-        }
-        if (direccionTarget.tipo === "coordinador") {
-          alert("No tiene permiso para editar la dirección de otro coordinador."); return;
-        }
-      }
-      if (currentUser.role === "subcoordinador") {
-        if (direccionTarget.tipo !== "votante") { alert("No tiene permiso para editar esta persona."); return; }
-        if (normalizeCI(direccionTarget.asignado_por) !== normalizeCI(currentUser.ci)) {
-          alert("No tiene permiso para editar la dirección de este votante."); return;
-        }
-      }
-    }
-    let tabla = "votantes";
-    if (direccionTarget.tipo === "coordinador") tabla = "coordinadores";
-    if (direccionTarget.tipo === "subcoordinador") tabla = "subcoordinadores";
-
-    const direccion_override = String(direccionValue || "").trim();
-    const targetCI = normalizeCI(direccionTarget.ci);
-    const { error } = await supabase.from(tabla).update({ direccion_override }).eq("ci", targetCI);
-    if (error) { console.error("Error guardando dirección:", error); alert(error.message || "Error guardando dirección"); return; }
-
-    // Update only the affected array, preserve all other references
-    const tipo = direccionTarget.tipo;
-    const key = tipo === "coordinador" ? "coordinadores" : tipo === "subcoordinador" ? "subcoordinadores" : "votantes";
-    setEstructura((prev) => ({
-      ...prev,
-      [key]: prev[key].map((x) =>
-        normalizeCI(x.ci) === targetCI ? { ...x, direccion_override } : x
-      ),
-    }));
-
-    setDireccionModalOpen(false);
-    setDireccionTarget(null);
-    setDireccionValue("");
-    showToast("Dirección actualizada correctamente");
-  };
-
   // ======================= AGREGAR PERSONA =======================
-  const handleAgregarPersona = async (persona) => {
-    if (!modalType) return alert("Seleccione tipo.");
+  // Devuelve { ok: true } en éxito o { ok: false, error } en fallo, para que
+  // AddPersonModal decida si cierra el paso de teléfono o muestra el error.
+  const handleAgregarPersona = async (persona, telefono) => {
+    if (!modalType) return { ok: false, error: "Seleccione tipo." };
     const ci = normalizeCI(persona.ci);
 
     if (modalType === "coordinador") {
-      if (currentUser.role !== "superadmin" && currentUser.role !== "owner") { alert("Solo el superadmin u owner pueden agregar coordinadores."); return; }
+      if (currentUser.role !== "superadmin" && currentUser.role !== "owner") {
+        return { ok: false, error: "Solo el superadmin u owner pueden agregar coordinadores." };
+      }
       const accessCode = generarAccessCode(8);
       const { data: inserted, error } = await supabase.from("coordinadores").insert([{
-        ci, login_code: accessCode, asignado_por_nombre: "Superadmin",
+        ci, login_code: accessCode, asignado_por_nombre: "Superadmin", telefono,
       }]).select();
-      if (error) { console.error("Error creando coordinador:", error); alert(error.message || "Error creando coordinador"); return; }
+      if (error) {
+        console.error("Error creando coordinador:", error);
+        return { ok: false, error: error.message || "Error creando coordinador" };
+      }
 
       // Merge with padron data and add to local state
       const padronEntry = padron.find((p) => normalizeCI(p.ci) === ci) || {};
-      const newCoord = { ...padronEntry, ...(inserted?.[0] || { ci, login_code: accessCode, asignado_por_nombre: "Superadmin" }), ci };
+      const newCoord = { ...padronEntry, ...(inserted?.[0] || { ci, login_code: accessCode, asignado_por_nombre: "Superadmin", telefono }), ci };
       setEstructura((prev) => ({
         ...prev,
         coordinadores: [...prev.coordinadores, newCoord],
@@ -731,20 +707,26 @@ const Dashboard = ({ currentUser, onLogout }) => {
       showToast(`Coordinador creado. Codigo: ${accessCode}`);
       try { await navigator.clipboard.writeText(accessCode); } catch { /* noop */ }
       setShowAddModal(false);
-      return;
+      return { ok: true };
     }
 
     if (modalType === "subcoordinador") {
-      if (currentUser.role !== "coordinador") { alert("Solo un coordinador puede agregar subcoordinadores."); return; }
+      if (currentUser.role !== "coordinador") {
+        return { ok: false, error: "Solo un coordinador puede agregar subcoordinadores." };
+      }
       const accessCode = generarAccessCode(8);
       const insertPayload = {
         ci,
         coordinador_ci: normalizeCI(currentUser.ci),
         login_code: accessCode,
         asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
+        telefono,
       };
       const { data: inserted, error } = await supabase.from("subcoordinadores").insert([insertPayload]).select();
-      if (error) { console.error("Error creando subcoordinador:", error); alert(error.message || "Error creando subcoordinador"); return; }
+      if (error) {
+        console.error("Error creando subcoordinador:", error);
+        return { ok: false, error: error.message || "Error creando subcoordinador" };
+      }
 
       // Merge with padron data and add to local state
       const padronEntry = padron.find((p) => normalizeCI(p.ci) === ci) || {};
@@ -757,11 +739,13 @@ const Dashboard = ({ currentUser, onLogout }) => {
       showToast(`Subcoordinador creado. Codigo: ${accessCode}`);
       try { await navigator.clipboard.writeText(accessCode); } catch { /* noop */ }
       setShowAddModal(false);
-      return;
+      return { ok: true };
     }
 
     if (modalType === "votante") {
-      if (currentUser.role !== "coordinador" && currentUser.role !== "subcoordinador") { alert("No permitido."); return; }
+      if (currentUser.role !== "coordinador" && currentUser.role !== "subcoordinador") {
+        return { ok: false, error: "No permitido." };
+      }
       let coordinador_ci = null;
       if (currentUser.role === "coordinador") {
         coordinador_ci = normalizeCI(currentUser.ci);
@@ -771,15 +755,21 @@ const Dashboard = ({ currentUser, onLogout }) => {
         );
         coordinador_ci = normalizeCI(sub?.coordinador_ci);
       }
-      if (!coordinador_ci) { alert("Error interno: no se pudo resolver coordinador_ci"); return; }
+      if (!coordinador_ci) {
+        return { ok: false, error: "Error interno: no se pudo resolver coordinador_ci" };
+      }
       const insertPayload = {
         ci,
         asignado_por: normalizeCI(currentUser.ci),
         asignado_por_nombre: `${currentUser.nombre} ${currentUser.apellido}`,
         coordinador_ci,
+        telefono,
       };
       const { data: inserted, error } = await supabase.from("votantes").insert([insertPayload]).select();
-      if (error) { console.error("Error creando votante:", error); alert(error.message || "Error creando votante"); return; }
+      if (error) {
+        console.error("Error creando votante:", error);
+        return { ok: false, error: error.message || "Error creando votante" };
+      }
 
       // Merge with padron data and add to local state
       const padronEntry = padron.find((p) => normalizeCI(p.ci) === ci) || {};
@@ -790,7 +780,10 @@ const Dashboard = ({ currentUser, onLogout }) => {
       }));
 
       setShowAddModal(false);
+      return { ok: true };
     }
+
+    return { ok: false, error: "Tipo no soportado." };
   };
 
   // ======================= QUITAR PERSONA =======================
@@ -954,6 +947,41 @@ const Dashboard = ({ currentUser, onLogout }) => {
       );
     });
   }, [searchCI, personasVisibles]);
+
+  // ======================= VER POR LOCAL DE VOTACIÓN =======================
+  // Agrupa la estructura visible del usuario por padron.local_votacion
+  // (nunca por "seccional"). Personas sin local van a un grupo aparte.
+  const SIN_LOCAL_LABEL = "Sin local de votación";
+
+  const localesConteo = useMemo(() => {
+    const map = new Map();
+    personasVisibles.forEach(({ tipo, persona }) => {
+      const nombreLocal = String(persona?.local_votacion || "").trim() || SIN_LOCAL_LABEL;
+      if (!map.has(nombreLocal)) {
+        map.set(nombreLocal, { nombre: nombreLocal, total: 0, confirmed: 0, personas: [] });
+      }
+      const grupo = map.get(nombreLocal);
+      const confirmado =
+        tipo === "votante" ? persona.voto_confirmado === true
+        : tipo === "subcoordinador" ? persona.confirmado === true
+        : true; // coordinador: siempre autoconfirmado (misma convención que el resto del dashboard)
+      grupo.total += 1;
+      if (confirmado) grupo.confirmed += 1;
+      grupo.personas.push({ tipo, persona });
+    });
+
+    const conLocal = Array.from(map.values())
+      .filter((g) => g.nombre !== SIN_LOCAL_LABEL)
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
+    const sinLocal = map.get(SIN_LOCAL_LABEL);
+
+    return sinLocal ? [...conLocal, sinLocal] : conLocal;
+  }, [personasVisibles]);
+
+  const grupoLocalSeleccionado = useMemo(
+    () => localesConteo.find((g) => g.nombre === localSeleccionado) || null,
+    [localesConteo, localSeleccionado]
+  );
 
   // ======================= PDF =======================
   const descargarPDF = async () => {
@@ -1187,6 +1215,104 @@ const Dashboard = ({ currentUser, onLogout }) => {
           </div>
         </section>
 
+        {/* =========== VER POR LOCAL DE VOTACIÓN =========== */}
+        <section aria-label="Ver por local de votación">
+          <div className="bg-white border border-slate-200 rounded-xl shadow-card overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-slate-500" />
+              <h2 className="text-base font-bold text-slate-800">Ver por local de votación</h2>
+            </div>
+
+            <div className="p-4 sm:p-5 space-y-4">
+              {localesConteo.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-4">
+                  No hay personas en su estructura todavía.
+                </p>
+              ) : (
+                <>
+                  <div>
+                    <label
+                      htmlFor="localVotacionSelect"
+                      className="block text-sm font-semibold text-slate-700 mb-2"
+                    >
+                      Local de votación
+                    </label>
+                    <select
+                      id="localVotacionSelect"
+                      value={localSeleccionado ?? ""}
+                      onChange={(e) => setLocalSeleccionado(e.target.value || null)}
+                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50"
+                    >
+                      <option value="">Seleccione un local...</option>
+                      {localesConteo.map((g) => (
+                        <option key={g.nombre} value={g.nombre}>
+                          {g.nombre} ({g.confirmed}/{g.total})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {grupoLocalSeleccionado && (
+                    <div className="border border-slate-200 rounded-xl overflow-hidden">
+                      <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
+                        <p className="font-semibold text-sm text-slate-700 truncate">
+                          {grupoLocalSeleccionado.nombre}
+                        </p>
+                        <VoteCounter
+                          confirmed={grupoLocalSeleccionado.confirmed}
+                          total={grupoLocalSeleccionado.total}
+                        />
+                      </div>
+                      <div className="p-3 space-y-1.5 max-h-96 overflow-y-auto">
+                        {grupoLocalSeleccionado.personas.map(({ tipo, persona }) => (
+                          <div
+                            key={`local-${tipo}-${persona.ci}`}
+                            className="border border-slate-200 rounded-lg p-3"
+                          >
+                            <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                              <span
+                                className={`font-semibold text-sm truncate ${
+                                  persona.nombre ? "text-slate-800" : "text-slate-400 italic"
+                                }`}
+                              >
+                                {persona.nombre
+                                  ? `${persona.nombre} ${persona.apellido || ""}`.trim()
+                                  : "Cargando..."}
+                              </span>
+                              <Badge
+                                variant={
+                                  tipo === "coordinador"
+                                    ? "red"
+                                    : tipo === "subcoordinador"
+                                    ? "blue"
+                                    : "default"
+                                }
+                              >
+                                {tipo === "coordinador"
+                                  ? "Coordinador"
+                                  : tipo === "subcoordinador"
+                                  ? "Subcoordinador"
+                                  : "Votante"}
+                              </Badge>
+                              {tipo === "votante" && persona.voto_confirmado && (
+                                <Badge variant="green">
+                                  <Check className="w-3 h-3 mr-1" />
+                                  Confirmado
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-500">CI: {persona.ci}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </section>
+
         {/* =========== RESULTADOS BÚSQUEDA =========== */}
         {normalizeText(searchCI) && (
           <section aria-label="Resultados de búsqueda">
@@ -1247,9 +1373,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
                         <div className="flex gap-1.5 shrink-0 flex-wrap">
                           <ActionBtn onClick={() => abrirTelefono(tipo, persona)} title="Editar teléfono" variant="green">
                             <Phone className="w-3.5 h-3.5" />
-                          </ActionBtn>
-                          <ActionBtn onClick={() => abrirDireccion(tipo, persona)} title="Editar dirección" variant="blue">
-                            <MapPin className="w-3.5 h-3.5" />
                           </ActionBtn>
                           {tipo === "votante" && !persona.voto_confirmado && canConfirmarVoto(persona) && (
                             <ActionBtn onClick={() => abrirConfirmVoto(persona)} title="Confirmar voto" variant="success-solid">
@@ -1340,9 +1463,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
                           <ActionBtn onClick={() => abrirTelefono("coordinador", coord)} title="Editar teléfono" variant="green">
                             <Phone className="w-3.5 h-3.5" />
                           </ActionBtn>
-                          <ActionBtn onClick={() => abrirDireccion("coordinador", coord)} title="Editar dirección" variant="blue">
-                            <MapPin className="w-3.5 h-3.5" />
-                          </ActionBtn>
                           <ActionBtn onClick={() => quitarPersona(coord.ci, "coordinador")} title="Eliminar coordinador" variant="danger-solid">
                             <Trash2 className="w-3.5 h-3.5" />
                           </ActionBtn>
@@ -1393,9 +1513,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
                                       <ActionBtn onClick={() => abrirTelefono("subcoordinador", sub)} title="Editar teléfono" variant="green">
                                         <Phone className="w-3.5 h-3.5" />
                                       </ActionBtn>
-                                      <ActionBtn onClick={() => abrirDireccion("subcoordinador", sub)} title="Editar dirección" variant="blue">
-                                        <MapPin className="w-3.5 h-3.5" />
-                                      </ActionBtn>
                                       <ActionBtn onClick={() => quitarPersona(sub.ci, "subcoordinador")} title="Eliminar" variant="danger-solid">
                                         <Trash2 className="w-3.5 h-3.5" />
                                       </ActionBtn>
@@ -1411,7 +1528,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
                                             key={v.ci}
                                             v={v}
                                             onTelefono={abrirTelefono}
-                                            onDireccion={abrirDireccion}
                                             onConfirmar={abrirConfirmVoto}
                                             onAnular={abrirAnularConfirmacion}
                                             onQuitar={quitarPersona}
@@ -1460,7 +1576,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
                                         key={v.ci}
                                         v={v}
                                         onTelefono={abrirTelefono}
-                                        onDireccion={abrirDireccion}
                                         onConfirmar={abrirConfirmVoto}
                                         onAnular={abrirAnularConfirmacion}
                                         onQuitar={quitarPersona}
@@ -1532,9 +1647,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
                           <ActionBtn onClick={() => abrirTelefono("subcoordinador", sub)} title="Editar teléfono" variant="green">
                             <Phone className="w-3.5 h-3.5" />
                           </ActionBtn>
-                          <ActionBtn onClick={() => abrirDireccion("subcoordinador", sub)} title="Editar dirección" variant="blue">
-                            <MapPin className="w-3.5 h-3.5" />
-                          </ActionBtn>
                           <ActionBtn onClick={() => quitarPersona(sub.ci, "subcoordinador")} title="Eliminar" variant="danger-solid">
                             <Trash2 className="w-3.5 h-3.5" />
                           </ActionBtn>
@@ -1553,7 +1665,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
                                 key={v.ci}
                                 v={v}
                                 onTelefono={abrirTelefono}
-                                onDireccion={abrirDireccion}
                                 onConfirmar={abrirConfirmVoto}
                                 onAnular={abrirAnularConfirmacion}
                                 onQuitar={quitarPersona}
@@ -1588,7 +1699,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
                             key={v.ci}
                             v={v}
                             onTelefono={abrirTelefono}
-                            onDireccion={abrirDireccion}
                             onConfirmar={abrirConfirmVoto}
                             onAnular={abrirAnularConfirmacion}
                             onQuitar={quitarPersona}
@@ -1620,7 +1730,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
                       key={v.ci}
                       v={v}
                       onTelefono={abrirTelefono}
-                      onDireccion={abrirDireccion}
                       onConfirmar={abrirConfirmVoto}
                       onAnular={abrirAnularConfirmacion}
                       onQuitar={quitarPersona}
@@ -1647,18 +1756,11 @@ const Dashboard = ({ currentUser, onLogout }) => {
         open={phoneModalOpen}
         persona={phoneTarget}
         value={phoneValue}
-        onChange={setPhoneValue}
-        onCancel={() => { setPhoneModalOpen(false); setPhoneTarget(null); setPhoneValue("+595"); }}
+        onChange={cambiarPhoneValue}
+        onCancel={cerrarTelefono}
         onSave={guardarTelefono}
-      />
-
-      <ModalDireccion
-        open={direccionModalOpen}
-        persona={direccionTarget}
-        value={direccionValue}
-        onChange={setDireccionValue}
-        onCancel={() => { setDireccionModalOpen(false); setDireccionTarget(null); setDireccionValue(""); }}
-        onSave={guardarDireccion}
+        error={phoneError}
+        saving={phoneSaving}
       />
 
       <AddPersonModal

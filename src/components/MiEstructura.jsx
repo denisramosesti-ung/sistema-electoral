@@ -53,7 +53,6 @@ const MiEstructura = ({
       {persona.local_votacion && <p>Local: {persona.local_votacion}</p>}
       {persona.mesa && <p>Mesa: {persona.mesa}</p>}
       {persona.orden && <p>Orden: {persona.orden}</p>}
-      {persona.direccion && <p>Dirección: {persona.direccion}</p>}
       {persona.telefono && <p>Tel: {persona.telefono}</p>}
     </div>
   );
