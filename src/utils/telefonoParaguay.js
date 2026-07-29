@@ -21,26 +21,21 @@ export const MAX_TELEFONO_INPUT_LENGTH = 9;
 const PARTE_EDITABLE_REGEX = /^9\d{8}$/;
 
 // Deja solo dígitos en el valor recibido, y si el usuario tecleó o pegó
-// el "0" inicial nacional (0981...) o el prefijo internacional completo
-// (+595981...), los quita para dejar únicamente la parte editable.
-// Recorta a 9 dígitos como máximo.
+// el "595" del prefijo internacional o el "0" inicial nacional, los
+// quita para dejar únicamente la parte editable. Recorta a 9 dígitos
+// como máximo.
 export const sanitizarEntradaTelefono = (raw) => {
-  let value = String(raw ?? "").trim();
+  let digits = String(raw ?? "").replace(/\D/g, "");
 
-  // Si pegan el prefijo internacional completo, quitarlo primero.
-  if (value.startsWith(PREFIJO_PY)) {
-    value = value.slice(PREFIJO_PY.length);
+  if (digits.startsWith("595")) {
+    digits = digits.slice(3);
   }
 
-  // Dejar solo dígitos.
-  value = value.replace(/\D/g, "");
-
-  // Si viene con el "0" inicial nacional (0981123456), quitarlo.
-  if (value.length === 10 && value.startsWith("0")) {
-    value = value.slice(1);
+  if (digits.startsWith("0")) {
+    digits = digits.slice(1);
   }
 
-  return value.slice(0, MAX_TELEFONO_INPUT_LENGTH);
+  return digits.slice(0, MAX_TELEFONO_INPUT_LENGTH);
 };
 
 // Valida la parte editable (sin el prefijo +595) ingresada por el usuario.

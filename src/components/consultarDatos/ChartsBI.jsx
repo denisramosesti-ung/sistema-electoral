@@ -52,14 +52,13 @@ function BarChart({ title, data, maxBars = 12, color = "bg-brand-500", preserveO
 // ======================= PIE CHART =======================
 function PieChart({ title, slices }) {
   const total = slices.reduce((s, d) => s + d.value, 0);
-  let cumAngle = 0;
 
-  const segments = slices.map((d) => {
+  const segments = slices.reduce((acc, d) => {
     const angle = total === 0 ? 0 : (d.value / total) * 360;
-    const start = cumAngle;
-    cumAngle += angle;
-    return { ...d, angle, start };
-  });
+    const prev = acc[acc.length - 1];
+    const start = prev ? prev.start + prev.angle : 0;
+    return [...acc, { ...d, angle, start }];
+  }, []);
 
   const describeArc = (cx, cy, r, startDeg, endDeg) => {
     if (endDeg - startDeg >= 360) {
@@ -120,18 +119,18 @@ function PieChart({ title, slices }) {
 }
 
 // ======================= EDAD HISTOGRAM =======================
-function EdadHistogram({ data }) {
-  const RANGES = [
-    { label: "18-25", min: 18, max: 25 },
-    { label: "26-35", min: 26, max: 35 },
-    { label: "36-45", min: 36, max: 45 },
-    { label: "46-55", min: 46, max: 55 },
-    { label: "56-65", min: 56, max: 65 },
-    { label: "66+",   min: 66, max: 999 },
-  ];
+const EDAD_RANGES = [
+  { label: "18-25", min: 18, max: 25 },
+  { label: "26-35", min: 26, max: 35 },
+  { label: "36-45", min: 36, max: 45 },
+  { label: "46-55", min: 46, max: 55 },
+  { label: "56-65", min: 56, max: 65 },
+  { label: "66+",   min: 66, max: 999 },
+];
 
+function EdadHistogram({ data }) {
   const buckets = useMemo(() => {
-    return RANGES.map((r) => ({
+    return EDAD_RANGES.map((r) => ({
       label: r.label,
       value: data.filter((d) => d >= r.min && d <= r.max).length,
     }));
@@ -174,16 +173,21 @@ export default function ChartsBI({ filtered }) {
   );
 
   // votos ya son boolean (normalizado en ConsultarDatos) — usar directamente
-  const makeVoteSlices = (key, labelSi = "Sí votó", labelNo = "No votó") => {
-    const si = filtered.filter((r) => r[key]).length;
+  const votoInternasAnrSlices = useMemo(() => {
+    const si = filtered.filter((r) => r.voto_internas_anr_2021).length;
     return [
-      { label: labelSi, value: si },
-      { label: labelNo, value: filtered.length - si },
+      { label: "Sí (ANR 2021)", value: si },
+      { label: "No votó", value: filtered.length - si },
     ];
-  };
+  }, [filtered]);
 
-  const votoInternasAnrSlices   = useMemo(() => makeVoteSlices("voto_internas_anr_2021",        "Sí (ANR 2021)",   "No votó"), [filtered]);
-  const votoGenerales2023Slices = useMemo(() => makeVoteSlices("voto_gral_presidenciales_2023", "Sí (Grl. 2023)", "No votó"), [filtered]);
+  const votoGenerales2023Slices = useMemo(() => {
+    const si = filtered.filter((r) => r.voto_gral_presidenciales_2023).length;
+    return [
+      { label: "Sí (Grl. 2023)", value: si },
+      { label: "No votó", value: filtered.length - si },
+    ];
+  }, [filtered]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

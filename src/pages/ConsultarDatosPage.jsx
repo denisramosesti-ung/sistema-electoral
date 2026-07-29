@@ -1,33 +1,29 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { ShieldAlert } from "lucide-react";
 import ConsultarDatos from "../components/ConsultarDatos";
 
 // Roles con acceso permitido
 const ROLES_PERMITIDOS = ["superadmin", "owner"];
 
-export default function ConsultarDatosPage() {
-  const [status, setStatus] = useState("checking"); // "checking" | "allowed" | "denied"
-  const [currentUser, setCurrentUser] = useState(null);
-
-  useEffect(() => {
-    // Leer sesión desde localStorage (mismo mecanismo que App.jsx)
-    try {
-      const saved = localStorage.getItem("currentUser");
-      if (!saved) {
-        setStatus("denied");
-        return;
-      }
-      const u = JSON.parse(saved);
-      if (u && u.role && (u.ci || u.username) && ROLES_PERMITIDOS.includes(u.role)) {
-        setCurrentUser(u);
-        setStatus("allowed");
-      } else {
-        setStatus("denied");
-      }
-    } catch {
-      setStatus("denied");
+// Leer sesión desde localStorage (mismo mecanismo que App.jsx). Es una
+// lectura síncrona, así que se resuelve directamente al inicializar el
+// estado en vez de en un efecto.
+const leerSesion = () => {
+  try {
+    const saved = localStorage.getItem("currentUser");
+    if (!saved) return { status: "denied", currentUser: null };
+    const u = JSON.parse(saved);
+    if (u && u.role && (u.ci || u.username) && ROLES_PERMITIDOS.includes(u.role)) {
+      return { status: "allowed", currentUser: u };
     }
-  }, []);
+    return { status: "denied", currentUser: null };
+  } catch {
+    return { status: "denied", currentUser: null };
+  }
+};
+
+export default function ConsultarDatosPage() {
+  const [{ status, currentUser }] = useState(leerSesion); // "checking" nunca se necesita: la lectura es síncrona
 
   // Verificando sesión
   if (status === "checking") {

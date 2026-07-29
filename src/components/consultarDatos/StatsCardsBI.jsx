@@ -13,24 +13,27 @@ const CARDS = [
 export default function StatsCardsBI({ metrics }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-      {CARDS.map(({ key, label, icon: Icon, color, bg }) => (
-        <div
-          key={key}
-          className="bg-white border border-slate-200 rounded-xl p-4 shadow-card"
-        >
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 leading-tight">
-              {label}
-            </p>
-            <div className={`p-1.5 rounded-lg ${bg}`}>
-              <Icon className={`w-3.5 h-3.5 ${color}`} />
+      {CARDS.map((card) => {
+        const Icon = card.icon;
+        return (
+          <div
+            key={card.key}
+            className="bg-white border border-slate-200 rounded-xl p-4 shadow-card"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 leading-tight">
+                {card.label}
+              </p>
+              <div className={`p-1.5 rounded-lg ${card.bg}`}>
+                <Icon className={`w-3.5 h-3.5 ${card.color}`} />
+              </div>
             </div>
+            <p className="text-2xl font-bold text-slate-800">
+              {(metrics[card.key] ?? 0).toLocaleString("es-PY")}
+            </p>
           </div>
-          <p className="text-2xl font-bold text-slate-800">
-            {(metrics[key] ?? 0).toLocaleString("es-PY")}
-          </p>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
