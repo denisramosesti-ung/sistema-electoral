@@ -21,6 +21,7 @@ import {
   Shield,
   AlertCircle,
   BarChart2,
+  FileSpreadsheet,
 } from "lucide-react";
 
 import AddPersonModal from "../AddPersonModal";
@@ -38,6 +39,7 @@ import {
   generateCoordinadorPDF,
   generateSubcoordinadorPDF,
 } from "../services/pdfService";
+import { exportarEstructuraExcel } from "../services/excelService";
 
 import { getEstadisticas } from "../services/estadisticasService";
 
@@ -564,6 +566,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
   const [createAdminModalOpen, setCreateAdminModalOpen] = useState(false);
 
   const [loadingEstructura, setLoadingEstructura] = useState(true);
+  const [generandoExcel, setGenerandoExcel] = useState(false);
 
   // Non-blocking toast notification (replaces alert() to prevent scroll jump)
   const [toastMsg, setToastMsg] = useState(null);
@@ -1232,6 +1235,23 @@ const Dashboard = ({ currentUser, onLogout }) => {
     }
   };
 
+  // ======================= EXCEL =======================
+  // Exporta exactamente el mismo alcance que ya usa el PDF: personasVisibles
+  // ya está filtrado por rol (owner/superadmin ven toda la estructura,
+  // coordinador solo la suya, subcoordinador solo sus votantes).
+  const descargarExcel = async () => {
+    if (!currentUser || generandoExcel) return;
+    setGenerandoExcel(true);
+    try {
+      exportarEstructuraExcel(personasVisibles, currentUser);
+    } catch (error) {
+      console.error("Error generando Excel:", error);
+      alert("Error al generar el archivo Excel");
+    } finally {
+      setGenerandoExcel(false);
+    }
+  };
+
   // ======================= ROLE LABEL =======================
   const roleLabel = {
     owner: "Owner",
@@ -1399,6 +1419,24 @@ const Dashboard = ({ currentUser, onLogout }) => {
           >
             <FileText className="w-4 h-4" />
             Descargar PDF
+          </button>
+
+          <button
+            onClick={descargarExcel}
+            disabled={generandoExcel}
+            className="inline-flex items-center gap-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-4 h-10 rounded-xl text-sm font-medium transition-colors w-full sm:w-auto shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {generandoExcel ? (
+              <>
+                <span className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+                Generando...
+              </>
+            ) : (
+              <>
+                <FileSpreadsheet className="w-4 h-4" />
+                Descargar Excel
+              </>
+            )}
           </button>
 
           {(currentUser.role === "superadmin" || currentUser.role === "owner") && (
