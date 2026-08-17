@@ -4,6 +4,16 @@
 export const normalizeCI = (ci) =>
   String(ci || "").replace(/\D/g, "");
 
+// Normaliza únicamente para búsquedas. Los valores originales se conservan
+// intactos para mostrar correctamente tildes y la letra Ñ en la interfaz.
+export const normalizeSearchText = (value) =>
+  String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
 // ======================= SUBCOORDINADORES DEL COORD =======================
 export const getMisSubcoordinadores = (estructura, currentUser) => {
   if (!currentUser || currentUser.role !== "coordinador") return [];
