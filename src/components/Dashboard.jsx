@@ -41,6 +41,7 @@ import { getEstadisticas } from "../services/estadisticasService";
 
 import {
   normalizeCI,
+  normalizeSearchText,
   getMisSubcoordinadores,
   getVotantesDeSubcoord,
   getMisVotantes,
@@ -349,13 +350,35 @@ const Dashboard = ({ currentUser, onLogout }) => {
       if (countError) { console.error("Error count padrón:", countError); return []; }
       if (!count || count <= 0) { setPadron([]); return []; }
 
-      const { data, error } = await supabase
-        .from("padron")
-        .select("*")
-        .range(0, count - 1);
+      const pageSize = 1000;
+      const concurrency = 5;
+      const ranges = [];
+      for (let from = 0; from < count; from += pageSize) {
+        ranges.push({ from, to: Math.min(from + pageSize - 1, count - 1) });
+      }
 
-      if (error) { console.error("Error cargando padrón:", error); return []; }
-      const result = data || [];
+      const result = [];
+      for (let i = 0; i < ranges.length; i += concurrency) {
+        const group = ranges.slice(i, i + concurrency);
+        const responses = await Promise.all(
+          group.map(({ from, to }) =>
+            supabase
+              .from("padron")
+              .select("*")
+              .order("ci", { ascending: true })
+              .range(from, to)
+          )
+        );
+
+        for (const { data, error } of responses) {
+          if (error) {
+            console.error("Error cargando padrón:", error);
+            return [];
+          }
+          result.push(...(data || []));
+        }
+      }
+
       setPadron(result);
       return result;
     } catch (e) {
@@ -397,7 +420,14 @@ const Dashboard = ({ currentUser, onLogout }) => {
         (arr || []).map((x) => {
           const ci = normalizeCI(x.ci);
           const p = padronMap.get(ci);
-          return { ...(p || {}), ...x, ci };
+          const merged = { ...(p || {}), ...x, ci };
+
+          // Nombre y apellido siempre se muestran tal como están en el padrón.
+          // Los datos operativos de la estructura siguen viniendo de x.
+          if (p?.nombre != null) merged.nombre = p.nombre;
+          if (p?.apellido != null) merged.apellido = p.apellido;
+
+          return merged;
         });
 
       setEstructura({
@@ -891,11 +921,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
   );
 
   // ======================= BUSCADOR =======================
-  const normalizeText = (v) =>
-    (v ?? "").toString().toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      .replace(/\s+/g, " ").trim();
-
   const personasVisibles = useMemo(() => {
     const role = currentUser?.role;
     const miCI = normalizeCI(currentUser?.ci);
@@ -932,13 +957,13 @@ const Dashboard = ({ currentUser, onLogout }) => {
   }, [estructura, currentUser]);
 
   const resultadosBusqueda = useMemo(() => {
-    const qRaw = normalizeText(searchCI);
+    const qRaw = normalizeSearchText(searchCI);
     if (!qRaw) return personasVisibles;
     const tokens = qRaw.split(" ").filter(Boolean);
     return personasVisibles.filter(({ persona }) => {
-      const ci = normalizeText(persona?.ci);
-      const nombre = normalizeText(persona?.nombre);
-      const apellido = normalizeText(persona?.apellido);
+      const ci = normalizeSearchText(persona?.ci);
+      const nombre = normalizeSearchText(persona?.nombre);
+      const apellido = normalizeSearchText(persona?.apellido);
       const full1 = `${nombre} ${apellido}`.trim();
       const full2 = `${apellido} ${nombre}`.trim();
       return tokens.every((t) =>
@@ -1207,7 +1232,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
                 </button>
               )}
             </div>
-            {normalizeText(searchCI) && (
+            {normalizeSearchText(searchCI) && (
               <p className="text-xs text-slate-500 mt-2">
                 {resultadosBusqueda.length} resultado{resultadosBusqueda.length !== 1 ? "s" : ""}
               </p>
@@ -1314,7 +1339,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
         </section>
 
         {/* =========== RESULTADOS BÚSQUEDA =========== */}
-        {normalizeText(searchCI) && (
+        {normalizeSearchText(searchCI) && (
           <section aria-label="Resultados de búsqueda">
             <div className="bg-white border border-slate-200 rounded-xl shadow-card overflow-hidden">
               <div className="px-5 py-3 border-b border-slate-100 bg-slate-50">
