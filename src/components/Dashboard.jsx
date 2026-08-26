@@ -239,6 +239,48 @@ const DatosPersona = ({ persona, rol, loginCode, onCopy, counter }) => {
 };
 
 // ======================= PERSONA ROW (votante in tree) =======================
+// Resuelve quién cargó a un votante a la estructura, usando únicamente
+// datos ya disponibles en memoria (sin consultas nuevas a Supabase).
+// Solo se usa en Resultados de búsqueda — no altera VotanteRow en el
+// resto de la aplicación.
+const resolverCargadoPor = (votante, estructura) => {
+  const nombreCompletoDe = (p) => `${p?.nombre || ""} ${p?.apellido || ""}`.trim();
+  const asignadoPorCI = normalizeCI(votante?.asignado_por);
+
+  if (asignadoPorCI) {
+    const coord = (estructura?.coordinadores || []).find(
+      (c) => normalizeCI(c.ci) === asignadoPorCI
+    );
+    if (coord) {
+      const nombre = nombreCompletoDe(coord) || votante?.asignado_por_nombre;
+      if (nombre) return { nombre, rol: "Coordinador", coordinadorNombre: null };
+    }
+
+    const sub = (estructura?.subcoordinadores || []).find(
+      (s) => normalizeCI(s.ci) === asignadoPorCI
+    );
+    if (sub) {
+      const nombre = nombreCompletoDe(sub) || votante?.asignado_por_nombre;
+      if (nombre) {
+        const coordDelSub = (estructura?.coordinadores || []).find(
+          (c) => normalizeCI(c.ci) === normalizeCI(sub.coordinador_ci)
+        );
+        return {
+          nombre,
+          rol: "Subcoordinador",
+          coordinadorNombre: coordDelSub ? nombreCompletoDe(coordDelSub) || null : null,
+        };
+      }
+    }
+  }
+
+  // No se pudo resolver por CI (o falta el nombre en la estructura):
+  // usar el nombre de texto guardado en su momento, si existe.
+  return votante?.asignado_por_nombre
+    ? { nombre: votante.asignado_por_nombre, rol: null, coordinadorNombre: null }
+    : null;
+};
+
 const VotanteRow = ({
   v,
   onTelefono,
@@ -247,6 +289,7 @@ const VotanteRow = ({
   onQuitar,
   canConfirmar,
   canAnular,
+  assignmentInfo = null,
 }) => (
   <div className="bg-white border border-slate-200 rounded-lg p-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 hover:border-slate-300 transition-colors">
     <div className="flex-1 min-w-0">
@@ -257,6 +300,19 @@ const VotanteRow = ({
             <Check className="w-3 h-3 mr-1" />
             Confirmado
           </Badge>
+        </div>
+      )}
+      {assignmentInfo && (
+        <div className="mt-1.5 text-xs text-slate-500 space-y-0.5">
+          <p>
+            Cargado por: <span className="font-medium text-slate-700">{assignmentInfo.nombre}</span>
+            {assignmentInfo.rol && <> · {assignmentInfo.rol}</>}
+          </p>
+          {assignmentInfo.coordinadorNombre && (
+            <p>
+              Coordinador: <span className="font-medium text-slate-700">{assignmentInfo.coordinadorNombre}</span>
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -1610,6 +1666,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
                         onQuitar={quitarPersona}
                         canConfirmar={canConfirmarVoto}
                         canAnular={canAnularConfirmacion}
+                        assignmentInfo={resolverCargadoPor(persona, estructura)}
                       />
                     );
                   })
