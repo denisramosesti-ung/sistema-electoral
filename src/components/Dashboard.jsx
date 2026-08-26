@@ -281,6 +281,28 @@ const resolverCargadoPor = (votante, estructura) => {
     : null;
 };
 
+const abrirWhatsApp = (votante) => {
+  const telefono = String(votante.telefono || "").replace(/\D/g, "");
+  const numero = telefono.startsWith("0") ? `595${telefono.slice(1)}` : telefono;
+  const nombre = `${votante.nombre || ""} ${votante.apellido || ""}`.trim() || "Votante";
+  const mensaje = [
+    `Hola ${nombre}.`,
+    "Te compartimos tus datos de votación:",
+    `Local: ${votante.local_votacion || "Sin información"}`,
+    `Mesa: ${votante.mesa || "Sin información"}`,
+    `Orden: ${votante.orden || "Sin información"}`,
+    "Esta información se envía para facilitar tu participación en la jornada electoral.",
+  ].join("\n");
+
+  window.open(`https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`, "_blank", "noopener,noreferrer");
+};
+
+const WhatsAppIcon = ({ className }) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+    <path d="M12.04 2a9.84 9.84 0 0 0-8.52 14.77L2 22l5.37-1.41A9.97 9.97 0 0 0 12.04 22 9.99 9.99 0 0 0 12.04 2Zm0 18.31a8.27 8.27 0 0 1-4.22-1.16l-.3-.18-3.19.84.85-3.1-.2-.32a8.2 8.2 0 0 1-1.27-4.4 8.32 8.32 0 1 1 8.33 8.32Zm4.56-6.23c-.25-.13-1.48-.73-1.71-.81-.23-.09-.4-.13-.56.12-.17.25-.65.82-.8.98-.14.17-.29.19-.54.06-.25-.12-1.05-.39-2-1.24a7.47 7.47 0 0 1-1.39-1.74c-.14-.25-.01-.38.11-.5.11-.11.25-.29.37-.44.13-.14.17-.25.25-.41.08-.17.04-.31-.02-.44-.06-.12-.56-1.35-.77-1.85-.2-.49-.41-.42-.56-.43h-.48c-.17 0-.44.06-.67.31-.23.25-.88.86-.88 2.09s.9 2.42 1.02 2.59c.13.16 1.76 2.68 4.26 3.76.6.26 1.06.41 1.42.52.6.19 1.14.16 1.57.1.48-.07 1.48-.61 1.69-1.19.21-.58.21-1.08.14-1.19-.06-.1-.23-.16-.48-.29Z" />
+  </svg>
+);
+
 const VotanteRow = ({
   v,
   onTelefono,
@@ -320,6 +342,11 @@ const VotanteRow = ({
       <ActionBtn onClick={() => onTelefono("votante", v)} title="Editar teléfono" variant="green">
         <Phone className="w-3.5 h-3.5" />
       </ActionBtn>
+      {v.telefono && (
+        <ActionBtn onClick={() => abrirWhatsApp(v)} title="Enviar datos por WhatsApp" variant="green">
+          <WhatsAppIcon className="w-4 h-4" />
+        </ActionBtn>
+      )}
       {!v.voto_confirmado && canConfirmar(v) && (
         <ActionBtn onClick={() => onConfirmar(v)} title="Confirmar voto" variant="success-solid">
           <Check className="w-3.5 h-3.5" />
