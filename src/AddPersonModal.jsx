@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Search, X, UserPlus, ChevronLeft, ChevronRight, Phone, ArrowLeft } from "lucide-react";
 import { validarTelefonoParaguayo } from "./utils/telefonoParaguay";
 import TelefonoParaguayoInput from "./components/TelefonoParaguayoInput";
+import { normalizeCI, normalizeSearchText } from "./utils/estructuraHelpers";
 
 const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -30,24 +31,21 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
 
   if (!show) return null;
 
-  const term = searchTerm.trim();
-
-  const normalize = (text) =>
-    (text || "").toLowerCase()
-      .normalize("NFD").replace(/\p{M}/gu, "");
+  const term = normalizeSearchText(searchTerm);
 
   const filtered = term
     ? disponibles
         .filter((p) => {
           const fullName = `${p.nombre ?? ""} ${p.apellido ?? ""}`;
-          const fullNameNorm = normalize(fullName);
-          const ciTxt = (p.ci ?? "").toString().toLowerCase();
-          const words = normalize(term).split(" ").filter(Boolean);
+          const fullNameNorm = normalizeSearchText(fullName);
+          const ciTxt = normalizeCI(p.ci);
+          const words = term.split(" ").filter(Boolean);
           return words.every((w) => ciTxt.includes(w) || fullNameNorm.includes(w));
         })
         .sort((a, b) => {
-          const exactA = a.ci?.toString() === searchTerm;
-          const exactB = b.ci?.toString() === searchTerm;
+          const searchedCI = normalizeCI(searchTerm);
+          const exactA = normalizeCI(a.ci) === searchedCI;
+          const exactB = normalizeCI(b.ci) === searchedCI;
           if (exactA && !exactB) return -1;
           if (!exactA && exactB) return 1;
           return (a.nombre || "").localeCompare(b.nombre || "");
