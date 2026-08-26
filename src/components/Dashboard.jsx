@@ -285,27 +285,21 @@ const crearEnlaceWhatsApp = (persona) => {
   const telefono = String(persona.telefono || "").replace(/\D/g, "");
   const numero = telefono.startsWith("0") ? `595${telefono.slice(1)}` : telefono;
   const nombre = `${persona.nombre || ""} ${persona.apellido || ""}`.trim() || "Votante";
-  const iconos = {
-    paraguay: "\u{1F1F5}\u{1F1FE}",
-    urna: "\u{1F5F3}\u{FE0F}",
-    local: "\u{1F4CD}",
-    bandera: "\u{1F6A9}",
-    rojo: "\u{1F534}",
-  };
   const mensaje = [
-    `${iconos.paraguay} Hola, *${nombre}*.`,
+    `Hola, *${nombre}*.`,
     "",
-    `${iconos.urna} Te compartimos tus *datos de votación*:`,
+    "*DATOS DE VOTACIÓN*",
+    "------------------------------",
     "",
-    `${iconos.local} *Local:* ${persona.local_votacion || "Sin información"}`,
+    `*Local:* ${persona.local_votacion || "Sin información"}`,
     `*Mesa:* ${persona.mesa || "Sin información"}`,
     `*Orden:* ${persona.orden || "Sin información"}`,
     "",
     "Esta información se envía para facilitar tu participación en la jornada electoral.",
     "",
-    `${iconos.bandera} Saludos,`,
-    `${iconos.rojo} *Equipo de Rodrigo Larrosa*`,
-    `${iconos.rojo} *Lista 1 · Opción 4*`,
+    "Saludos,",
+    "*Equipo de Rodrigo Larrosa*",
+    "*LISTA 1 - OPCIÓN 4*",
   ].join("\n");
 
   return `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
