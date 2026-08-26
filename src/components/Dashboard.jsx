@@ -281,17 +281,20 @@ const resolverCargadoPor = (votante, estructura) => {
     : null;
 };
 
-const abrirWhatsApp = (votante) => {
-  const telefono = String(votante.telefono || "").replace(/\D/g, "");
+const abrirWhatsApp = (persona) => {
+  const telefono = String(persona.telefono || "").replace(/\D/g, "");
   const numero = telefono.startsWith("0") ? `595${telefono.slice(1)}` : telefono;
-  const nombre = `${votante.nombre || ""} ${votante.apellido || ""}`.trim() || "Votante";
+  const nombre = `${persona.nombre || ""} ${persona.apellido || ""}`.trim() || "Votante";
   const mensaje = [
     `Hola ${nombre}.`,
     "Te compartimos tus datos de votación:",
-    `Local: ${votante.local_votacion || "Sin información"}`,
-    `Mesa: ${votante.mesa || "Sin información"}`,
-    `Orden: ${votante.orden || "Sin información"}`,
+    `Local: ${persona.local_votacion || "Sin información"}`,
+    `Mesa: ${persona.mesa || "Sin información"}`,
+    `Orden: ${persona.orden || "Sin información"}`,
     "Esta información se envía para facilitar tu participación en la jornada electoral.",
+    "Saludos,",
+    "Equipo de Rodrigo Larrosa",
+    "Lista 1 · Opción 4",
   ].join("\n");
 
   window.open(`https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`, "_blank", "noopener,noreferrer");
@@ -446,6 +449,11 @@ const SubcoordinadorCard = ({
           <ActionBtn onClick={() => onTelefono("subcoordinador", sub)} title="Editar teléfono" variant="green">
             <Phone className="w-3.5 h-3.5" />
           </ActionBtn>
+          {sub.telefono && (
+            <ActionBtn onClick={() => abrirWhatsApp(sub)} title="Enviar datos por WhatsApp" variant="green">
+              <WhatsAppIcon className="w-4 h-4" />
+            </ActionBtn>
+          )}
           <ActionBtn onClick={() => onQuitar(sub.ci, "subcoordinador")} title="Eliminar" variant="danger-solid">
             <Trash2 className="w-3.5 h-3.5" />
           </ActionBtn>
@@ -539,6 +547,11 @@ const CoordinadorCard = ({
           <ActionBtn onClick={() => onTelefono("coordinador", coord)} title="Editar teléfono" variant="green">
             <Phone className="w-3.5 h-3.5" />
           </ActionBtn>
+          {coord.telefono && (
+            <ActionBtn onClick={() => abrirWhatsApp(coord)} title="Enviar datos por WhatsApp" variant="green">
+              <WhatsAppIcon className="w-4 h-4" />
+            </ActionBtn>
+          )}
           <ActionBtn onClick={() => onQuitar(coord.ci, "coordinador")} title="Eliminar coordinador" variant="danger-solid">
             <Trash2 className="w-3.5 h-3.5" />
           </ActionBtn>
