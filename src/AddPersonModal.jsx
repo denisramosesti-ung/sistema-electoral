@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Search, X, UserPlus, ChevronLeft, ChevronRight, Phone, ArrowLeft } from "lucide-react";
-import {
-  validarTelefonoParaguayo,
-  sanitizarEntradaTelefono,
-  MAX_TELEFONO_INPUT_LENGTH,
-} from "./utils/telefonoParaguay";
+import { validarTelefonoParaguayo } from "./utils/telefonoParaguay";
+import TelefonoParaguayoInput from "./components/TelefonoParaguayoInput";
 import { normalizeCI, normalizeSearchText } from "./utils/estructuraHelpers";
 
 const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
@@ -81,10 +78,12 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
     setPhoneError(null);
   };
 
-  const handlePhoneChange = (e) => {
-    setPhoneValue(sanitizarEntradaTelefono(e.target.value));
+  const handlePhoneChange = (val) => {
+    setPhoneValue(val);
     if (phoneError) setPhoneError(null);
   };
+
+  const telefonoValido = validarTelefonoParaguayo(phoneValue).valido;
 
   // ======================= CONFIRMAR ASIGNACIÓN =======================
   const handleConfirmarAsignacion = async () => {
@@ -291,28 +290,14 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
                 <label htmlFor="telefonoAsignacion" className="block text-sm font-medium text-slate-700 mb-1.5">
                   Número de teléfono <span className="text-red-500">*</span>
                 </label>
-                <input
+                <TelefonoParaguayoInput
                   id="telefonoAsignacion"
-                  type="tel"
                   value={phoneValue}
                   onChange={handlePhoneChange}
-                  maxLength={MAX_TELEFONO_INPUT_LENGTH}
+                  error={phoneError}
                   disabled={saving}
                   autoFocus
-                  placeholder="0981 123 456"
-                  className={`w-full px-4 py-2.5 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:border-transparent bg-slate-50 disabled:opacity-60 ${
-                    phoneError
-                      ? "border-red-300 focus:ring-red-400"
-                      : "border-slate-300 focus:ring-brand-500"
-                  }`}
                 />
-                {phoneError ? (
-                  <p className="text-xs text-red-600 mt-1.5">{phoneError}</p>
-                ) : (
-                  <p className="text-xs text-slate-400 mt-1.5">
-                    Formatos válidos: 0981123456 o +595981123456
-                  </p>
-                )}
               </div>
             </div>
 
@@ -327,7 +312,7 @@ const AddPersonModal = ({ show, onClose, tipo, onAdd, disponibles }) => {
               </button>
               <button
                 onClick={handleConfirmarAsignacion}
-                disabled={saving}
+                disabled={saving || !telefonoValido}
                 className="flex-1 h-10 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors border-0 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {saving ? (

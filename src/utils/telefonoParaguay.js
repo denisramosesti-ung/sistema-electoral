@@ -1,78 +1,68 @@
 // ======================= TELÉFONO PARAGUAYO =======================
 // Utilidad centralizada de validación y normalización de números
-// celulares paraguayos. Formato de guardado en Supabase:
-//   +595981123456  (siempre internacional, 13 caracteres)
+// celulares paraguayos. El prefijo "+595" es fijo y no editable; el
+// usuario solo escribe la parte editable (9 dígitos, empieza con "9").
 //
-// Formatos de entrada aceptados:
-//   0981123456
-//   0981 123 456
-//   +595981123456
-//   +595 981 123 456
+// Ejemplo:
+//   Prefijo fijo:     +595
+//   Parte editable:   981123456   (9 dígitos, /^9\d{8}$/)
+//   Guardado final:    +595981123456
+//
+// El formato final coincide exactamente con el CHECK existente en
+// Supabase: ^\+5959[0-9]{8}$ — no requiere cambios en la base de datos.
 
-const NATIONAL_REGEX = /^09\d{8}$/; // 09 + 8 dígitos = 10 dígitos
-const INTERNATIONAL_REGEX = /^\+5959\d{8}$/; // +5959 + 8 dígitos = 13 caracteres
+// Prefijo fijo mostrado junto al input, no editable por el usuario.
+export const PREFIJO_PY = "+595";
 
-// Máximo de caracteres que se permite escribir en el input
-// (cubre el formato más largo con espacios: "+595 981 123 456")
-export const MAX_TELEFONO_INPUT_LENGTH = 17;
+// Cantidad exacta de dígitos que debe tener la parte editable.
+export const MAX_TELEFONO_INPUT_LENGTH = 9;
 
-// Quita espacios, guiones y paréntesis antes de validar/normalizar.
-export const limpiarTelefono = (raw) =>
-  String(raw ?? "").replace(/[\s\-()]/g, "");
+// La parte editable siempre debe empezar con "9" y tener 9 dígitos.
+const PARTE_EDITABLE_REGEX = /^9\d{8}$/;
 
-// true si, una vez limpio, calza con el formato nacional o internacional.
-export const esTelefonoParaguayoValido = (raw) => {
-  const limpio = limpiarTelefono(raw);
-  return NATIONAL_REGEX.test(limpio) || INTERNATIONAL_REGEX.test(limpio);
+// Deja solo dígitos en el valor recibido, y si el usuario tecleó o pegó
+// el "595" del prefijo internacional o el "0" inicial nacional, los
+// quita para dejar únicamente la parte editable. Recorta a 9 dígitos
+// como máximo.
+export const sanitizarEntradaTelefono = (raw) => {
+  let digits = String(raw ?? "").replace(/\D/g, "");
+
+  if (digits.startsWith("595")) {
+    digits = digits.slice(3);
+  }
+
+  if (digits.startsWith("0")) {
+    digits = digits.slice(1);
+  }
+
+  return digits.slice(0, MAX_TELEFONO_INPUT_LENGTH);
 };
 
-// Devuelve el número en formato internacional normalizado (+595981123456)
-// o null si el valor no es un teléfono paraguayo válido.
-export const normalizarTelefonoParaguayo = (raw) => {
-  const limpio = limpiarTelefono(raw);
-  if (INTERNATIONAL_REGEX.test(limpio)) return limpio;
-  if (NATIONAL_REGEX.test(limpio)) return `+595${limpio.slice(1)}`;
-  return null;
-};
+// Valida la parte editable (sin el prefijo +595) ingresada por el usuario.
+// Retorna { valido, error, normalizado }; normalizado es el número
+// completo en formato internacional (+5959XXXXXXXX) listo para guardar.
+export const validarTelefonoParaguayo = (parteEditableRaw) => {
+  const parte = sanitizarEntradaTelefono(parteEditableRaw);
 
-// Valida un valor de teléfono ingresado por el usuario.
-// Retorna { valido, error, normalizado }.
-export const validarTelefonoParaguayo = (raw) => {
-  const value = String(raw ?? "").trim();
-
-  if (!value) {
+  if (!parte) {
     return { valido: false, error: "El teléfono es obligatorio.", normalizado: null };
   }
 
-  // Solo se permiten dígitos, "+", espacios, guiones y paréntesis como entrada.
-  if (!/^[+0-9\s\-()]+$/.test(value)) {
+  if (!PARTE_EDITABLE_REGEX.test(parte)) {
     return {
       valido: false,
-      error: "El teléfono solo puede contener números.",
+      error: "Ingrese un celular paraguayo válido. Ejemplo: 981123456",
       normalizado: null,
     };
   }
 
-  const normalizado = normalizarTelefonoParaguayo(value);
-  if (!normalizado) {
-    return {
-      valido: false,
-      error: "Número inválido. Use formato 0981123456 o +595981123456.",
-      normalizado: null,
-    };
-  }
-
-  return { valido: true, error: null, normalizado };
+  return { valido: true, error: null, normalizado: `${PREFIJO_PY}${parte}` };
 };
 
-// Filtra caracteres no permitidos mientras el usuario escribe y limita
-// la longitud del input. Pensado para usarse en el onChange del campo.
-export const sanitizarEntradaTelefono = (raw) => {
-  let value = String(raw ?? "").replace(/[^\d+\s\-()]/g, "");
-
-  // El "+" solo es válido como primer carácter.
-  const hasLeadingPlus = value.startsWith("+");
-  value = (hasLeadingPlus ? "+" : "") + value.replace(/\+/g, "");
-
-  return value.slice(0, MAX_TELEFONO_INPUT_LENGTH);
+// Dado un teléfono ya guardado en Supabase (+5959XXXXXXXX), devuelve solo
+// la parte editable (sin el prefijo) para precargar el input al editar.
+export const extraerParteEditable = (telefonoGuardado) => {
+  const value = String(telefonoGuardado ?? "").trim();
+  const sinPrefijo = value.startsWith(PREFIJO_PY) ? value.slice(PREFIJO_PY.length) : value;
+  return sanitizarEntradaTelefono(sinPrefijo);
 };

@@ -20,22 +20,26 @@ import {
   TrendingUp,
   Shield,
   AlertCircle,
-  MapPin,
+  BarChart2,
+  FileSpreadsheet,
 } from "lucide-react";
 
 import AddPersonModal from "../AddPersonModal";
 import ModalTelefono from "./ModalTelefono";
 import ConfirmVotoModal from "./ConfirmVotoModal";
 import CreateAdminModal from "./CreateAdminModal";
+import VerPorLocalVotacionModule from "./VerPorLocalVotacionModule";
 import {
   validarTelefonoParaguayo,
   sanitizarEntradaTelefono,
+  extraerParteEditable,
 } from "../utils/telefonoParaguay";
 import {
   generateSuperadminPDF,
   generateCoordinadorPDF,
   generateSubcoordinadorPDF,
 } from "../services/pdfService";
+import { exportarEstructuraExcel } from "../services/excelService";
 
 import { getEstadisticas } from "../services/estadisticasService";
 
@@ -277,6 +281,251 @@ const VotanteRow = ({
   </div>
 );
 
+// ======================= SUBCOORDINADOR CARD =======================
+// Tarjeta completa de un subcoordinador. Se usa tanto anidada dentro de
+// un CoordinadorCard (vista superadmin/owner, variante compacta sin
+// acción de confirmar/anular sub) como en la lista propia de un
+// coordinador (variante "top", con esa acción) y en Resultados de
+// búsqueda, para no duplicar la implementación en ningún lugar.
+const SubcoordinadorCard = ({
+  sub,
+  counts,
+  expandedMap,
+  onToggleExpand,
+  estructura,
+  onTelefono,
+  onQuitar,
+  onCopy,
+  onConfirmarVoto,
+  onAnularConfirmacion,
+  canConfirmarVoto,
+  canAnularConfirmacion,
+  nested = false,
+  onConfirmarSub,
+  onAnularConfirmSub,
+}) => {
+  const subCI = normalizeCI(sub.ci);
+  const expanded = Boolean(expandedMap[subCI]);
+  const votantesDeSub = getVotantesDeSubcoord(estructura, sub.ci);
+
+  return (
+    <div
+      className={
+        nested
+          ? "border border-slate-200 rounded-lg bg-white overflow-hidden"
+          : "border border-slate-200 rounded-xl overflow-hidden"
+      }
+    >
+      {/* Sub header */}
+      <div
+        className={
+          nested
+            ? "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 cursor-pointer hover:bg-slate-50 transition-colors"
+            : "flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 cursor-pointer hover:bg-slate-50 transition-colors bg-white"
+        }
+        onClick={() => onToggleExpand(sub.ci)}
+      >
+        <div className="flex items-start gap-2 flex-1 min-w-0">
+          <span className={nested ? "text-brand-500 shrink-0 mt-0.5" : "text-brand-600 shrink-0 mt-0.5"}>
+            {expanded
+              ? <ChevronDown className={nested ? "w-3.5 h-3.5" : "w-4 h-4"} />
+              : <ChevronRight className={nested ? "w-3.5 h-3.5" : "w-4 h-4"} />}
+          </span>
+          <div className="flex-1 min-w-0">
+            <DatosPersona
+              persona={sub}
+              rol="Sub-coordinador"
+              loginCode={sub.login_code}
+              onCopy={onCopy}
+              counter={<VoteCounter confirmed={counts.confirmed} total={counts.total} />}
+            />
+            {sub.confirmado && (
+              <div className="mt-1">
+                <Badge variant="green">
+                  <Check className="w-3 h-3 mr-1" />
+                  Sub confirmado
+                </Badge>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+          {!nested && !sub.confirmado && (
+            <ActionBtn onClick={() => onConfirmarSub(sub)} title="Confirmar subcoordinador" variant="success-solid">
+              <Check className="w-3.5 h-3.5" />
+            </ActionBtn>
+          )}
+          {!nested && sub.confirmado && (
+            <ActionBtn onClick={() => onAnularConfirmSub(sub)} title="Anular confirmación sub" variant="danger">
+              <X className="w-3.5 h-3.5" />
+            </ActionBtn>
+          )}
+          <ActionBtn onClick={() => onTelefono("subcoordinador", sub)} title="Editar teléfono" variant="green">
+            <Phone className="w-3.5 h-3.5" />
+          </ActionBtn>
+          <ActionBtn onClick={() => onQuitar(sub.ci, "subcoordinador")} title="Eliminar" variant="danger-solid">
+            <Trash2 className="w-3.5 h-3.5" />
+          </ActionBtn>
+        </div>
+      </div>
+
+      {/* Sub votantes */}
+      {expanded && (
+        <div className="border-t border-slate-100 bg-slate-50 px-3 pb-3 pt-2 overflow-x-auto animate-fade-in">
+          {!nested && (
+            <p className="text-xs font-semibold text-slate-600 mb-2">
+              Votantes asignados
+            </p>
+          )}
+          <div className="space-y-1.5 min-w-0">
+            {votantesDeSub.map((v) => (
+              <VotanteRow
+                key={v.ci}
+                v={v}
+                onTelefono={onTelefono}
+                onConfirmar={onConfirmarVoto}
+                onAnular={onAnularConfirmacion}
+                onQuitar={onQuitar}
+                canConfirmar={canConfirmarVoto}
+                canAnular={canAnularConfirmacion}
+              />
+            ))}
+            {votantesDeSub.length === 0 && (
+              <p className="text-xs text-slate-400 py-2 text-center">
+                Sin votantes asignados.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ======================= COORDINADOR CARD =======================
+// Tarjeta completa de un coordinador (vista superadmin/owner). Se usa
+// tanto en Mi Estructura como en Resultados de búsqueda.
+const CoordinadorCard = ({
+  coord,
+  counts,
+  expandedMap,
+  onToggleExpand,
+  estructura,
+  voteCountsBySub,
+  onTelefono,
+  onQuitar,
+  onCopy,
+  onConfirmarVoto,
+  onAnularConfirmacion,
+  canConfirmarVoto,
+  canAnularConfirmacion,
+}) => {
+  const coordCI = normalizeCI(coord.ci);
+  const expanded = Boolean(expandedMap[coordCI]);
+  const misSubs = (estructura.subcoordinadores || []).filter(
+    (s) => normalizeCI(s.coordinador_ci) === coordCI
+  );
+  const directVoters = (estructura.votantes || []).filter(
+    (v) => normalizeCI(v.asignado_por) === coordCI
+  );
+
+  return (
+    <div className="border border-slate-200 rounded-xl overflow-hidden">
+      {/* Coord header */}
+      <div
+        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 cursor-pointer hover:bg-slate-50 transition-colors bg-white"
+        onClick={() => onToggleExpand(coord.ci)}
+      >
+        <div className="flex items-start gap-2 flex-1 min-w-0">
+          <span className="text-brand-600 shrink-0 mt-0.5">
+            {expanded
+              ? <ChevronDown className="w-4 h-4" />
+              : <ChevronRight className="w-4 h-4" />}
+          </span>
+          <div className="flex-1 min-w-0">
+            <DatosPersona
+              persona={coord}
+              rol="Coordinador"
+              loginCode={coord.login_code}
+              onCopy={onCopy}
+              counter={<VoteCounter confirmed={counts.confirmed} total={counts.total} />}
+            />
+          </div>
+        </div>
+        <div className="flex gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <ActionBtn onClick={() => onTelefono("coordinador", coord)} title="Editar teléfono" variant="green">
+            <Phone className="w-3.5 h-3.5" />
+          </ActionBtn>
+          <ActionBtn onClick={() => onQuitar(coord.ci, "coordinador")} title="Eliminar coordinador" variant="danger-solid">
+            <Trash2 className="w-3.5 h-3.5" />
+          </ActionBtn>
+        </div>
+      </div>
+
+      {/* Coord expanded */}
+      {expanded && (
+        <div className="border-t border-slate-100 bg-slate-50/50 px-4 pb-4 pt-3 overflow-x-auto animate-fade-in">
+          <div className="space-y-2 min-w-0">
+            {misSubs.map((sub) => {
+              const subCounts = voteCountsBySub[normalizeCI(sub.ci)] ?? { confirmed: 0, total: 0 };
+              return (
+                <SubcoordinadorCard
+                  key={sub.ci}
+                  sub={sub}
+                  counts={subCounts}
+                  expandedMap={expandedMap}
+                  onToggleExpand={onToggleExpand}
+                  estructura={estructura}
+                  onTelefono={onTelefono}
+                  onQuitar={onQuitar}
+                  onCopy={onCopy}
+                  onConfirmarVoto={onConfirmarVoto}
+                  onAnularConfirmacion={onAnularConfirmacion}
+                  canConfirmarVoto={canConfirmarVoto}
+                  canAnularConfirmacion={canAnularConfirmacion}
+                  nested
+                />
+              );
+            })}
+
+            {misSubs.length === 0 && (
+              <p className="text-xs text-slate-400 text-center py-2">
+                Sin subcoordinadores asignados.
+              </p>
+            )}
+
+            {directVoters.length > 0 && (
+              <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
+                <div className="px-3 py-2 bg-slate-50 border-b border-slate-100">
+                  <p className="font-semibold text-xs text-slate-600 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-slate-400" />
+                    Votantes directos del coordinador
+                    <span className="text-slate-400 font-normal">({directVoters.length})</span>
+                  </p>
+                </div>
+                <div className="p-2.5 space-y-1.5">
+                  {directVoters.map((v) => (
+                    <VotanteRow
+                      key={v.ci}
+                      v={v}
+                      onTelefono={onTelefono}
+                      onConfirmar={onConfirmarVoto}
+                      onAnular={onAnularConfirmacion}
+                      onQuitar={onQuitar}
+                      canConfirmar={canConfirmarVoto}
+                      canAnular={canAnularConfirmacion}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ======================= MAIN COMPONENT =======================
 const Dashboard = ({ currentUser, onLogout }) => {
   // ======================= STATE =======================
@@ -290,8 +539,12 @@ const Dashboard = ({ currentUser, onLogout }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [modalType, setModalType] = useState("");
   const [expandedCoords, setExpandedCoords] = useState({});
+  // Estado de expandido propio de "Resultados de búsqueda": separado de
+  // expandedCoords para que abrir/cerrar una tarjeta ahí nunca afecte la
+  // misma tarjeta dentro de "Mi Estructura" (ni viceversa).
+  const [expandedSearchResults, setExpandedSearchResults] = useState({});
   const [searchCI, setSearchCI] = useState("");
-  const [localSeleccionado, setLocalSeleccionado] = useState(null);
+  const [showVerPorLocal, setShowVerPorLocal] = useState(false);
 
   const [phoneModalOpen, setPhoneModalOpen] = useState(false);
   const [phoneTarget, setPhoneTarget] = useState(null);
@@ -314,6 +567,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
   const [createAdminModalOpen, setCreateAdminModalOpen] = useState(false);
 
   const [loadingEstructura, setLoadingEstructura] = useState(true);
+  const [generandoExcel, setGenerandoExcel] = useState(false);
 
   // Non-blocking toast notification (replaces alert() to prevent scroll jump)
   const [toastMsg, setToastMsg] = useState(null);
@@ -338,6 +592,11 @@ const Dashboard = ({ currentUser, onLogout }) => {
   const toggleExpand = useCallback((ci) => {
     const key = normalizeCI(ci);
     setExpandedCoords((prev) => ({ ...prev, [key]: !prev[key] }));
+  }, []);
+
+  const toggleExpandSearch = useCallback((ci) => {
+    const key = normalizeCI(ci);
+    setExpandedSearchResults((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
   // ======================= CARGAR PADRÓN =======================
@@ -623,6 +882,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
   // ======================= LOGOUT =======================
   const handleLogout = () => {
     setExpandedCoords({});
+    setExpandedSearchResults({});
     setSearchCI("");
     onLogout?.();
   };
@@ -630,7 +890,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
   // ======================= TELEFONO =======================
   const abrirTelefono = (tipo, p) => {
     setPhoneTarget({ tipo, ...p });
-    setPhoneValue(p.telefono || "");
+    setPhoneValue(extraerParteEditable(p.telefono));
     setPhoneError(null);
     setPhoneSaving(false);
     setPhoneModalOpen(true);
@@ -973,41 +1233,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
     });
   }, [searchCI, personasVisibles]);
 
-  // ======================= VER POR LOCAL DE VOTACIÓN =======================
-  // Agrupa la estructura visible del usuario por padron.local_votacion
-  // (nunca por "seccional"). Personas sin local van a un grupo aparte.
-  const SIN_LOCAL_LABEL = "Sin local de votación";
-
-  const localesConteo = useMemo(() => {
-    const map = new Map();
-    personasVisibles.forEach(({ tipo, persona }) => {
-      const nombreLocal = String(persona?.local_votacion || "").trim() || SIN_LOCAL_LABEL;
-      if (!map.has(nombreLocal)) {
-        map.set(nombreLocal, { nombre: nombreLocal, total: 0, confirmed: 0, personas: [] });
-      }
-      const grupo = map.get(nombreLocal);
-      const confirmado =
-        tipo === "votante" ? persona.voto_confirmado === true
-        : tipo === "subcoordinador" ? persona.confirmado === true
-        : true; // coordinador: siempre autoconfirmado (misma convención que el resto del dashboard)
-      grupo.total += 1;
-      if (confirmado) grupo.confirmed += 1;
-      grupo.personas.push({ tipo, persona });
-    });
-
-    const conLocal = Array.from(map.values())
-      .filter((g) => g.nombre !== SIN_LOCAL_LABEL)
-      .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
-    const sinLocal = map.get(SIN_LOCAL_LABEL);
-
-    return sinLocal ? [...conLocal, sinLocal] : conLocal;
-  }, [personasVisibles]);
-
-  const grupoLocalSeleccionado = useMemo(
-    () => localesConteo.find((g) => g.nombre === localSeleccionado) || null,
-    [localesConteo, localSeleccionado]
-  );
-
   // ======================= PDF =======================
   const descargarPDF = async () => {
     if (!currentUser) { alert("Usuario no válido"); return; }
@@ -1032,6 +1257,23 @@ const Dashboard = ({ currentUser, onLogout }) => {
     } catch (error) {
       console.error("Error generando PDF:", error);
       alert("Error al generar el reporte PDF");
+    }
+  };
+
+  // ======================= EXCEL =======================
+  // Exporta exactamente el mismo alcance que ya usa el PDF: personasVisibles
+  // ya está filtrado por rol (owner/superadmin ven toda la estructura,
+  // coordinador solo la suya, subcoordinador solo sus votantes).
+  const descargarExcel = async () => {
+    if (!currentUser || generandoExcel) return;
+    setGenerandoExcel(true);
+    try {
+      exportarEstructuraExcel(personasVisibles, currentUser);
+    } catch (error) {
+      console.error("Error generando Excel:", error);
+      alert("Error al generar el archivo Excel");
+    } finally {
+      setGenerandoExcel(false);
     }
   };
 
@@ -1203,9 +1445,56 @@ const Dashboard = ({ currentUser, onLogout }) => {
             <FileText className="w-4 h-4" />
             Descargar PDF
           </button>
+
+          <button
+            onClick={descargarExcel}
+            disabled={generandoExcel}
+            className="inline-flex items-center gap-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-4 h-10 rounded-xl text-sm font-medium transition-colors w-full sm:w-auto shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {generandoExcel ? (
+              <>
+                <span className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+                Generando...
+              </>
+            ) : (
+              <>
+                <FileSpreadsheet className="w-4 h-4" />
+                Descargar Excel
+              </>
+            )}
+          </button>
+
+          {(currentUser.role === "superadmin" || currentUser.role === "owner") && (
+            <button
+              onClick={() => window.open("/consultar-datos", "_blank")}
+              className="inline-flex items-center gap-2 border border-brand-300 bg-white hover:bg-brand-50 text-brand-700 px-4 h-10 rounded-xl text-sm font-medium transition-colors w-full sm:w-auto shadow-sm"
+            >
+              <BarChart2 className="w-4 h-4" />
+              Consultar datos
+            </button>
+          )}
+
+          {(currentUser.role === "superadmin" || currentUser.role === "owner") && (
+            <button
+              onClick={() => setShowVerPorLocal(true)}
+              className="inline-flex items-center gap-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 px-4 h-10 rounded-xl text-sm font-medium transition-colors w-full sm:w-auto shadow-sm"
+            >
+              <Users className="w-4 h-4" />
+              Ver por local de votación
+            </button>
+          )}
         </section>
 
-        {/* =========== BUSCADOR =========== */}
+        {/* =========== VER POR LOCAL DE VOTACIÓN =========== */}
+        {showVerPorLocal && (currentUser.role === "superadmin" || currentUser.role === "owner") && (
+          <section aria-label="Ver por local de votación" className="mt-2">
+            <VerPorLocalVotacionModule estructura={estructura} onVolver={() => setShowVerPorLocal(false)} />
+          </section>
+        )}
+
+        {/* =========== BUSCADOR + RESULTADOS + MI ESTRUCTURA =========== */}
+        {!showVerPorLocal && (
+        <>
         <section aria-label="Búsqueda interna">
           <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-card">
             <label
@@ -1240,104 +1529,6 @@ const Dashboard = ({ currentUser, onLogout }) => {
           </div>
         </section>
 
-        {/* =========== VER POR LOCAL DE VOTACIÓN =========== */}
-        <section aria-label="Ver por local de votación">
-          <div className="bg-white border border-slate-200 rounded-xl shadow-card overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-slate-500" />
-              <h2 className="text-base font-bold text-slate-800">Ver por local de votación</h2>
-            </div>
-
-            <div className="p-4 sm:p-5 space-y-4">
-              {localesConteo.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-4">
-                  No hay personas en su estructura todavía.
-                </p>
-              ) : (
-                <>
-                  <div>
-                    <label
-                      htmlFor="localVotacionSelect"
-                      className="block text-sm font-semibold text-slate-700 mb-2"
-                    >
-                      Local de votación
-                    </label>
-                    <select
-                      id="localVotacionSelect"
-                      value={localSeleccionado ?? ""}
-                      onChange={(e) => setLocalSeleccionado(e.target.value || null)}
-                      className="w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent bg-slate-50"
-                    >
-                      <option value="">Seleccione un local...</option>
-                      {localesConteo.map((g) => (
-                        <option key={g.nombre} value={g.nombre}>
-                          {g.nombre} ({g.confirmed}/{g.total})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {grupoLocalSeleccionado && (
-                    <div className="border border-slate-200 rounded-xl overflow-hidden">
-                      <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
-                        <p className="font-semibold text-sm text-slate-700 truncate">
-                          {grupoLocalSeleccionado.nombre}
-                        </p>
-                        <VoteCounter
-                          confirmed={grupoLocalSeleccionado.confirmed}
-                          total={grupoLocalSeleccionado.total}
-                        />
-                      </div>
-                      <div className="p-3 space-y-1.5 max-h-96 overflow-y-auto">
-                        {grupoLocalSeleccionado.personas.map(({ tipo, persona }) => (
-                          <div
-                            key={`local-${tipo}-${persona.ci}`}
-                            className="border border-slate-200 rounded-lg p-3"
-                          >
-                            <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                              <span
-                                className={`font-semibold text-sm truncate ${
-                                  persona.nombre ? "text-slate-800" : "text-slate-400 italic"
-                                }`}
-                              >
-                                {persona.nombre
-                                  ? `${persona.nombre} ${persona.apellido || ""}`.trim()
-                                  : "Cargando..."}
-                              </span>
-                              <Badge
-                                variant={
-                                  tipo === "coordinador"
-                                    ? "red"
-                                    : tipo === "subcoordinador"
-                                    ? "blue"
-                                    : "default"
-                                }
-                              >
-                                {tipo === "coordinador"
-                                  ? "Coordinador"
-                                  : tipo === "subcoordinador"
-                                  ? "Subcoordinador"
-                                  : "Votante"}
-                              </Badge>
-                              {tipo === "votante" && persona.voto_confirmado && (
-                                <Badge variant="green">
-                                  <Check className="w-3 h-3 mr-1" />
-                                  Confirmado
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-xs text-slate-500">CI: {persona.ci}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        </section>
-
         {/* =========== RESULTADOS BÚSQUEDA =========== */}
         {normalizeSearchText(searchCI) && (
           <section aria-label="Resultados de búsqueda">
@@ -1360,62 +1551,68 @@ const Dashboard = ({ currentUser, onLogout }) => {
                     </p>
                   </div>
                 ) : (
-                  resultadosBusqueda.slice(0, 50).map(({ tipo, persona }) => (
-                    <div
-                      key={`${tipo}-${persona.ci}`}
-                      className="border border-slate-200 rounded-lg p-3 hover:border-slate-300 hover:bg-slate-50 transition-colors"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                            <span className={`font-semibold text-sm truncate ${persona.nombre ? "text-slate-800" : "text-slate-400 italic"}`}>
-                              {persona.nombre ? `${persona.nombre} ${persona.apellido || ""}`.trim() : "Cargando..."}
-                            </span>
-                            <Badge
-                              variant={
-                                tipo === "coordinador"
-                                  ? "red"
-                                  : tipo === "subcoordinador"
-                                  ? "blue"
-                                  : "default"
-                              }
-                            >
-                              {tipo === "coordinador"
-                                ? "Coordinador"
-                                : tipo === "subcoordinador"
-                                ? "Subcoordinador"
-                                : "Votante"}
-                            </Badge>
-                            {tipo === "votante" && persona.voto_confirmado && (
-                              <Badge variant="green">
-                                <Check className="w-3 h-3 mr-1" />
-                                Confirmado
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-xs text-slate-500">CI: {persona.ci}</p>
-                        </div>
-                        <div className="flex gap-1.5 shrink-0 flex-wrap">
-                          <ActionBtn onClick={() => abrirTelefono(tipo, persona)} title="Editar teléfono" variant="green">
-                            <Phone className="w-3.5 h-3.5" />
-                          </ActionBtn>
-                          {tipo === "votante" && !persona.voto_confirmado && canConfirmarVoto(persona) && (
-                            <ActionBtn onClick={() => abrirConfirmVoto(persona)} title="Confirmar voto" variant="success-solid">
-                              <Check className="w-3.5 h-3.5" />
-                            </ActionBtn>
-                          )}
-                          {tipo === "votante" && persona.voto_confirmado && canAnularConfirmacion(persona) && (
-                            <ActionBtn onClick={() => abrirAnularConfirmacion(persona)} title="Anular confirmación" variant="danger">
-                              <X className="w-3.5 h-3.5" />
-                            </ActionBtn>
-                          )}
-                          <ActionBtn onClick={() => quitarPersona(persona.ci, tipo)} title="Eliminar" variant="danger">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </ActionBtn>
-                        </div>
-                      </div>
-                    </div>
-                  ))
+                  resultadosBusqueda.slice(0, 50).map(({ tipo, persona }) => {
+                    if (tipo === "coordinador") {
+                      const coordCI = normalizeCI(persona.ci);
+                      const coordCounts = voteCountsByCoord[coordCI] ?? { confirmed: 0, total: 0 };
+                      return (
+                        <CoordinadorCard
+                          key={`coordinador-${persona.ci}`}
+                          coord={persona}
+                          counts={coordCounts}
+                          expandedMap={expandedSearchResults}
+                          onToggleExpand={toggleExpandSearch}
+                          estructura={estructura}
+                          voteCountsBySub={voteCountsBySub}
+                          onTelefono={abrirTelefono}
+                          onQuitar={quitarPersona}
+                          onCopy={copyToClipboard}
+                          onConfirmarVoto={abrirConfirmVoto}
+                          onAnularConfirmacion={abrirAnularConfirmacion}
+                          canConfirmarVoto={canConfirmarVoto}
+                          canAnularConfirmacion={canAnularConfirmacion}
+                        />
+                      );
+                    }
+
+                    if (tipo === "subcoordinador") {
+                      const subCI = normalizeCI(persona.ci);
+                      const subCounts = voteCountsBySub[subCI] ?? { confirmed: 0, total: 0 };
+                      return (
+                        <SubcoordinadorCard
+                          key={`subcoordinador-${persona.ci}`}
+                          sub={persona}
+                          counts={subCounts}
+                          expandedMap={expandedSearchResults}
+                          onToggleExpand={toggleExpandSearch}
+                          estructura={estructura}
+                          onTelefono={abrirTelefono}
+                          onQuitar={quitarPersona}
+                          onCopy={copyToClipboard}
+                          onConfirmarVoto={abrirConfirmVoto}
+                          onAnularConfirmacion={abrirAnularConfirmacion}
+                          canConfirmarVoto={canConfirmarVoto}
+                          canAnularConfirmacion={canAnularConfirmacion}
+                          nested={currentUser.role !== "coordinador"}
+                          onConfirmarSub={abrirConfirmSub}
+                          onAnularConfirmSub={abrirAnularConfirmSub}
+                        />
+                      );
+                    }
+
+                    return (
+                      <VotanteRow
+                        key={`votante-${persona.ci}`}
+                        v={persona}
+                        onTelefono={abrirTelefono}
+                        onConfirmar={abrirConfirmVoto}
+                        onAnular={abrirAnularConfirmacion}
+                        onQuitar={quitarPersona}
+                        canConfirmar={canConfirmarVoto}
+                        canAnular={canAnularConfirmacion}
+                      />
+                    );
+                  })
                 )}
 
                 {resultadosBusqueda.length > 50 && (
@@ -1462,161 +1659,23 @@ const Dashboard = ({ currentUser, onLogout }) => {
                     const coordCI = normalizeCI(coord.ci);
                     const coordCounts = voteCountsByCoord[coordCI] ?? { confirmed: 0, total: 0 };
                     return (
-                    <div key={coord.ci} className="border border-slate-200 rounded-xl overflow-hidden">
-                      {/* Coord header */}
-                      <div
-                        className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 cursor-pointer hover:bg-slate-50 transition-colors bg-white"
-                        onClick={() => toggleExpand(coord.ci)}
-                      >
-                        <div className="flex items-start gap-2 flex-1 min-w-0">
-                          <span className="text-brand-600 shrink-0 mt-0.5">
-                            {expandedCoords[coordCI]
-                              ? <ChevronDown className="w-4 h-4" />
-                              : <ChevronRight className="w-4 h-4" />}
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <DatosPersona
-                              persona={coord}
-                              rol="Coordinador"
-                              loginCode={coord.login_code}
-                              onCopy={copyToClipboard}
-                              counter={<VoteCounter confirmed={coordCounts.confirmed} total={coordCounts.total} />}
-                            />
-                          </div>
-                        </div>
-                        <div className="flex gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                          <ActionBtn onClick={() => abrirTelefono("coordinador", coord)} title="Editar teléfono" variant="green">
-                            <Phone className="w-3.5 h-3.5" />
-                          </ActionBtn>
-                          <ActionBtn onClick={() => quitarPersona(coord.ci, "coordinador")} title="Eliminar coordinador" variant="danger-solid">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </ActionBtn>
-                        </div>
-                      </div>
-
-                      {/* Coord expanded */}
-                      {expandedCoords[coordCI] && (
-                        <div className="border-t border-slate-100 bg-slate-50/50 px-4 pb-4 pt-3 overflow-x-auto animate-fade-in">
-                          <div className="space-y-2 min-w-0">
-                            {(estructura.subcoordinadores || [])
-                              .filter((s) => normalizeCI(s.coordinador_ci) === coordCI)
-                              .map((sub) => {
-                                const subCI = normalizeCI(sub.ci);
-                                const subCounts = voteCountsBySub[subCI] ?? { confirmed: 0, total: 0 };
-                                return (
-                                <div key={sub.ci} className="border border-slate-200 rounded-lg bg-white overflow-hidden">
-                                  {/* Sub header */}
-                                  <div
-                                    className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 cursor-pointer hover:bg-slate-50 transition-colors"
-                                    onClick={() => toggleExpand(sub.ci)}
-                                  >
-                                    <div className="flex items-start gap-2 flex-1 min-w-0">
-                                      <span className="text-brand-500 shrink-0 mt-0.5">
-                                        {expandedCoords[subCI]
-                                          ? <ChevronDown className="w-3.5 h-3.5" />
-                                          : <ChevronRight className="w-3.5 h-3.5" />}
-                                      </span>
-                                      <div className="flex-1 min-w-0">
-                                        <DatosPersona
-                                          persona={sub}
-                                          rol="Sub-coordinador"
-                                          loginCode={sub.login_code}
-                                          onCopy={copyToClipboard}
-                                          counter={<VoteCounter confirmed={subCounts.confirmed} total={subCounts.total} />}
-                                        />
-                                        {sub.confirmado && (
-                                          <div className="mt-1">
-                                            <Badge variant="green">
-                                              <Check className="w-3 h-3 mr-1" />
-                                              Sub confirmado
-                                            </Badge>
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                    <div className="flex gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                                      <ActionBtn onClick={() => abrirTelefono("subcoordinador", sub)} title="Editar teléfono" variant="green">
-                                        <Phone className="w-3.5 h-3.5" />
-                                      </ActionBtn>
-                                      <ActionBtn onClick={() => quitarPersona(sub.ci, "subcoordinador")} title="Eliminar" variant="danger-solid">
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </ActionBtn>
-                                    </div>
-                                  </div>
-
-                                  {/* Sub votantes */}
-                                  {expandedCoords[subCI] && (
-                                    <div className="border-t border-slate-100 bg-slate-50 px-3 pb-3 pt-2 overflow-x-auto animate-fade-in">
-                                      <div className="space-y-1.5 min-w-0">
-                                        {getVotantesDeSubcoord(estructura, sub.ci).map((v) => (
-                                          <VotanteRow
-                                            key={v.ci}
-                                            v={v}
-                                            onTelefono={abrirTelefono}
-                                            onConfirmar={abrirConfirmVoto}
-                                            onAnular={abrirAnularConfirmacion}
-                                            onQuitar={quitarPersona}
-                                            canConfirmar={canConfirmarVoto}
-                                            canAnular={canAnularConfirmacion}
-                                          />
-                                        ))}
-                                        {getVotantesDeSubcoord(estructura, sub.ci).length === 0 && (
-                                          <p className="text-xs text-slate-400 py-2 text-center">
-                                            Sin votantes asignados.
-                                          </p>
-                                        )}
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                              })}
-
-                            {(estructura.subcoordinadores || []).filter(
-                              (s) => normalizeCI(s.coordinador_ci) === coordCI
-                            ).length === 0 && (
-                              <p className="text-xs text-slate-400 text-center py-2">
-                                Sin subcoordinadores asignados.
-                              </p>
-                            )}
-
-                            {/* Direct voters of this coordinator */}
-                            {(() => {
-                              const directVoters = (estructura.votantes || []).filter(
-                                (v) => normalizeCI(v.asignado_por) === coordCI
-                              );
-                              if (directVoters.length === 0) return null;
-                              return (
-                                <div className="border border-slate-200 rounded-lg bg-white overflow-hidden">
-                                  <div className="px-3 py-2 bg-slate-50 border-b border-slate-100">
-                                    <p className="font-semibold text-xs text-slate-600 flex items-center gap-1.5">
-                                      <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                      Votantes directos del coordinador
-                                      <span className="text-slate-400 font-normal">({directVoters.length})</span>
-                                    </p>
-                                  </div>
-                                  <div className="p-2.5 space-y-1.5">
-                                    {directVoters.map((v) => (
-                                      <VotanteRow
-                                        key={v.ci}
-                                        v={v}
-                                        onTelefono={abrirTelefono}
-                                        onConfirmar={abrirConfirmVoto}
-                                        onAnular={abrirAnularConfirmacion}
-                                        onQuitar={quitarPersona}
-                                        canConfirmar={canConfirmarVoto}
-                                        canAnular={canAnularConfirmacion}
-                                      />
-                                    ))}
-                                  </div>
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
+                      <CoordinadorCard
+                        key={coord.ci}
+                        coord={coord}
+                        counts={coordCounts}
+                        expandedMap={expandedCoords}
+                        onToggleExpand={toggleExpand}
+                        estructura={estructura}
+                        voteCountsBySub={voteCountsBySub}
+                        onTelefono={abrirTelefono}
+                        onQuitar={quitarPersona}
+                        onCopy={copyToClipboard}
+                        onConfirmarVoto={abrirConfirmVoto}
+                        onAnularConfirmacion={abrirAnularConfirmacion}
+                        canConfirmarVoto={canConfirmarVoto}
+                        canAnularConfirmacion={canAnularConfirmacion}
+                      />
+                    );
                   })}
                 </div>
               )}
@@ -1628,85 +1687,25 @@ const Dashboard = ({ currentUser, onLogout }) => {
                     const subCI = normalizeCI(sub.ci);
                     const subCounts = voteCountsBySub[subCI] ?? { confirmed: 0, total: 0 };
                     return (
-                    <div key={sub.ci} className="border border-slate-200 rounded-xl overflow-hidden">
-                      {/* Sub header */}
-                      <div
-                        className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 cursor-pointer hover:bg-slate-50 transition-colors bg-white"
-                        onClick={() => toggleExpand(sub.ci)}
-                      >
-                        <div className="flex items-start gap-2 flex-1 min-w-0">
-                          <span className="text-brand-600 shrink-0 mt-0.5">
-                            {expandedCoords[subCI]
-                              ? <ChevronDown className="w-4 h-4" />
-                              : <ChevronRight className="w-4 h-4" />}
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <DatosPersona
-                              persona={sub}
-                              rol="Sub-coordinador"
-                              loginCode={sub.login_code}
-                              onCopy={copyToClipboard}
-                              counter={<VoteCounter confirmed={subCounts.confirmed} total={subCounts.total} />}
-                            />
-                            {sub.confirmado && (
-                              <div className="mt-1">
-                                <Badge variant="green">
-                                  <Check className="w-3 h-3 mr-1" />
-                                  Sub confirmado
-                                </Badge>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                          {!sub.confirmado && (
-                            <ActionBtn onClick={() => abrirConfirmSub(sub)} title="Confirmar subcoordinador" variant="success-solid">
-                              <Check className="w-3.5 h-3.5" />
-                            </ActionBtn>
-                          )}
-                          {sub.confirmado && (
-                            <ActionBtn onClick={() => abrirAnularConfirmSub(sub)} title="Anular confirmación sub" variant="danger">
-                              <X className="w-3.5 h-3.5" />
-                            </ActionBtn>
-                          )}
-                          <ActionBtn onClick={() => abrirTelefono("subcoordinador", sub)} title="Editar teléfono" variant="green">
-                            <Phone className="w-3.5 h-3.5" />
-                          </ActionBtn>
-                          <ActionBtn onClick={() => quitarPersona(sub.ci, "subcoordinador")} title="Eliminar" variant="danger-solid">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </ActionBtn>
-                        </div>
-                      </div>
-
-                      {/* Sub votantes expanded */}
-                      {expandedCoords[subCI] && (
-                        <div className="border-t border-slate-100 bg-slate-50 px-3 pb-3 pt-2 overflow-x-auto animate-fade-in">
-                          <p className="text-xs font-semibold text-slate-600 mb-2">
-                            Votantes asignados
-                          </p>
-                          <div className="space-y-1.5 min-w-0">
-                            {getVotantesDeSubcoord(estructura, sub.ci).map((v) => (
-                              <VotanteRow
-                                key={v.ci}
-                                v={v}
-                                onTelefono={abrirTelefono}
-                                onConfirmar={abrirConfirmVoto}
-                                onAnular={abrirAnularConfirmacion}
-                                onQuitar={quitarPersona}
-                                canConfirmar={canConfirmarVoto}
-                                canAnular={canAnularConfirmacion}
-                              />
-                            ))}
-                            {getVotantesDeSubcoord(estructura, sub.ci).length === 0 && (
-                              <p className="text-xs text-slate-400 text-center py-2">
-                                Sin votantes asignados.
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
+                      <SubcoordinadorCard
+                        key={sub.ci}
+                        sub={sub}
+                        counts={subCounts}
+                        expandedMap={expandedCoords}
+                        onToggleExpand={toggleExpand}
+                        estructura={estructura}
+                        onTelefono={abrirTelefono}
+                        onQuitar={quitarPersona}
+                        onCopy={copyToClipboard}
+                        onConfirmarVoto={abrirConfirmVoto}
+                        onAnularConfirmacion={abrirAnularConfirmacion}
+                        canConfirmarVoto={canConfirmarVoto}
+                        canAnularConfirmacion={canAnularConfirmacion}
+                        nested={false}
+                        onConfirmarSub={abrirConfirmSub}
+                        onAnularConfirmSub={abrirAnularConfirmSub}
+                      />
+                    );
                   })}
 
                   {/* Votantes directos del coordinador */}
@@ -1774,6 +1773,8 @@ const Dashboard = ({ currentUser, onLogout }) => {
             </div>
           </div>
         </section>
+        </>
+        )}
       </main>
 
       {/* =========== MODALS =========== */}
@@ -1786,6 +1787,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
         onSave={guardarTelefono}
         error={phoneError}
         saving={phoneSaving}
+        valido={validarTelefonoParaguayo(phoneValue).valido}
       />
 
       <AddPersonModal

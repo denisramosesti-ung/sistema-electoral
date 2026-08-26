@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/consultar-datos",
+      "destination": "/index.html"
+    }
+  ]
+}
