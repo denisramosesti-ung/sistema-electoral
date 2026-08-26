@@ -286,15 +286,19 @@ const abrirWhatsApp = (persona) => {
   const numero = telefono.startsWith("0") ? `595${telefono.slice(1)}` : telefono;
   const nombre = `${persona.nombre || ""} ${persona.apellido || ""}`.trim() || "Votante";
   const mensaje = [
-    `Hola ${nombre}.`,
-    "Te compartimos tus datos de votación:",
-    `Local: ${persona.local_votacion || "Sin información"}`,
-    `Mesa: ${persona.mesa || "Sin información"}`,
-    `Orden: ${persona.orden || "Sin información"}`,
+    `🇵🇾 Hola, *${nombre}*.`,
+    "",
+    "🗳️ Te compartimos tus *datos de votación*:",
+    "",
+    `📍 *Local:* ${persona.local_votacion || "Sin información"}`,
+    `🔢 *Mesa:* ${persona.mesa || "Sin información"}`,
+    `📋 *Orden:* ${persona.orden || "Sin información"}`,
+    "",
     "Esta información se envía para facilitar tu participación en la jornada electoral.",
-    "Saludos,",
-    "Equipo de Rodrigo Larrosa",
-    "Lista 1 · Opción 4",
+    "",
+    "🚩 Saludos,",
+    "🔴 *Equipo de Rodrigo Larrosa*",
+    "🔴 *Lista 1 · Opción 4*",
   ].join("\n");
 
   window.open(`https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`, "_blank", "noopener,noreferrer");
